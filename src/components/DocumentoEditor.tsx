@@ -14,8 +14,7 @@ type Documento = {
   content: string; // CORREÇÃO: any -> string
 };
 
-export function DocumentoEditor({ documento }: { documento?: Documento }) {
-  const [open, setOpen] = useState(false);
+export function DocumentoEditor({ documento }: { documento?: Documento }) {  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const isEditMode = !!documento?.id;
   const [editorContent, setEditorContent] = useState('');

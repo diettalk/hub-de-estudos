@@ -1,21 +1,17 @@
 // src/components/RevisoesHojeCard.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-
-// Função para formatar a data de hoje no formato do banco de dados (YYYY-MM-DD)
-const getTodayString = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-}
+// import Link from 'next/link'; // REMOVIDO
 
 export async function RevisoesHojeCard() {
     const supabase = createServerComponentClient({ cookies });
     const today = new Date().toISOString().split('T')[0];
-    const { data: revisoes } = await supabase // 'error' foi removido
+    
+    // CORREÇÃO: a variável 'error' foi removida da desestruturação
+    const { data: revisoes } = await supabase
         .from('sessoes_estudo')
         .select('id, foco')
         .or(`(data_revisao_1.eq.${today},r1_concluida.is.false),(data_revisao_2.eq.${today},r2_concluida.is.false),(data_revisao_3.eq.${today},r3_concluida.is.false)`);
-
     return (
         <div className="card bg-gray-800 p-6">
             <h3 className="font-bold text-xl mb-4">

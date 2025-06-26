@@ -1,3 +1,4 @@
+// src/components/LembreteEditor.tsx
 'use client';
 import { useState, useTransition } from 'react';
 import { Button } from './ui/button';
@@ -5,10 +6,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { addLembrete, updateLembrete } from '@/app/actions';
-import { type Lembrete } from '@/lib/types'; // Importando o tipo específico
 
-export function LembreteEditor({ lembrete, data, onActionSuccess }: { lembrete?: Lembrete, data?: string, onActionSuccess: () => void; }) {  const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+type Lembrete = { // TIPO ESPECÍFICO
+  id: number;
+  titulo: string;
+  cor: string;
+  data: string;
+};
+
+export function LembreteEditor({ lembrete, data, onActionSuccess }: { lembrete?: Lembrete, data?: string, onActionSuccess: () => void; }) {  const [isPending, startTransition] = useTransition();
   const isEditMode = !!lembrete;
 
   return (

@@ -4,25 +4,19 @@
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 
-// AÇÕES DE CONCURSO (SEU CÓDIGO - MANTIDO) ---
-
+// --- AÇÕES DE CONCURSO ---
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
-
   if (!nome || !banca || !dataProva) return;
-  await supabase.from('concursos').insert({ 
-    nome, banca, data_prova: dataProva, prioridades, user_id: user.id 
-  });
+  await supabase.from('concursos').insert({ nome, banca, data_prova: dataProva, prioridades, user_id: user.id });
   revalidatePath('/materiais');
 }
 export async function updateConcurso(formData: FormData) {
@@ -45,15 +39,17 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/materiais');
 }
 
-// --- AÇÕES DE DISCIPLINA (CRUD COMPLETO) ---
-export async function addMasterDisciplina(formData: FormData) {
+// --- AÇÕES DE DISCIPLINA ---
+export async function updateDisciplina(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const id = Number(formData.get('id'));
   const nome = formData.get('nome') as string;
   const emoji = formData.get('emoji') as string;
-  if (!nome || !emoji) return;
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('disciplinas').insert({ nome, emoji });
+  if (!id || !nome || !emoji) return;
+  await supabase.from('disciplinas').update({ nome, emoji }).eq('id', id);
   revalidatePath('/disciplinas');
 }
+
 export async function updateDisciplina(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -262,7 +258,10 @@ export async function updateAnotacoesRapidas(content: string) {
   revalidatePath('/');
 }
 
-// --- AÇÕES PARA TÓPICOS (CRUD COMPLETO) ---
+// --- AÇÕES PARA TÓPICOS ---
+export async function saveTopicoContent(topicoId: number, content: string) { // CORREÇÃO: any -> string
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('topicos').update({ conteudo_rico: content }).eq('id', topicoId);
 export async function addTopico(formData: FormData) {
   const nome = formData.get('nome') as string;
   const disciplinaId = Number(formData.get('disciplina_id'));
