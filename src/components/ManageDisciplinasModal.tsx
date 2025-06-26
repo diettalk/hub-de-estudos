@@ -1,12 +1,12 @@
 // src/components/ManageDisciplinasModal.tsx
 'use client';
-import { useTransition } from 'react'; // REMOVIDO: useState
+import { useTransition } from 'react'; // 'useState' foi removido
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { toggleDisciplinaConcurso } from '@/app/actions';
 import { type Disciplina, type EnrichedConcurso } from '@/lib/types';
 
-export function ManageDisciplinasModal({ concurso, allDisciplinas }: { concurso: any, allDisciplinas: any[] }) { // CORREÇÃO: tipos mais específicos
+export function ManageDisciplinasModal({ concurso, allDisciplinas }: { concurso: EnrichedConcurso, allDisciplinas: Disciplina[] }) {
   const [isPending, startTransition] = useTransition();
 
   const handleCheckedChange = (disciplinaId: number) => {

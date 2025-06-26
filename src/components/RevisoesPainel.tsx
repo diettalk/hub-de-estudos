@@ -1,15 +1,11 @@
 // src/components/RevisoesPainel.tsx
 'use client';
-
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useTransition } from 'react';
-import { type RevisionTask } from '@/lib/types';
-import { updateRevisaoStatus } from '@/app/actions';
-import { Button } from '@/components/ui/button';
-import { type SessaoEstudo } from '@/lib/types'; // Importando tipo
+import { useEffect, useState, useTransition, useCallback } from 'react';
+import { type SessaoEstudo } from '@/lib/types'; // Usando o tipo específico
 
-function calculateRevisions(sessoes: SessaoEstudo[]): { today: any[], week: any[], month: any[] } { // CORREÇÃO: tipo mais específico  const todayTasks: RevisionTask[] = [], weekTasks: RevisionTask[] = [], monthTasks: RevisionTask[] = [];
-  const now = new Date(); now.setHours(0, 0, 0, 0);
+// O tipo de 'sessoes' foi especificado como SessaoEstudo[]
+function calculateRevisions(sessoes: SessaoEstudo[]): { today: any[], week: any[], month: any[] } {   const now = new Date(); now.setHours(0, 0, 0, 0);
   const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 

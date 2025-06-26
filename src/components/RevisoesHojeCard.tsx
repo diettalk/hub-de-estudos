@@ -1,13 +1,13 @@
 // src/components/RevisoesHojeCard.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-// import Link from 'next/link'; // REMOVIDO
+// import Link from 'next/link'; // 'Link' removido pois não era usado
 
 export async function RevisoesHojeCard() {
     const supabase = createServerComponentClient({ cookies });
     const today = new Date().toISOString().split('T')[0];
-    
-    // CORREÇÃO: a variável 'error' foi removida da desestruturação
+
+    // 'error' foi removido, pois não estava sendo usado
     const { data: revisoes } = await supabase
         .from('sessoes_estudo')
         .select('id, foco')

@@ -7,14 +7,18 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { addLembrete, updateLembrete } from '@/app/actions';
 
-type Lembrete = { // TIPO ESPECÍFICO
+// Tipo específico para Lembrete
+type Lembrete = {
   id: number;
   titulo: string;
   cor: string;
   data: string;
 };
 
-export function LembreteEditor({ lembrete, data, onActionSuccess }: { lembrete?: Lembrete, data?: string, onActionSuccess: () => void; }) {  const [isPending, startTransition] = useTransition();
+// O tipo de 'lembrete' foi especificado
+export function LembreteEditor({ lembrete, data, onActionSuccess }: { lembrete?: Lembrete, data?: string, onActionSuccess: () => void; }) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const isEditMode = !!lembrete;
 
   return (

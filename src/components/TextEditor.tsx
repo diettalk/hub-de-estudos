@@ -1,9 +1,8 @@
 // src/components/TextEditor.tsx
 'use client';
-
-import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react'; // Importa o tipo Editor
 import StarterKit from '@tiptap/starter-kit';
-import './TextEditor.css'; // Vamos criar este arquivo para estilizar
+import './TextEditor.css';
 
 // Componente para a barra de ferramentas do editor
 const MenuBar = ({ editor }: { editor: Editor | null }) => {
@@ -39,7 +38,6 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
     </div>
   );
 };
-
 
 export function TextEditor({ value, onChange }: { value: string; onChange: (value: string) => void; }) {
   const editor = useEditor({
