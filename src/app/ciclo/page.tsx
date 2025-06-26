@@ -1,54 +1,88 @@
-// src/components/CicloTableRow.tsx
+// src/app/ciclo/page.tsx
 'use client';
-import { useTransition } from 'react';
-import { updateSessaoEstudo, deleteSessaoCiclo } from '@/app/actions';
+
+import { useEffect, useState, useTransition } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { addSessaoCiclo } from '@/app/actions';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { CicloTableRow } from '@/components/CicloTableRow';
+import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
 
-export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo, disciplinas: Disciplina[] }) {
-  const [isPending, startTransition] = useTransition();
+export default function CicloPage() {
+  const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
+  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdding, startAddingTransition] = useTransition();
+  const supabase = createClientComponentClient();
 
-  const handleUpdate = (formData: FormData) => {
-    formData.append('id', String(sessao.id));
-    formData.append('isMateriaFinalizada', String(sessao.materia_finalizada));
-    startTransition(() => {
-      updateSessaoEstudo(formData);
-    });
-  };
-  
-  const handleDelete = () => {
-    if(window.confirm('Tem certeza que quer excluir esta linha do ciclo?')) {
-        startTransition(() => {
-            deleteSessaoCiclo(sessao.id);
-        });
-    }
-  }
+  useEffect(() => {
+    const getCicloData = async () => {
+      setLoading(true);
+      const sessoesPromise = supabase.from('sessoes_estudo').select(`*, disciplina:disciplina_id(id, nome, emoji)`).order('hora_no_ciclo');
+      const disciplinasPromise = supabase.from('disciplinas').select('*').order('nome');
+      const [{ data: sessoesData }, { data: disciplinasData }] = await Promise.all([sessoesPromise, disciplinasPromise]);
 
-  const acertos = sessao.questoes_acertos || 0;
-  const total = sessao.questoes_total || 0;
-  const aproveitamento = total > 0 ? Math.round((acertos / total) * 100) : 0;
-  
+      const sessoesComDisciplina = (sessoesData || []).map(s => ({ ...s, disciplinas: s.disciplina }));
+      setSessoes(sessoesComDisciplina);
+      setDisciplinas(disciplinasData || []);
+      setLoading(false);
+    };
+    getCicloData();
+  }, [supabase]);
+
+  if (loading) return <div>Carregando Ciclo de Estudos...</div>;
+
+  const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos... (e o resto do seu texto completo aqui)`;
+
   return (
-    <tr className={sessao.materia_finalizada ? 'bg-purple-900/30 opacity-40' : sessao.concluido ? 'bg-green-900/30' : 'hover:bg-gray-700/50'}>
-      <td className="p-2 text-center"><input type="checkbox" name="concluido" defaultChecked={sessao.concluido} onChange={(e) => { const f = new FormData(); f.append('concluido', String(e.target.checked)); f.append('data_estudo_was_null', String(sessao.data_estudo === null)); handleUpdate(f); }} disabled={isPending} className="h-5 w-5"/></td>
-      <td className="p-2 text-center"><input type="checkbox" name="materia_finalizada" defaultChecked={sessao.materia_finalizada} onChange={(e) => { const f = new FormData(); f.append('materia_finalizada', String(e.target.checked)); handleUpdate(f); }} disabled={isPending} className="h-5 w-5"/></td>
-      <td className="p-3 font-bold">{sessao.hora_no_ciclo}</td>
-      <td className="p-3">
-        <select name="disciplina_id" defaultValue={sessao.disciplinas?.id || ''} onChange={(e) => { const f = new FormData(); f.append('disciplina_id', e.target.value); handleUpdate(f); }} className="w-full bg-gray-700/50 p-1 rounded-md text-xs border-gray-600">
-            <option value="">Selecione...</option>
-            {disciplinas.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
-        </select>
-      </td>
-      <td className="p-3"><Textarea name="foco" defaultValue={sessao.foco} onBlur={(e) => { const f = new FormData(); f.append('foco', e.target.value); handleUpdate(f);}} disabled={isPending} rows={1} className="w-full bg-transparent p-1 rounded-md"/></td>
-      <td className="p-3"><Textarea name="diario_de_bordo" defaultValue={sessao.diario_de_bordo || ''} onBlur={(e) => { const f = new FormData(); f.append('diario_de_bordo', e.target.value); handleUpdate(f); }} disabled={isPending} rows={1} className="w-full bg-gray-700/50 p-1 rounded-md"/></td>
-      <td className="p-3"><div className="flex items-center gap-1"><Input type="number" name="questoes_acertos" defaultValue={sessao.questoes_acertos || ''} onBlur={(e) => { const f = new FormData(); f.append('questoes_acertos', e.target.value); handleUpdate(f); }} placeholder="A" className="w-14 bg-gray-700/50 p-1 rounded-md"/>/ <Input type="number" name="questoes_total" defaultValue={sessao.questoes_total || ''} onBlur={(e) => { const f = new FormData(); f.append('questoes_total', e.target.value); handleUpdate(f); }} placeholder="T" className="w-14 bg-gray-700/50 p-1 rounded-md"/><span className="w-10 text-center font-bold">{total > 0 ? `${aproveitamento}%` : '-'}</span></div></td>
-      <td className="p-3"><Input type="date" name="data_estudo" defaultValue={sessao.data_estudo || ''} onChange={(e) => { const f = new FormData(); f.append('data_estudo', e.target.value); handleUpdate(f); }} className="w-full bg-gray-700/50 p-1 rounded-md"/></td>
-      <td className="p-3"><div className="flex items-center justify-center gap-2"><Input type="date" name="data_revisao_1" defaultValue={sessao.data_revisao_1 || ''} onChange={(e) => { const f = new FormData(); f.append('data_revisao_1', e.target.value); handleUpdate(f);}}/><input type="checkbox" name="r1_concluida" defaultChecked={sessao.r1_concluida} onChange={(e) => { const f = new FormData(); f.append('r1_concluida', String(e.target.checked)); handleUpdate(f);}}/></div></td>
-      <td className="p-3"><div className="flex items-center justify-center gap-2"><Input type="date" name="data_revisao_2" defaultValue={sessao.data_revisao_2 || ''} onChange={(e) => { const f = new FormData(); f.append('data_revisao_2', e.target.value); handleUpdate(f);}}/><input type="checkbox" name="r2_concluida" defaultChecked={sessao.r2_concluida} onChange={(e) => { const f = new FormData(); f.append('r2_concluida', String(e.target.checked)); handleUpdate(f);}}/></div></td>
-      <td className="p-3"><div className="flex items-center justify-center gap-2"><Input type="date" name="data_revisao_3" defaultValue={sessao.data_revisao_3 || ''} onChange={(e) => { const f = new FormData(); f.append('data_revisao_3', e.target.value); handleUpdate(f);}}/><input type="checkbox" name="r3_concluida" defaultChecked={sessao.r3_concluida} onChange={(e) => { const f = new FormData(); f.append('r3_concluida', String(e.target.checked)); handleUpdate(f);}}/></div></td>
-      <td className="p-2"><Button onClick={handleDelete} variant="ghost" size="icon" className="h-6 w-6"><i className="fas fa-trash-alt text-xs text-red-500"></i></Button></td>
-    </tr>
+    <div className="space-y-8">
+      <ProgressoCicloCard sessoes={sessoes} />
+
+      <details className="card p-6 bg-gray-800/50">
+        <summary className="font-semibold text-lg cursor-pointer">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</summary>
+        <div className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
+          <h4 className="font-bold text-white">Tutorial de Evolução do Ciclo</h4>
+          <div>... (Seu texto completo do Tutorial aqui)</div>
+        </div>
+      </details>
+      
+      <div>
+        <h2 className="text-2xl font-bold">Ciclo de Estudos - FASE 1 (Painel de Controle)</h2>
+        <div className="bg-gray-800/50 rounded-lg shadow-lg overflow-hidden border border-gray-700 mt-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-300">
+              <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
+                <tr>
+                  <th className="p-3">OK</th><th className="p-3">Finalizada</th><th className="p-3">Hora</th>
+                  <th className="p-3">Matéria</th><th className="p-3 min-w-[350px]">Foco Sugerido</th>
+                  <th className="p-3 min-w-[250px]">Diário de Bordo</th><th className="p-3 min-w-[200px]">Questões</th>
+                  <th className="p-3 min-w-[150px]">Data Estudo</th><th className="text-center p-3">R1</th>
+                  <th className="text-center p-3">R7</th><th className="text-center p-3">R30</th><th className="p-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {sessoes.map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao} disciplinas={disciplinas} />)}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2 flex justify-center border-t border-gray-700">
+            <Button onClick={() => startAddingTransition(() => addSessaoCiclo())} variant="ghost" size="sm" disabled={isAdding}>
+              {isAdding ? 'Adicionando...' : '+ Adicionar Linha ao Ciclo'}
+            </Button>
+          </div>
+        </div>
+      </div>
+      
+      <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700 text-sm">
+        <h3 className="font-bold mb-2">Legenda de Matérias (Siglas)</h3>
+        <div>... (Sua legenda completa aqui)</div>
+      </div>
+
+      <details className="p-6 bg-gray-800/50 rounded-lg border border-gray-700 cursor-pointer">
+        <summary className="font-semibold">Comando para Evolução do Ciclo (Para uso futuro)</summary>
+        <pre className="mt-4 bg-gray-900 p-4 rounded-md text-xs whitespace-pre-wrap">{comandoEvolucao}</pre>
+      </details>
+    </div>
   );
 }

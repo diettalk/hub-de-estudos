@@ -96,28 +96,39 @@ export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId:
     revalidatePath('/materiais');
 }
 
-// --- AÇÃO DO CICLO DE ESTUDOS ---
+// --- AÇÕES DO CICLO DE ESTUDOS (LÓGICA FINAL E CORRIGIDA) ---
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;
 
   const updateData: { [key: string]: any } = {};
+  
+  if (formData.has('foco')) updateData.foco = formData.get('foco');
+  if (formData.has('disciplina_id')) updateData.disciplina_id = Number(formData.get('disciplina_id')) || null;
   if (formData.has('diario_de_bordo')) updateData.diario_de_bordo = formData.get('diario_de_bordo');
   if (formData.has('questoes_acertos')) updateData.questoes_acertos = Number(formData.get('questoes_acertos')) || null;
   if (formData.has('questoes_total')) updateData.questoes_total = Number(formData.get('questoes_total')) || null;
-  if (formData.has('r1_concluida')) updateData.r1_concluida = formData.get('r1_concluida') === 'true';
-  if (formData.has('data_revisao_1')) updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
-  if (formData.has('r2_concluida')) updateData.r2_concluida = formData.get('r2_concluida') === 'true';
-  if (formData.has('data_revisao_2')) updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
-  if (formData.has('r3_concluida')) updateData.r3_concluida = formData.get('r3_concluida') === 'true';
-  if (formData.has('data_revisao_3')) updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
   if (formData.has('materia_finalizada')) updateData.materia_finalizada = formData.get('materia_finalizada') === 'true';
+  if (formData.has('r1_concluida')) updateData.r1_concluida = formData.get('r1_concluida') === 'true';
+  if (formData.has('r2_concluida')) updateData.r2_concluida = formData.get('r2_concluida') === 'true';
+  if (formData.has('r3_concluida')) updateData.r3_concluida = formData.get('r3_concluida') === 'true';
+  
+  const isMateriaFinalizada = formData.get('isMateriaFinalizada') === 'true';
 
-  if (formData.has('concluido')) {
+  if (formData.has('data_estudo')) {
+    const dataEstudoStr = formData.get('data_estudo') as string;
+    updateData.data_estudo = dataEstudoStr || null;
+    if (dataEstudoStr && !isMateriaFinalizada) {
+      const studyDate = new Date(dataEstudoStr + 'T03:00:00');
+      const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1); updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
+      const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7); updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
+      const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30); updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+    }
+  } else if (formData.has('concluido')) {
     const isConcluido = formData.get('concluido') === 'true';
     updateData.concluido = isConcluido;
-    if (isConcluido && formData.get('data_estudo_was_null') === 'true') {
+    if (isConcluido && formData.get('data_estudo_was_null') === 'true' && !isMateriaFinalizada) {
       const studyDate = new Date();
       updateData.data_estudo = studyDate.toISOString().split('T')[0];
       const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1); updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
@@ -129,23 +140,28 @@ export async function updateSessaoEstudo(formData: FormData) {
       updateData.data_revisao_2 = null; updateData.r2_concluida = false;
       updateData.data_revisao_3 = null; updateData.r3_concluida = false;
     }
+  } else {
+    if (formData.has('data_revisao_1')) updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
+    if (formData.has('data_revisao_2')) updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
+    if (formData.has('data_revisao_3')) updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
   }
-
-  if (formData.has('data_estudo')) {
-    const dataEstudoStr = formData.get('data_estudo') as string;
-    updateData.data_estudo = dataEstudoStr || null;
-    if (dataEstudoStr && formData.get('isMateriaFinalizada') !== 'true') {
-      const studyDate = new Date(dataEstudoStr + 'T03:00:00');
-      const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1); updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-      const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7); updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-      const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30); updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
-    }
-  }
-
+  
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');
+}
+export async function addSessaoCiclo() {
+  const supabase = createServerActionClient({ cookies });
+  const { data: ultimaSessao } = await supabase.from('sessoes_estudo').select('hora_no_ciclo').order('hora_no_ciclo', { ascending: false }).limit(1).single();
+  const proximaHora = (ultimaSessao?.hora_no_ciclo || 0) + 1;
+  await supabase.from('sessoes_estudo').insert({ hora_no_ciclo: proximaHora, foco: 'Nova sessão' });
+  revalidatePath('/ciclo');
+}
+export async function deleteSessaoCiclo(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('sessoes_estudo').delete().eq('id', id);
+  revalidatePath('/ciclo');
 }
 
 // --- AÇÕES DO CALENDÁRIO ---
