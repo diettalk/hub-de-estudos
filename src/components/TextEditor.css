@@ -1,0 +1,14 @@
+/* src/components/TextEditor.css */
+
+.tiptap {
+  height: 100%;
+}
+
+.tiptap > .ProseMirror {
+  height: 100%;
+  padding: 0.5rem;
+}
+
+.tiptap > .ProseMirror:focus {
+  outline: none;
+}
