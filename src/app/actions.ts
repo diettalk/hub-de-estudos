@@ -6,7 +6,8 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
-// --- AÇÕES DE CONCURSO (SEU CÓDIGO - MANTIDO) ---
+// AÇÕES DE CONCURSO (SEU CÓDIGO - MANTIDO) ---
+
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,16 +21,10 @@ export async function addConcurso(formData: FormData) {
 
   if (!nome || !banca || !dataProva) return;
   await supabase.from('concursos').insert({ 
-    nome, 
-    banca, 
-    data_prova: dataProva, 
-    prioridades, 
-    user_id: user.id 
+    nome, banca, data_prova: dataProva, prioridades, user_id: user.id 
   });
-
   revalidatePath('/materiais');
 }
-
 export async function updateConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -38,20 +33,11 @@ export async function updateConcurso(formData: FormData) {
   const dataProva = formData.get('data_prova') as string;
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
-
   if (!id || !nome || !banca || !dataProva) return;
-
-  await supabase.from('concursos').update({ 
-    nome, 
-    banca, 
-    data_prova: dataProva, 
-    prioridades 
-  }).eq('id', id);
-
+  await supabase.from('concursos').update({ nome, banca, data_prova: dataProva, prioridades }).eq('id', id);
   revalidatePath('/');
   revalidatePath('/materiais');
 }
-
 export async function deleteConcurso(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('concursos').delete().eq('id', id);
@@ -59,7 +45,7 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/materiais');
 }
 
-// --- AÇÕES DE DISCIPLINA (SEU CÓDIGO - MANTIDO) ---
+// --- AÇÕES DE DISCIPLINA (CRUD COMPLETO) ---
 export async function addMasterDisciplina(formData: FormData) {
   const nome = formData.get('nome') as string;
   const emoji = formData.get('emoji') as string;
@@ -68,7 +54,6 @@ export async function addMasterDisciplina(formData: FormData) {
   await supabase.from('disciplinas').insert({ nome, emoji });
   revalidatePath('/disciplinas');
 }
-
 export async function updateDisciplina(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -78,10 +63,8 @@ export async function updateDisciplina(formData: FormData) {
   await supabase.from('disciplinas').update({ nome, emoji }).eq('id', id);
   revalidatePath('/disciplinas');
 }
-
 export async function deleteDisciplina(id: number) {
   const supabase = createServerActionClient({ cookies });
-  if (isNaN(id)) return;
   await supabase.from('disciplinas').delete().eq('id', id);
   revalidatePath('/disciplinas');
 }
@@ -279,13 +262,14 @@ export async function updateAnotacoesRapidas(content: string) {
   revalidatePath('/');
 }
 
-// --- AÇÕES PARA TÓPICOS/ANOTAÇÕES (CRUD COMPLETO) ---
+// --- AÇÕES PARA TÓPICOS (CRUD COMPLETO) ---
 export async function addTopico(formData: FormData) {
   const nome = formData.get('nome') as string;
   const disciplinaId = Number(formData.get('disciplina_id'));
+  const conteudo = formData.get('conteudo_rico') as string;
   if (!nome || !disciplinaId) return;
   const supabase = createServerActionClient({ cookies });
-  await supabase.from('topicos').insert({ nome, disciplina_id: disciplinaId, conteudo_rico: '' });
+  await supabase.from('topicos').insert({ nome, disciplina_id: disciplinaId, conteudo_rico: conteudo });
   revalidatePath('/disciplinas');
 }
 export async function updateTopico(formData: FormData) {

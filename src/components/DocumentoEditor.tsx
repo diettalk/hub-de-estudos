@@ -1,9 +1,8 @@
 // src/components/DocumentoEditor.tsx
 'use client';
-
 import { useState, useTransition, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { TextEditor } from './TextEditor';
@@ -12,7 +11,7 @@ import { addDocumento, updateDocumento, deleteDocumento } from '@/app/actions';
 type Documento = {
   id: number;
   title: string;
-  content: any;
+  content: string; // CORREÇÃO: any -> string
 };
 
 export function DocumentoEditor({ documento }: { documento?: Documento }) {

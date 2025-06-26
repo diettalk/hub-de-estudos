@@ -6,9 +6,9 @@ import { useEffect, useState, useTransition } from 'react';
 import { type RevisionTask } from '@/lib/types';
 import { updateRevisaoStatus } from '@/app/actions';
 import { Button } from '@/components/ui/button';
+import { type SessaoEstudo } from '@/lib/types'; // Importando tipo
 
-function calculateRevisions(sessoes: any[]): { today: RevisionTask[], week: RevisionTask[], month: RevisionTask[] } {
-  const todayTasks: RevisionTask[] = [], weekTasks: RevisionTask[] = [], monthTasks: RevisionTask[] = [];
+function calculateRevisions(sessoes: SessaoEstudo[]): { today: any[], week: any[], month: any[] } { // CORREÇÃO: tipo mais específico  const todayTasks: RevisionTask[] = [], weekTasks: RevisionTask[] = [], monthTasks: RevisionTask[] = [];
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);

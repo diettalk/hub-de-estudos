@@ -18,6 +18,8 @@ export function TopicoEditor({ disciplinaId, topico, onAction }: { disciplinaId:
   useEffect(() => {
     if (isEditMode) {
       setEditorContent(topico.conteudo_rico || '');
+    } else {
+      setEditorContent('');
     }
   }, [topico, isEditMode]);
 
@@ -26,7 +28,7 @@ export function TopicoEditor({ disciplinaId, topico, onAction }: { disciplinaId:
     startTransition(async () => {
       if (isEditMode) {
         formData.append('id', String(topico.id));
-        await updateTopico(formData);
+        await updateTopico(formData); // Agora esta função existe
       } else {
         await addTopico(formData);
       }
@@ -38,8 +40,8 @@ export function TopicoEditor({ disciplinaId, topico, onAction }: { disciplinaId:
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {isEditMode ?
-          <span className="flex-grow cursor-pointer flex items-center gap-2"><i className="fas fa-file-alt text-blue-400"></i> {topico.nome}</span> :
+        {isEditMode ? 
+          <span className="flex-grow cursor-pointer flex items-center gap-2"><i className="fas fa-file-alt text-blue-400"></i> {topico.nome}</span> : 
           <Button size="sm" variant="ghost"><i className="fas fa-plus mr-2"></i>Novo Tópico</Button>
         }
       </DialogTrigger>
