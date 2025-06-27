@@ -1,11 +1,14 @@
+// src/app/page.tsx
+
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import RevisoesPainel from '@/components/RevisoesPainel';
-import { updateAnotacoesRapidas } from '@/app/actions'; // CORREÇÃO: Importação da Server Action que estava faltando
+import { updateAnotacoesRapidas } from '@/app/actions';
 
+// Esta é a página principal que serve como Dashboard.
 export default async function Dashboard() {
   const supabase = createServerComponentClient({ cookies });
 
@@ -13,10 +16,15 @@ export default async function Dashboard() {
     data: { session },
   } = await supabase.auth.getSession();
 
+  // CORREÇÃO CRÍTICA AQUI:
+  // Se NÃO houver sessão, redirecionamos IMEDIATAMENTE para a página de login.
+  // Isso impede a "guerra de estados" e o loop de redirecionamento.
+  // A página Dashboard só será renderizada se o usuário estiver autenticado.
   if (!session) {
     redirect('/login');
   }
 
+  // O resto do código só será executado se houver uma sessão.
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, email, anotacoes_rapidas')
@@ -53,7 +61,6 @@ export default async function Dashboard() {
         </div>
         <div className="card bg-gray-800 p-6 rounded-lg">
           <h3 className="font-bold text-lg mb-2">Revisões para Hoje</h3>
-          {/* O componente RevisoesPainel agora é responsável por sua própria lógica de contagem */}
           <RevisoesPainel />
         </div>
       </div>
@@ -73,7 +80,6 @@ export default async function Dashboard() {
           </form>
         </div>
 
-        {/* Adicione outros cards ou seções aqui, se necessário */}
         <div className="card bg-gray-800 p-6 rounded-lg flex items-center justify-center">
           <p className="text-gray-500">Outra seção em breve...</p>
         </div>
