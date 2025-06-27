@@ -96,11 +96,11 @@ export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId:
     revalidatePath('/materiais');
 }
 
-// --- AÇÕES DO CICLO DE ESTUDOS (LÓGICA FINAL E CORRIGIDA) ---
+// --- AÇÃO DO CICLO DE ESTUDOS (LÓGICA FINAL E CORRIGIDA) ---
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
-  if (isNaN(id)) return;
+  if (isNaN(id)) return { error: 'ID da sessão inválido.' };
 
   const updateData: { [key: string]: any } = {};
   
@@ -116,6 +116,7 @@ export async function updateSessaoEstudo(formData: FormData) {
   
   const isMateriaFinalizada = formData.get('isMateriaFinalizada') === 'true';
 
+  // Lógica de Datas
   if (formData.has('data_estudo')) {
     const dataEstudoStr = formData.get('data_estudo') as string;
     updateData.data_estudo = dataEstudoStr || null;
@@ -128,6 +129,7 @@ export async function updateSessaoEstudo(formData: FormData) {
   } else if (formData.has('concluido')) {
     const isConcluido = formData.get('concluido') === 'true';
     updateData.concluido = isConcluido;
+    
     if (isConcluido && formData.get('data_estudo_was_null') === 'true' && !isMateriaFinalizada) {
       const studyDate = new Date();
       updateData.data_estudo = studyDate.toISOString().split('T')[0];
@@ -147,17 +149,20 @@ export async function updateSessaoEstudo(formData: FormData) {
   }
   
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
+  
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');
 }
+
 export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: ultimaSessao } = await supabase.from('sessoes_estudo').select('hora_no_ciclo').order('hora_no_ciclo', { ascending: false }).limit(1).single();
   const proximaHora = (ultimaSessao?.hora_no_ciclo || 0) + 1;
-  await supabase.from('sessoes_estudo').insert({ hora_no_ciclo: proximaHora, foco: 'Nova sessão' });
+  await supabase.from('sessoes_estudo').insert({ hora_no_ciclo: proximaHora, foco: 'Nova sessão - Edite o foco e selecione a matéria.' });
   revalidatePath('/ciclo');
 }
+
 export async function deleteSessaoCiclo(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('sessoes_estudo').delete().eq('id', id);
