@@ -1,34 +1,31 @@
 // src/app/login/page.tsx
+
 'use client';
 
-// 1. MUDANÇA IMPORTANTE: Agora importamos diretamente do pacote principal do Supabase
-import { createClient } from '@supabase/supabase-js';
-import { Button } from '@/components/ui/button'; // Reutilizando nosso botão bonito
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Button } from '@/components/ui/button';
 
 export default function LoginPage() {
-  // 2. Criamos o cliente Supabase da forma mais direta possível
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClientComponentClient();
 
   const handleLogin = async () => {
-    // 3. A função de login continua exatamente a mesma
+    // CORREÇÃO AQUI: Adicionamos a opção 'redirectTo' para garantir
+    // que o Supabase saiba exatamente para onde enviar o usuário
+    // após a autorização do GitHub. Isso torna o processo mais robusto.
     await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${location.origin}/auth/callback`,
       },
     });
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white">
-      <div className="text-center p-8 bg-gray-800 rounded-xl shadow-2xl">
-        <h1 className="text-4xl font-black mb-2">HUB Hélio</h1>
-        <p className="text-gray-400 mb-8">Faça o login para começar</p>
-        <Button onClick={handleLogin} size="lg">
-          <i className="fab fa-github mr-3"></i>
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="bg-gray-800 p-8 rounded-lg text-center shadow-lg">
+        <h1 className="text-2xl font-bold mb-2">HUB Hélio</h1>
+        <p className="text-gray-400 mb-6">Faça o login para começar</p>
+        <Button onClick={handleLogin}>
           Entrar com GitHub
         </Button>
       </div>

@@ -3,29 +3,22 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { revalidatePath } from 'next/cache';
+import type { NextRequest } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
+// CORREÇÃO: Adicionamos 'export const dynamic = 'force-dynamic''
+// para garantir que esta rota não seja cacheada estaticamente.
+export const dynamic = 'force-dynamic';
 
-  console.log('CALLBACK ROTA: Recebido código do GitHub, tentando trocar por sessão.');
+export async function GET(request: NextRequest) {
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get('code');
 
   if (code) {
     const supabase = createRouteHandlerClient({ cookies });
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      console.error('CALLBACK ROTA ERROR: Erro ao trocar código pela sessão:', error);
-      // Redireciona para uma página de erro se a troca falhar
-      return NextResponse.redirect(new URL('/login?error=Authentication%20Failed', request.url));
-    }
+    // A troca do código pela sessão estabelece o cookie de login
+    await supabase.auth.exchangeCodeForSession(code);
   }
 
-  console.log('CALLBACK ROTA: Sessão trocada com SUCESSO. Redirecionando para o Dashboard.');
-  
-  // Força a revalidação do cache da página principal
-  revalidatePath('/', 'layout');
-
-  // Redireciona para a página principal (Dashboard)
-  return NextResponse.redirect(new URL('/', request.url));
+  // Após criar a sessão, redireciona o usuário para a página principal (Dashboard)
+  return NextResponse.redirect(requestUrl.origin);
 }
