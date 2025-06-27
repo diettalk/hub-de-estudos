@@ -26,7 +26,6 @@ export default async function RootLayout({
     data: { session },
   } = await supabase.auth.getSession();
 
-  // ADICIONADO "ESPIÃO"
   console.log(
     `--- LAYOUT --- Sessão encontrada:`,
     session ? `UserID: ${session.user.id}` : "null"
@@ -53,7 +52,8 @@ export default async function RootLayout({
               <NavItem href="/revisoes">Revisões</NavItem>
               <NavItem href="/documentos">Documentos</NavItem>
               <NavItem href="/tarefas">Tarefas</NavItem>
-              <NavItem href="/calendario">Calendário</aram>
+              {/* CORREÇÃO AQUI: A tag estava fechada como </aram> */}
+              <NavItem href="/calendario">Calendário</NavItem>
             </ul>
           </nav>
         )}
