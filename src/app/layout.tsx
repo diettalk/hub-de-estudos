@@ -5,9 +5,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
-import { LogoutButton } from "@/components/LogoutButton";
-import Link from "next/link";
-import { NavItem } from "@/components/NavItem";
+import { LogoutButton } from "@/components/LogoutButton"; // Agora vai funcionar
+import { NavItem } from "@/components/NavItem";       // Agora vai funcionar
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,11 +24,6 @@ export default async function RootLayout({
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
-  console.log(
-    `--- LAYOUT --- Sessão encontrada:`,
-    session ? `UserID: ${session.user.id}` : "null"
-  );
 
   return (
     <html lang="pt-BR">
@@ -52,7 +46,6 @@ export default async function RootLayout({
               <NavItem href="/revisoes">Revisões</NavItem>
               <NavItem href="/documentos">Documentos</NavItem>
               <NavItem href="/tarefas">Tarefas</NavItem>
-              {/* CORREÇÃO AQUI: A tag estava fechada como </aram> */}
               <NavItem href="/calendario">Calendário</NavItem>
             </ul>
           </nav>
