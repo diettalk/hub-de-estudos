@@ -68,6 +68,36 @@ export default function CicloDeEstudosPage() {
     getCicloData();
   }, [supabase]);
   
+<tr key={sessao.id} className="border-b border-gray-700 hover:bg-gray-800/50">
+  <td className="p-3 text-center">
+    <input type="checkbox" defaultChecked={sessao.concluida} />
+  </td>
+  <td className="p-3 text-center">{sessao.finalizada}</td>
+  <td className="p-3 text-center">{sessao.hora}</td>
+  <td className="p-3">{sessao.materia}</td>
+  <td className="p-3">{sessao.foco_sugerido}</td>
+  <td className="p-3">
+    <Textarea defaultValue={sessao.diario_de_bordo || ''} className="bg-gray-700 h-10"/>
+  </td>
+  <td className="p-3">{sessao.questoes}</td>
+  <td className="p-3 text-center">
+    <input type="date" defaultValue={sessao.data_estudo || ''} className="bg-gray-700"/>
+  </td>
+  <td className="p-3 text-center">{sessao.r1 ? new Date(sessao.r1 + 'T03:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+  <td className="p-3 text-center">{sessao.r7 ? new Date(sessao.r7 + 'T03:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+  <td className="p-3 text-center">{sessao.r30 ? new Date(sessao.r30 + 'T03:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+  
+  {/* CORREÇÃO AQUI: Adicionando a coluna e o botão de exclusão de volta */}
+  <td className="p-3 text-center">
+    <form action={deleteSessaoCiclo}>
+        <input type="hidden" name="id" value={sessao.id} />
+        <Button type="submit" variant="ghost" size="icon" className="h-8 w-8">
+            <i className="fas fa-times text-xs text-red-500"></i>
+        </Button>
+    </form>
+  </td>
+</tr>
+  
   if (loading) return <div>Carregando...</div>;
 
   const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos. ...`;

@@ -1,105 +1,103 @@
 // src/app/disciplinas/page.tsx
+
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { type Disciplina, type Topico } from '@/lib/types';
-import { addMasterDisciplina, updateDisciplina, deleteDisciplina, deleteTopico } from '@/app/actions';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { TopicoEditor } from '@/components/TopicoEditor'; // Importa o novo componente
+import { Textarea } from '@/components/ui/textarea';
+import { updateTopicoAnotacoes } from '@/app/actions';
 
-function DisciplinaForm({ disciplina, onAction }: { disciplina?: Disciplina; onAction: () => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {disciplina ? <Button variant="ghost" size="icon" className="h-6 w-6 p-0"><i className="fas fa-pencil-alt text-xs"/></Button> : <Button size="sm">+ Nova</Button>}
-      </DialogTrigger>
-      <DialogContent className="bg-gray-800 text-white"><DialogHeader><DialogTitle>{disciplina ? 'Editar' : 'Nova'} Disciplina</DialogTitle></DialogHeader>
-        <form action={async (formData) => { if (disciplina) formData.append('id', String(disciplina.id)); await (disciplina ? updateDisciplina(formData) : addMasterDisciplina(formData)); onAction(); setOpen(false); }}>
-          <div className="space-y-4 py-4">
-            <div><Label>Nome</Label><Input name="nome" defaultValue={disciplina?.nome} className="bg-gray-700"/></div>
-            <div><Label>Emoji</Label><Input name="emoji" defaultValue={disciplina?.emoji} className="bg-gray-700"/></div>
-          </div>
-          <DialogFooter><Button type="submit">Salvar</Button></DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+// Tipos para os dados
+type Topico = { id: number; nome: string; anotacoes: string | null };
+type Disciplina = { id: number; nome: string; topicos: Topico[] };
 
 export default function DisciplinasPage() {
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
   const [selectedDisciplina, setSelectedDisciplina] = useState<Disciplina | null>(null);
-  const [topicos, setTopicos] = useState<Topico[]>([]);
+  const [selectedTopico, setSelectedTopico] = useState<Topico | null>(null);
   const [isPending, startTransition] = useTransition();
   const supabase = createClientComponentClient();
 
-  const fetchData = async () => {
-    const { data: discData } = await supabase.from('disciplinas').select('*').order('nome');
-    setDisciplinas(discData ?? []);
-    if (selectedDisciplina) {
-      const { data: topicoData } = await supabase.from('topicos').select('*').eq('disciplina_id', selectedDisciplina.id).order('created_at');
-      setTopicos(topicoData ?? []);
-    } else {
-      setTopicos([]);
-    }
-  };
-
   useEffect(() => {
+    const fetchData = async () => {
+      const { data, error } = await supabase
+        .from('disciplinas')
+        .select(`*, topicos(*)`);
+      if (data) {
+        setDisciplinas(data as Disciplina[]);
+      }
+    };
     fetchData();
-    const channel = supabase.channel('realtime-all').on('postgres_changes', { event: '*', schema: 'public' }, fetchData).subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [supabase]);
 
-  useEffect(() => {
-    if (selectedDisciplina) {
-      fetchData(); // Recarrega os tópicos quando a disciplina muda
-    } else {
-      setTopicos([]);
-    }
-  }, [selectedDisciplina]);
+  const handleSelectTopico = (disciplina: Disciplina, topico: Topico) => {
+    setSelectedDisciplina(disciplina);
+    setSelectedTopico(topico);
+  };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-[calc(100vh-200px)]">
-      <aside className="md:col-span-1 space-y-2 bg-gray-800/50 p-2 rounded-lg border overflow-y-auto">
-        <div className="flex justify-between items-center p-2"><h3 className="font-bold text-sm">BIBLIOTECA</h3><DisciplinaForm onAction={fetchData} /></div>
-        {disciplinas.map(d => (
-          <div key={d.id} onClick={() => setSelectedDisciplina(d)} className={`p-2 rounded-md cursor-pointer text-sm flex justify-between items-center ${selectedDisciplina?.id === d.id ? 'bg-blue-600' : 'hover:bg-gray-700'}`}>
-            <span className="flex items-center gap-2"><span className="text-lg">{d.emoji}</span> {d.nome}</span>
-            <div className="flex items-center">
-              <DisciplinaForm disciplina={d} onAction={fetchData} />
-              <Button variant="ghost" size="icon" className="h-6 w-6" disabled={isPending} onClick={(e) => { e.stopPropagation(); if(confirm('Certeza?')) { startTransition(() => deleteDisciplina(d.id)); }}}>
-                <i className="fas fa-trash-alt text-xs text-red-500"></i>
-              </Button>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[80vh]">
+      <div className="md:col-span-1 bg-gray-800 p-4 rounded-lg overflow-y-auto">
+        <h2 className="text-xl font-bold mb-4">BIBLIOTECA</h2>
+        {/* Botão + Nova (funcionalidade futura) */}
+        
+        <div className="space-y-2">
+          {disciplinas.map((disciplina) => (
+            <div key={disciplina.id}>
+              <h3 className="font-semibold px-3 py-2">{disciplina.nome}</h3>
+              <ul className="space-y-1">
+                {disciplina.topicos.map((topico) => (
+                  <li key={topico.id}>
+                    <button
+                      onClick={() => handleSelectTopico(disciplina, topico)}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                        selectedTopico?.id === topico.id
+                          ? 'bg-blue-600 text-white'
+                          : 'hover:bg-gray-700'
+                      }`}
+                    >
+                      {topico.nome}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-        ))}
-      </aside>
+          ))}
+        </div>
+      </div>
 
-      <main className="md:col-span-3 card bg-gray-800/50 border-gray-700 p-4">
-        {selectedDisciplina ? (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">{selectedDisciplina.emoji} {selectedDisciplina.nome}</h2>
-              <TopicoEditor disciplinaId={selectedDisciplina.id} onAction={fetchData} />
-            </div>
-            <div className="space-y-2">
-              {topicos.map(t => (
-                <div key={t.id} className="p-3 rounded-lg flex justify-between items-center bg-gray-800 hover:bg-gray-700/50">
-                  <TopicoEditor topico={t} disciplinaId={selectedDisciplina.id} onAction={fetchData} />
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" disabled={isPending} onClick={async () => { if(confirm('Certeza?')) { await deleteTopico(t.id); fetchData(); } }}>
-                    <i className="fas fa-trash-alt text-xs text-red-500"/>
-                  </Button>
-                </div>
-              ))}
-            </div>
+      <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg flex flex-col">
+        {selectedTopico ? (
+          <>
+            <h2 className="text-2xl font-bold mb-1">
+              {selectedDisciplina?.nome}
+            </h2>
+            <p className="text-gray-400 mb-4">{selectedTopico.nome}</p>
+            
+            <form 
+              action={(formData) => startTransition(() => updateTopicoAnotacoes(formData))}
+              className="flex flex-col flex-grow"
+            >
+              <input type="hidden" name="topicoId" value={selectedTopico.id} />
+              <Textarea
+                key={selectedTopico.id} // Força a re-renderização ao mudar de tópico
+                name="anotacoes"
+                defaultValue={selectedTopico.anotacoes || ''}
+                className="flex-grow bg-gray-900 text-white border-gray-700 resize-none"
+                placeholder="Digite suas anotações sobre este tópico..."
+              />
+              <Button type="submit" disabled={isPending} className="mt-4 self-end">
+                {isPending ? 'Salvando...' : 'Salvar Anotações'}
+              </Button>
+            </form>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500">Selecione um tópico para ver os detalhes.</p>
           </div>
-        ) : <p className="text-gray-500 flex h-full items-center justify-center">Selecione uma disciplina na sua biblioteca.</p>}
-      </main>
+        )}
+      </div>
     </div>
   );
 }

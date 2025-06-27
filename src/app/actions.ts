@@ -271,3 +271,38 @@ export async function deleteTarefa(id: number) {
   revalidatePath('/tarefas');
   revalidatePath('/calendario');
 }
+
+export async function updateAnotacoesRapidas(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return;
+  }
+
+  const anotacoes = formData.get('anotacoes') as string;
+
+  await supabase
+    .from('profiles')
+    .update({ anotacoes_rapidas: anotacoes })
+    .eq('id', session.user.id);
+
+  // CORREÇÃO: Força a atualização da página Dashboard
+  revalidatePath('/');
+}
+
+export async function updateTopicoAnotacoes(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const topicoId = formData.get('topicoId') as string;
+  const anotacoes = formData.get('anotacoes') as string;
+
+  await supabase
+    .from('topicos')
+    .update({ anotacoes: anotacoes })
+    .eq('id', topicoId);
+
+  // CORREÇÃO: Força a atualização da página de disciplinas
+  revalidatePath('/disciplinas');
+}
