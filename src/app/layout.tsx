@@ -1,29 +1,64 @@
 // src/app/layout.tsx
-import type { Metadata } from 'next';
-import { GeistSans } from 'geist/font/sans';
-import './globals.css';
-import { Header } from '@/components/Header';
-import { Navbar } from '@/components/Navbar';
+
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { LogoutButton } from "@/components/LogoutButton";
+import Link from "next/link";
+import { NavItem } from "@/components/NavItem";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'HUB Hélio - Estudos',
-  description: 'Sua Plataforma Centralizada para a Aprovação',
+  title: "HUB Hélio",
+  description: "Sua Plataforma Centralizada para a Aprovação",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const supabase = createServerComponentClient({ cookies });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // ADICIONADO "ESPIÃO"
+  console.log(
+    `--- LAYOUT --- Sessão encontrada:`,
+    session ? `UserID: ${session.user.id}` : "null"
+  );
+
   return (
-    <html lang="pt-BR" className="dark" style={{ colorScheme: 'dark' }} suppressHydrationWarning={true}>
-      <head>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-      </head>
-      <body className={GeistSans.className}>
-        <div className="bg-background text-foreground min-h-screen">
-          <div className="container mx-auto">
-            <Header />
-            <Navbar />
-            <main className="p-4 md:p-8">{children}</main>
+    <html lang="pt-BR">
+      <body className={`${inter.className} bg-gray-900 text-white`}>
+        <header className="p-4 border-b border-gray-700 flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">HUB Hélio</h1>
+            <p className="text-sm text-gray-400">Sua Plataforma Centralizada para a Aprovação</p>
           </div>
-        </div>
+          {session && <LogoutButton />}
+        </header>
+        
+        {session && (
+          <nav className="p-4 border-b border-gray-700">
+            <ul className="flex space-x-4 overflow-x-auto">
+              <NavItem href="/">Dashboard</NavItem>
+              <NavItem href="/guia-estudos">Guia de Estudos</NavItem>
+              <NavItem href="/disciplinas">Disciplinas</NavItem>
+              <NavItem href="/ciclo">Ciclo de Estudos</NavItem>
+              <NavItem href="/revisoes">Revisões</NavItem>
+              <NavItem href="/documentos">Documentos</NavItem>
+              <NavItem href="/tarefas">Tarefas</NavItem>
+              <NavItem href="/calendario">Calendário</aram>
+            </ul>
+          </nav>
+        )}
+
+        <main className="p-6">{children}</main>
       </body>
     </html>
   );
