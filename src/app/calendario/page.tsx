@@ -2,12 +2,12 @@
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useTransition, useCallback } from 'react';
-import { DayPicker } from 'react-day-picker';
+import { useEffect, useState, useTransition } from 'react';
+import { DayPicker } from 'react-day-picker'; // A IMPORTAÇÃO QUE FALTAVA
 import { ptBR } from 'date-fns/locale';
 import { format } from 'date-fns';
 import 'react-day-picker/dist/style.css';
-import { addLembrete, deleteLembrete, updateRevisaoStatus } from '@/app/actions';
+import { addLembrete, deleteLembrete, updateLembrete, updateRevisaoStatus } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,9 +15,8 @@ import { LembreteEditor } from '@/components/LembreteEditor';
 
 type Lembrete = { id: number; titulo: string; cor: string; data: string; };
 type CalendarEvent = {
-  key: string; id: number; title: string; type: 'revisao' | 'lembrete';
-  color: string; completed: boolean; revisionType?: 'R1' | 'R7' | 'R30'; date: Date;
-  data: Lembrete | any; // Mantido como 'any' por enquanto para evitar quebrar a lógica de revisão
+  key: string; id: number; title: string; type: 'revisao' | 'lembrete' | 'prova';
+  color: string; completed: boolean; revisionType?: 'R1' | 'R7' | 'R30'; data: any;
 };
 
 export default function CalendarioGeralPage() {
@@ -26,12 +25,12 @@ export default function CalendarioGeralPage() {
   const [isPending, startTransition] = useTransition();
   const supabase = createClientComponentClient();
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = async () => {
     const sessoesPromise = supabase.from('sessoes_estudo').select('id, foco, data_revisao_1, r1_concluida, data_revisao_2, r2_concluida, data_revisao_3, r3_concluida');
     const lembretesPromise = supabase.from('lembretes').select('*');
-    const [{ data: sessoes }, { data: lembretesData }] = await Promise.all([sessoesPromise, lembretesPromise]);
-    
-    const allEvents: Record<string, CalendarEvent[]> = {};
+    const concursosPromise = supabase.from('concursos').select('id, nome, data_prova');
+    const [{ data: sessoes }, { data: lembretes }, { data: concursos }] = await Promise.all([sessoesPromise, lembretesPromise, concursosPromise]);
+       const allEvents: Record<string, CalendarEvent[]> = {};
     const addEvent = (dateStr: string | null, event: Omit<CalendarEvent, 'date'> & {date?: Date}) => {
       if (dateStr) {
         if (!allEvents[dateStr]) allEvents[dateStr] = [];
@@ -43,18 +42,18 @@ export default function CalendarioGeralPage() {
       addEvent(r.data_revisao_2, { key: `r2-${r.id}`, id: r.id, title: r.foco, type: 'revisao', revisionType: 'R7', completed: r.r2_concluida, color: '#F59E0B', data: r });
       addEvent(r.data_revisao_3, { key: `r3-${r.id}`, id: r.id, title: r.foco, type: 'revisao', revisionType: 'R30', completed: r.r3_concluida, color: '#10B981', data: r });
     });
-    (lembretesData as Lembrete[] | null)?.forEach(l => addEvent(l.data, { key: `l-${l.id}`, id: l.id, title: l.titulo, type: 'lembrete', color: l.cor, completed: false, data: l }));
+    lembretes?.forEach((l: Lembrete) => addEvent(l.data, { key: `l-${l.id}`, id: l.id, title: l.titulo, type: 'lembrete', color: l.cor, completed: false, data: l }));
+    concursos?.forEach((c: any) => addEvent(c.data_prova, { key: `p-${c.id}`, id: c.id, title: `Prova: ${c.nome}`, type: 'prova', color: '#9333EA', completed: false, data: c }));
     setEvents(allEvents);
-  }, [supabase]);
+  };
 
   useEffect(() => {
     fetchEvents();
     const channel = supabase.channel('realtime-calendario-page').on('postgres_changes', { event: '*', schema: 'public' }, fetchEvents).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [supabase, fetchEvents]);
-  
+  }, [supabase]); 
   const selectedDayString = format(selectedDay, 'yyyy-MM-dd');
-  const tasksForSelectedDay = events[selectedDayString] || [];
+  const eventsForSelectedDay = events[selectedDayString] || [];
 
   return (
     <div>
@@ -66,11 +65,10 @@ export default function CalendarioGeralPage() {
         <div className="lg:col-span-2 card bg-gray-800 p-6">
           <h3 className="font-bold text-xl mb-4">Eventos para {format(selectedDay, 'PPP', { locale: ptBR })}</h3>
           <div className="space-y-3 max-h-[45vh] overflow-y-auto pr-2 mb-4">
-            {/* CORREÇÃO AQUI */}
-            {tasksForSelectedDay.map((event) => (
+            {eventsForSelectedDay.map((event) => (
               <div key={event.key} className={`p-3 rounded-lg flex items-center gap-3 border-l-4 ${event.completed ? 'opacity-50' : 'bg-gray-900/50'}`} style={{borderColor: event.color}}>
                 {event.type === 'revisao' && (
-                  <input type="checkbox" className="h-5 w-5 shrink-0" checked={event.completed} 
+                  <input type="checkbox" className="h-5 w-5 shrink-0" checked={event.completed}
                          onChange={() => startTransition(() => updateRevisaoStatus(event.id, event.revisionType!, !event.completed))}
                          disabled={isPending}
                   />
@@ -84,8 +82,7 @@ export default function CalendarioGeralPage() {
                 )}
               </div>
             ))}
-            {/* E CORREÇÃO AQUI */}
-            {tasksForSelectedDay.length === 0 && <p className="text-gray-500">Nenhum evento para este dia.</p>}
+            {eventsForSelectedDay.length === 0 && <p className="text-gray-500">Nenhum evento para este dia.</p>}
           </div>
           <form id="lembrete-form" action={async (formData) => { await addLembrete(formData); (document.getElementById('lembrete-form-input') as HTMLInputElement).value = ''; fetchEvents(); }}>
             <Label className="text-xs">Novo Lembrete:</Label>
