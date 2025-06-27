@@ -1,73 +1,81 @@
-// src/app/ciclo/page.tsx
-'use client';
-
-import { useEffect, useState, useTransition } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { addSessaoCiclo } from '@/app/actions';
-import { type SessaoEstudo, type Disciplina } from '@/lib/types';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { CicloTableRow } from '@/components/CicloTableRow';
-import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
+import { Textarea } from '@/components/ui/textarea';
+import RevisoesPainel from '@/components/RevisoesPainel';
+import { updateAnotacoesRapidas } from '@/app/actions'; // CORREÇÃO: Importação da Server Action que estava faltando
 
-export default function CicloPage() {
-  const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
-  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAdding, startAddingTransition] = useTransition();
-  const supabase = createClientComponentClient();
+export default async function Dashboard() {
+  const supabase = createServerComponentClient({ cookies });
 
-  const getCicloData = async () => {
-    const sessoesPromise = supabase.from('sessoes_estudo').select(`*, disciplinas (id, nome, emoji)`).order('hora_no_ciclo');
-    const disciplinasPromise = supabase.from('disciplinas').select('*').order('nome');
-    const [{ data: sessoesData }, { data: disciplinasData }] = await Promise.all([sessoesPromise, disciplinasPromise]);
-    setSessoes(sessoesData as SessaoEstudo[] || []);
-    setDisciplinas(disciplinasData || []);
-    setLoading(false);
-  };
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  useEffect(() => {
-    getCicloData();
-  }, [supabase]);
+  if (!session) {
+    redirect('/login');
+  }
 
-  if(loading) return <div>Carregando...</div>
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, email, anotacoes_rapidas')
+    .eq('id', session.user.id)
+    .single();
 
-  const comandoEvolucao = `Olá, David! Concluí a Fase 1...`;
-  
+  const { count: tarefasPendentes } = await supabase
+    .from('tarefas')
+    .select('*', { count: 'exact', head: true })
+    .eq('concluida', false);
+
+  const { count: sessoesHoje } = await supabase
+    .from('sessoes_estudo')
+    .select('*', { count: 'exact', head: true })
+    .eq('data_estudo', new Date().toISOString().split('T')[0]);
+
+
   return (
-    <div className="space-y-6">
-      <ProgressoCicloCard sessoes={sessoes} />
-      
-      {/* ... Seus textos do tutorial e legenda aqui ... */}
-      
-      <div>
-        <h2 className="text-2xl font-bold">Ciclo de Estudos - FASE 1 (Painel de Controle)</h2>
-        <div className="overflow-x-auto bg-gray-800/50 rounded-lg border border-gray-700 mt-4">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase bg-gray-800">
-              <tr>
-                <th className="p-3">OK</th>
-                <th className="p-3">Finalizada</th>
-                <th className="p-3">Hora</th>
-                <th className="p-3">Matéria</th>
-                <th className="p-3 min-w-[350px]">Foco Sugerido</th>
-                <th className="p-3 min-w-[250px]">Diário de Bordo</th>
-                <th className="p-3 min-w-[200px]">Questões</th>
-                <th className="p-3 min-w-[150px]">Data Estudo</th>
-                <th className="text-center p-3">R1 (24h)</th>
-                <th className="text-center p-3">R7 (7d)</th>
-                <th className="text-center p-3">R30 (30d)</th>
-                <th className="p-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessoes.map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao} disciplinas={disciplinas} />)}
-            </tbody>
-          </table>
+    <div>
+      <header className="text-left mb-8">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-gray-400">Bem-vindo(a) de volta! Aqui está um resumo do seu progresso.</p>
+      </header>
+
+      {/* Grid de cards de estatísticas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="card bg-gray-800 p-6 rounded-lg">
+          <h3 className="font-bold text-lg mb-2">Sessões de Hoje</h3>
+          <p className="text-4xl font-bold text-blue-400">{sessoesHoje ?? 0}</p>
         </div>
-        <div className="flex justify-center mt-4">
-          <Button onClick={() => startAddingTransition(() => addSessaoCiclo())} variant="outline" size="sm" disabled={isAdding}>
-            {isAdding ? 'Adicionando...' : '+ Adicionar Linha ao Ciclo'}
-          </Button>
+        <div className="card bg-gray-800 p-6 rounded-lg">
+          <h3 className="font-bold text-lg mb-2">Tarefas Pendentes</h3>
+          <p className="text-4xl font-bold text-yellow-400">{tarefasPendentes ?? 0}</p>
+        </div>
+        <div className="card bg-gray-800 p-6 rounded-lg">
+          <h3 className="font-bold text-lg mb-2">Revisões para Hoje</h3>
+          {/* O componente RevisoesPainel agora é responsável por sua própria lógica de contagem */}
+          <RevisoesPainel />
+        </div>
+      </div>
+
+      {/* Grid de anotações e outras seções */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="card bg-gray-800 p-6 rounded-lg">
+          <h3 className="font-bold text-lg mb-4">Anotações Rápidas</h3>
+          <form action={updateAnotacoesRapidas} className="flex flex-col h-full">
+            <Textarea
+              name="anotacoes"
+              defaultValue={profile?.anotacoes_rapidas || ''}
+              className="flex-grow bg-gray-900 text-white border-gray-700 resize-none"
+              placeholder="Digite suas anotações aqui..."
+            />
+            <Button type="submit" className="mt-4 self-end">Salvar Anotações</Button>
+          </form>
+        </div>
+
+        {/* Adicione outros cards ou seções aqui, se necessário */}
+        <div className="card bg-gray-800 p-6 rounded-lg flex items-center justify-center">
+          <p className="text-gray-500">Outra seção em breve...</p>
         </div>
       </div>
     </div>

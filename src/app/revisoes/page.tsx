@@ -1,101 +1,145 @@
-// src/app/revisoes/page.tsx
-'use client';
+'use client'; // CORREÇÃO: Adicionado para permitir interatividade e hooks
+
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useEffect, useState, useTransition } from 'react';
-import { updateSessaoEstudo } from '@/app/actions';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState, useCallback, useTransition } from 'react'; // CORREÇÃO: Adicionado useTransition
+import 'react-day-picker/dist/style.css';
+import { updateRevisaoStatus } from '@/app/actions';
 
-type RevisionTask = { sessaoId: number; foco: string; type: 'R1' | 'R7' | 'R30'; dueDate: Date; };
+type Revisao = {
+  id: number;
+  foco: string;
+  data_revisao_1: string | null;
+  r1_concluida: boolean;
+  data_revisao_2: string | null;
+  r2_concluida: boolean;
+  data_revisao_3: string | null;
+  r3_concluida: boolean;
+};
 
-function calculateRevisions(sessoes: any[]): { today: RevisionTask[], week: RevisionTask[], month: RevisionTask[] } {
-  const todayTasks: RevisionTask[] = [], weekTasks: RevisionTask[] = [], monthTasks: RevisionTask[] = [];
-  const now = new Date(); now.setHours(0, 0, 0, 0);
-  const endOfWeek = new Date(now); endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-  sessoes.forEach(sessao => {
-    if (sessao.data_estudo) {
-      if (sessao.data_revisao_1 && !sessao.r1_concluida) {
-        const dueDate = new Date(sessao.data_revisao_1 + 'T03:00:00');
-        if (dueDate >= now && dueDate <= endOfMonth) {
-          const task = { sessaoId: sessao.id, foco: sessao.foco, type: 'R1' as const, dueDate };
-          if (dueDate.getTime() === now.getTime()) todayTasks.push(task); else if (dueDate <= endOfWeek) weekTasks.push(task); else monthTasks.push(task);
-        }
-      }
-      if (sessao.data_revisao_2 && !sessao.r2_concluida) {
-        const dueDate = new Date(sessao.data_revisao_2 + 'T03:00:00');
-        if (dueDate >= now && dueDate <= endOfMonth) {
-          const task = { sessaoId: sessao.id, foco: sessao.foco, type: 'R7' as const, dueDate };
-          if (dueDate.getTime() === now.getTime()) todayTasks.push(task); else if (dueDate <= endOfWeek) weekTasks.push(task); else monthTasks.push(task);
-        }
-      }
-      if (sessao.data_revisao_3 && !sessao.r3_concluida) {
-        const dueDate = new Date(sessao.data_revisao_3 + 'T03:00:00');
-        if (dueDate >= now && dueDate <= endOfMonth) {
-          const task = { sessaoId: sessao.id, foco: sessao.foco, type: 'R30' as const, dueDate };
-          if (dueDate.getTime() === now.getTime()) todayTasks.push(task); else if (dueDate <= endOfWeek) weekTasks.push(task); else monthTasks.push(task);
-        }
-      }
-    }
-  });
-
-  const sortFn = (a: RevisionTask, b: RevisionTask) => a.dueDate.getTime() - b.dueDate.getTime();
-  return { today: todayTasks.sort(sortFn), week: weekTasks.sort(sortFn), month: monthTasks.sort(sortFn) };
-}
+type EventoRevisao = {
+  id: number;
+  title: string;
+  type: 'R1' | 'R7' | 'R30';
+  completed: boolean;
+  color: string;
+};
 
 export default function RevisoesPage() {
-  const [tasks, setTasks] = useState<{ today: RevisionTask[], week: RevisionTask[], month: RevisionTask[] }>({ today: [], week: [], month: [] });
+  const [revisoesHoje, setRevisoesHoje] = useState<EventoRevisao[]>([]);
+  const [revisoesAtrasadas, setRevisoesAtrasadas] = useState<EventoRevisao[]>([]);
   const [isPending, startTransition] = useTransition();
   const supabase = createClientComponentClient();
 
-  useEffect(() => {
-    const getRevisions = async () => {
-      const { data } = await supabase.from('sessoes_estudo').select('id, foco, data_estudo, data_revisao_1, r1_concluida, data_revisao_2, r2_concluida, data_revisao_3, r3_concluida').eq('concluido', true);
-      if (data) setTasks(calculateRevisions(data));
-    };
-    getRevisions();
+  const fetchRevisoes = useCallback(async () => {
+    const hoje = new Date().toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
+    // CORREÇÃO AQUI: A sintaxe do .or() foi completamente ajustada
+    // para usar and() em cada condição, que é o formato correto do Supabase.
+    const { data, error } = await supabase
+      .from('sessoes_estudo')
+      .select('id, foco, data_revisao_1, r1_concluida, data_revisao_2, r2_concluida, data_revisao_3, r3_concluida')
+      .or(
+        `and(data_revisao_1.lte.${hoje},r1_concluida.is.false),and(data_revisao_2.lte.${hoje},r2_concluida.is.false),and(data_revisao_3.lte.${hoje},r3_concluida.is.false)`
+      );
+
+    if (error) {
+      console.error('Erro ao buscar revisões:', error);
+      return;
+    }
+
+    const eventosHoje: EventoRevisao[] = [];
+    const eventosAtrasados: EventoRevisao[] = [];
+
+    data?.forEach((r: Revisao) => {
+      // Revisão 1
+      if (r.data_revisao_1 && !r.r1_concluida) {
+        if (r.data_revisao_1 === hoje) {
+          eventosHoje.push({ id: r.id, title: r.foco, type: 'R1', completed: false, color: '#EF4444' });
+        } else if (r.data_revisao_1 < hoje) {
+          eventosAtrasados.push({ id: r.id, title: r.foco, type: 'R1', completed: false, color: '#EF4444' });
+        }
+      }
+      // Revisão 2 (R7)
+      if (r.data_revisao_2 && !r.r2_concluida) {
+        if (r.data_revisao_2 === hoje) {
+          eventosHoje.push({ id: r.id, title: r.foco, type: 'R7', completed: false, color: '#F59E0B' });
+        } else if (r.data_revisao_2 < hoje) {
+          eventosAtrasados.push({ id: r.id, title: r.foco, type: 'R7', completed: false, color: '#F59E0B' });
+        }
+      }
+      // Revisão 3 (R30)
+      if (r.data_revisao_3 && !r.r3_concluida) {
+        if (r.data_revisao_3 === hoje) {
+          eventosHoje.push({ id: r.id, title: r.foco, type: 'R30', completed: false, color: '#10B981' });
+        } else if (r.data_revisao_3 < hoje) {
+          eventosAtrasados.push({ id: r.id, title: r.foco, type: 'R30', completed: false, color: '#10B981' });
+        }
+      }
+    });
+
+    setRevisoesHoje(eventosHoje);
+    setRevisoesAtrasadas(eventosAtrasados);
   }, [supabase]);
-  
-  const handleRevisionToggle = (sessaoId: number, type: 'R1' | 'R7' | 'R30') => {
-    const fieldName = type === 'R1' ? 'r1_concluida' : type === 'R7' ? 'r2_concluida' : 'r3_concluida';
-    const formData = new FormData();
-    formData.append('id', String(sessaoId));
-    formData.append(fieldName, 'true');
-    startTransition(() => {
-      updateSessaoEstudo(formData);
-      setTasks(currentTasks => ({
-        today: currentTasks.today.filter(t => !(t.sessaoId === sessaoId && t.type === type)),
-        week: currentTasks.week.filter(t => !(t.sessaoId === sessaoId && t.type === type)),
-        month: currentTasks.month.filter(t => !(t.sessaoId === sessaoId && t.type === type)),
-      }));
+
+  useEffect(() => {
+    fetchRevisoes();
+    const channel = supabase.channel('realtime-revisoes').on('postgres_changes', { event: '*', schema: 'public', table: 'sessoes_estudo' }, fetchRevisoes).subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchRevisoes, supabase]);
+
+  const handleToggle = (id: number, type: 'R1' | 'R7' | 'R30', completed: boolean) => {
+    startTransition(async () => {
+      await updateRevisaoStatus(id, type, completed);
     });
   };
 
-  const RevisionList = ({ title, items, colorClass }: { title: string, items: RevisionTask[], colorClass: string }) => {
-    if (items.length === 0) return null;
+  const renderRevisaoList = (revisoes: EventoRevisao[]) => {
+    if (revisoes.length === 0) {
+      return <p className="text-gray-500">Nenhuma revisão nesta categoria.</p>;
+    }
     return (
-      <div className="mb-6"><h3 className="font-bold text-lg mb-2">{title} ({items.length})</h3><ul className="space-y-2">
-        {items.map(task => (
-          <li key={`${task.sessaoId}-${task.type}`} className={`flex justify-between items-center p-3 bg-gray-800 rounded-md border-l-4 ${colorClass}`}>
-            <div><p className="font-semibold">{task.foco}</p><p className="text-xs text-gray-400">Vence: {task.dueDate.toLocaleDateString('pt-BR')}</p></div>
-            <Button onClick={() => handleRevisionToggle(task.sessaoId, task.type)} disabled={isPending} size="sm"><i className="fas fa-check"></i></Button>
-          </li>
+      <div className="space-y-3">
+        {revisoes.map((revisao, index) => (
+          <div key={`${revisao.id}-${revisao.type}-${index}`} className="flex items-center gap-4 p-3 bg-gray-800 rounded-lg">
+            <input
+              type="checkbox"
+              className="h-5 w-5 shrink-0"
+              checked={revisao.completed}
+              onChange={() => handleToggle(revisao.id, revisao.type, !revisao.completed)}
+              disabled={isPending}
+            />
+            <div className="flex-grow">
+              <p className={revisao.completed ? 'line-through text-gray-500' : ''}>{revisao.title}</p>
+            </div>
+            <span
+              className="text-xs font-bold px-2 py-1 rounded-full"
+              style={{ backgroundColor: revisao.color, color: 'white' }}
+            >
+              {revisao.type}
+            </span>
+          </div>
         ))}
-      </ul></div>
+      </div>
     );
   };
-  
+
   return (
     <div>
-      <header className="text-left mb-8"><h1 className="text-3xl font-bold">Painel de Revisões</h1></header>
-      <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700">
-        {tasks.today.length === 0 && tasks.week.length === 0 && tasks.month.length === 0 ? (<p className="text-gray-400">Nenhuma revisão futura encontrada.</p>) : (
-          <>
-            <RevisionList title="Hoje" items={tasks.today} colorClass="border-red-500" />
-            <RevisionList title="Próximos 7 Dias" items={tasks.week} colorClass="border-yellow-500" />
-            <RevisionList title="Este Mês" items={tasks.month} colorClass="border-blue-500" />
-          </>
-        )}
+      <header className="text-left mb-8">
+        <h1 className="text-3xl font-bold">Painel de Revisões</h1>
+        <p className="text-gray-400">Suas revisões espaçadas que precisam de atenção.</p>
+      </header>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">Para Hoje</h2>
+          {renderRevisaoList(revisoesHoje)}
+        </div>
+        <div>
+          <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2 text-yellow-400">Atrasadas</h2>
+          {renderRevisaoList(revisoesAtrasadas)}
+        </div>
       </div>
     </div>
   );
