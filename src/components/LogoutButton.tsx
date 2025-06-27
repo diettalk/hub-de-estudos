@@ -4,7 +4,8 @@
 
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useRouter } from "next/navigation";
-import { Button } from "./ui/button";
+// CORREÇÃO AQUI: Ajustado o caminho da importação para usar o atalho '@/'.
+import { Button } from "@/components/ui/button";
 
 export function LogoutButton() {
   const router = useRouter();
