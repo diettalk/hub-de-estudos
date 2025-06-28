@@ -392,3 +392,35 @@ export async function updateConcursoStatus(id: number, status: 'ativo' | 'previs
   await supabase.from('concursos').update({ status }).eq('id', id);
   revalidatePath('/guia-estudos');
 }
+
+// --- AÇÕES DE VÍNCULO CONCURSO/PÁGINA ---
+
+export async function linkPastaToConcurso(concursoId: number, paginaId: number) {
+  const supabase = createServerActionClient({ cookies });
+  
+  // Verifica se o vínculo já não existe para evitar duplicatas
+  const { data: existingLink } = await supabase
+    .from('concurso_paginas')
+    .select()
+    .match({ concurso_id: concursoId, pagina_id: paginaId })
+    .single();
+
+  if (existingLink) return; // Se já existe, não faz nada
+
+  await supabase.from('concurso_paginas').insert({
+    concurso_id: concursoId,
+    pagina_id: paginaId,
+  });
+
+  revalidatePath('/guia-estudos');
+}
+
+export async function unlinkPastaFromConcurso(concursoId: number, paginaId: number) {
+  const supabase = createServerActionClient({ cookies });
+  await supabase
+    .from('concurso_paginas')
+    .delete()
+    .match({ concurso_id: concursoId, pagina_id: paginaId });
+
+  revalidatePath('/guia-estudos');
+}
