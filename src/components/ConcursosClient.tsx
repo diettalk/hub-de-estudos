@@ -5,19 +5,20 @@
 import { useState, useTransition } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input'; // Importamos o Input
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label'; // Importação que estava faltando para o Label
 import { Archive, ArchiveRestore, Edit, Trash2, FileText, Upload } from "lucide-react";
 import { deleteConcurso, updateConcursoStatus, uploadEdital } from '@/app/actions';
 import { ConcursoFormModal } from './ConcursoFormModal';
 
-// O tipo Concurso agora inclui o campo edital_url
+// O tipo Concurso deve corresponder à sua tabela
 type Concurso = {
   id: number;
   nome: string;
   banca: string;
   data_prova: string;
   status: 'ativo' | 'previsto' | 'arquivado';
-  edital_url: string | null; // Novo campo
+  edital_url: string | null;
 };
 
 type ConcursosClientProps = {
@@ -26,6 +27,7 @@ type ConcursosClientProps = {
   arquivados: Concurso[];
 };
 
+// Componente para um Card de Concurso individual
 const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => void }) => {
   const [isPending, startTransition] = useTransition();
 
@@ -46,7 +48,6 @@ const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => 
         <p className="text-sm text-gray-400">{concurso.banca}</p>
         <p className="text-sm text-gray-400 mt-1">Data da Prova: {dataFormatada}</p>
         
-        {/* LÓGICA DO EDITAL */}
         <div className="mt-4">
           {concurso.edital_url ? (
             <a href={concurso.edital_url} target="_blank" rel="noopener noreferrer">
@@ -59,7 +60,7 @@ const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => 
             <form action={(formData) => startTransition(() => uploadEdital(formData))} className="flex flex-col gap-2">
               <input type="hidden" name="concursoId" value={concurso.id} />
               <Label htmlFor={`edital-${concurso.id}`} className="text-xs text-gray-400">Anexar Edital (PDF)</Label>
-              <Input id={`edital-${concurso.id}`} name="edital" type="file" accept=".pdf" className="text-xs" required />
+              <Input id={`edital-${concurso.id}`} name="edital" type="file" accept=".pdf" className="text-xs h-9" required />
               <Button type="submit" disabled={isPending} size="sm">
                 <Upload className="h-4 w-4 mr-2" />
                 {isPending ? 'Enviando...' : 'Enviar'}
