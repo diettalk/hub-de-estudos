@@ -15,7 +15,10 @@ export async function addConcurso(formData: FormData) {
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
   const status = formData.get('status') as string;
-  const edital_url = formData.get('edital_url') as string; // Campo de link
+  const edital_url = formData.get('edital_url') as string;
+  // Lógica de prioridades adicionada de volta
+  const prioridadesRaw = formData.get('prioridades') as string;
+  const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()).filter(p => p.length > 0) : [];
 
   if (!nome || !banca || !dataProva || !status) return;
 
@@ -24,7 +27,8 @@ export async function addConcurso(formData: FormData) {
     banca, 
     data_prova: dataProva, 
     status,
-    edital_url, // Salva o link
+    edital_url,
+    prioridades, // Adicionado
     user_id: user.id 
   });
 
@@ -39,7 +43,10 @@ export async function updateConcurso(formData: FormData) {
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
   const status = formData.get('status') as string;
-  const edital_url = formData.get('edital_url') as string; // Campo de link
+  const edital_url = formData.get('edital_url') as string;
+  // Lógica de prioridades adicionada de volta
+  const prioridadesRaw = formData.get('prioridades') as string;
+  const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()).filter(p => p.length > 0) : [];
 
   if (!id || !nome || !banca || !dataProva || !status) return;
 
@@ -48,7 +55,8 @@ export async function updateConcurso(formData: FormData) {
     banca, 
     data_prova: dataProva, 
     status,
-    edital_url // Salva o link
+    edital_url,
+    prioridades // Adicionado
   }).eq('id', id);
 
   revalidatePath('/guia-estudos');

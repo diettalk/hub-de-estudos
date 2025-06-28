@@ -9,6 +9,7 @@ import { Archive, ArchiveRestore, Edit, Trash2, FileText } from "lucide-react";
 import { deleteConcurso, updateConcursoStatus } from '@/app/actions';
 import { ConcursoFormModal } from './ConcursoFormModal';
 
+// O tipo Concurso agora inclui o campo prioridades
 type Concurso = {
   id: number;
   nome: string;
@@ -16,6 +17,7 @@ type Concurso = {
   data_prova: string;
   status: 'ativo' | 'previsto' | 'arquivado';
   edital_url: string | null;
+  prioridades: string[] | null; // Adicionado
 };
 
 type ConcursosClientProps = {
@@ -44,7 +46,18 @@ const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => 
         <p className="text-sm text-gray-400">{concurso.banca}</p>
         <p className="text-sm text-gray-400 mt-1">Data da Prova: {dataFormatada}</p>
         
-        {/* LÓGICA DO EDITAL SIMPLIFICADA */}
+        {/* EXIBIÇÃO DAS PRIORIDADES ADICIONADA AQUI */}
+        {concurso.prioridades && concurso.prioridades.length > 0 && (
+          <div className="mt-3">
+            <h4 className="text-xs font-bold text-gray-300 mb-1">Prioridades:</h4>
+            <ul className="list-disc list-inside space-y-1">
+              {concurso.prioridades.map((p, index) => (
+                <li key={index} className="text-xs text-gray-400">{p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
         {concurso.edital_url && (
           <div className="mt-4">
             <a href={concurso.edital_url} target="_blank" rel="noopener noreferrer">

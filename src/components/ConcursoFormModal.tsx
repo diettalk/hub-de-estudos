@@ -6,6 +6,7 @@ import { useTransition, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from '@/components/ui/textarea'; // Importamos a Textarea
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ type Concurso = {
   data_prova: string;
   status: 'ativo' | 'previsto' | 'arquivado';
   edital_url: string | null;
+  prioridades: string[] | null; // Adicionado
 };
 
 type ConcursoFormModalProps = {
@@ -66,6 +68,7 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
         <form ref={formRef} action={formAction}>
           {isEditMode && <input type="hidden" name="id" value={concurso.id} />}
           <div className="grid gap-4 py-4">
+            {/* ... outros campos do formulário (Nome, Banca, etc.) ... */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="nome" className="text-right">Nome</Label>
               <Input id="nome" name="nome" defaultValue={concurso?.nome || ''} className="col-span-3 bg-gray-900" required />
@@ -78,7 +81,6 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
               <Label htmlFor="data_prova" className="text-right">Data da Prova</Label>
               <Input id="data_prova" name="data_prova" type="date" defaultValue={concurso?.data_prova || ''} className="col-span-3 bg-gray-900" required />
             </div>
-            {/* CAMPO DE UPLOAD TROCADO POR CAMPO DE LINK */}
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edital_url" className="text-right">Link do Edital</Label>
               <Input id="edital_url" name="edital_url" type="url" placeholder="https://..." defaultValue={concurso?.edital_url || ''} className="col-span-3 bg-gray-900" />
@@ -86,15 +88,25 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="status" className="text-right">Status</Label>
               <Select name="status" defaultValue={concurso?.status || 'ativo'}>
-                <SelectTrigger className="col-span-3 bg-gray-900">
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
+                <SelectTrigger className="col-span-3 bg-gray-900"><SelectValue placeholder="Selecione o status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ativo">Ativo</SelectItem>
                   <SelectItem value="previsto">Previsto</SelectItem>
                   <SelectItem value="arquivado">Arquivado</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            {/* CAMPO DE PRIORIDADES ADICIONADO AQUI */}
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="prioridades" className="text-right pt-2">Prioridades</Label>
+              <Textarea 
+                id="prioridades" 
+                name="prioridades" 
+                placeholder="Uma prioridade por linha..." 
+                className="col-span-3 bg-gray-900 resize-y" 
+                defaultValue={concurso?.prioridades?.join('\n') || ''}
+                rows={4}
+              />
             </div>
           </div>
           <DialogFooter>
