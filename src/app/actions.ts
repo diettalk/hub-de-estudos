@@ -58,7 +58,7 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/materiais');
 }
 
-// --- AÇÕES DE DISCIPLINA ---
+// --- AÇÕES DE DISCIPLINA (ANTIGO) ---
 export async function addMasterDisciplina(formData: FormData) {
   const nome = formData.get('nome') as string;
   const emoji = formData.get('emoji') as string;
@@ -231,7 +231,7 @@ export async function deleteDocumento(id: number) {
   revalidatePath('/documentos');
 }
 
-// --- AÇÕES PARA TÓPICOS ---
+// --- AÇÕES PARA TÓPICOS (ANTIGO) ---
 export async function addTopico(formData: FormData) {
   const nome = formData.get('nome') as string;
   const disciplinaId = Number(formData.get('disciplina_id'));
@@ -293,8 +293,7 @@ export async function deleteTarefa(id: number) {
   revalidatePath('/calendario');
 }
 
-// Adicione estas funções em src/app/actions.ts
-
+// --- AÇÕES DE ANOTAÇÕES RÁPIDAS (DASHBOARD) ---
 export async function addAnotacao(formData: FormData) {
   const content = formData.get('content') as string;
   if (!content || content.trim() === '') return;
@@ -316,8 +315,6 @@ export async function deleteAnotacao(formData: FormData) {
   revalidatePath('/'); // Revalida o Dashboard para remover a nota
 }
 
-// Adicione esta função em src/app/actions.ts
-
 export async function updateAnotacao(formData: FormData) {
   const id = Number(formData.get('id'));
   const content = formData.get('content') as string;
@@ -328,36 +325,7 @@ export async function updateAnotacao(formData: FormData) {
   revalidatePath('/');
 }
 
-// Adicione este bloco em: src/app/actions.ts
-
-// --- AÇÕES DA BASE DE CONHECIMENTO (PÁGINAS) ---
-
-export async function createPagina(parentId: number | null, title: string, emoji: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado' };
-
-  const { data, error } = await supabase
-    .from('paginas')
-    .insert({
-      title,
-      emoji,
-      parent_id: parentId,
-      user_id: user.id,
-    })
-    .select()
-    .single();
-
-  if (error) return { error: error.message };
-  
-  revalidatePath('/disciplinas');
-  return { data };
-}
-
-// Adicione este bloco em: src/app/actions.ts
-
-// --- AÇÕES DA BASE DE CONHECIMENTO (PÁGINAS) ---
-
+// --- AÇÕES DA BASE DE CONHECIMENTO (PÁGINAS/DISCIPLINAS) ---
 export async function createPagina(parentId: number | null, title: string, emoji: string) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
