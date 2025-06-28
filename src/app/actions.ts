@@ -5,7 +5,7 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-// --- AÇÕES DE CONCURSO ---
+// SUBSTITUA A SUA FUNÇÃO addConcurso EXISTENTE POR ESTA:
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -14,41 +14,46 @@ export async function addConcurso(formData: FormData) {
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
+  const status = formData.get('status') as string; // Novo campo
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
 
-  if (!nome || !banca || !dataProva) return;
+  if (!nome || !banca || !dataProva || !status) return;
+
   await supabase.from('concursos').insert({ 
     nome, 
     banca, 
     data_prova: dataProva, 
+    status, // Novo campo
     prioridades, 
     user_id: user.id 
   });
 
-  revalidatePath('/materiais');
+  revalidatePath('/guia-estudos'); // Atualizado
 }
 
+// SUBSTITUA A SUA FUNÇÃO updateConcurso EXISTENTE POR ESTA:
 export async function updateConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
+  const status = formData.get('status') as string; // Novo campo
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
 
-  if (!id || !nome || !banca || !dataProva) return;
+  if (!id || !nome || !banca || !dataProva || !status) return;
 
   await supabase.from('concursos').update({ 
     nome, 
     banca, 
     data_prova: dataProva, 
+    status, // Novo campo
     prioridades 
   }).eq('id', id);
 
-  revalidatePath('/');
-  revalidatePath('/materiais');
+  revalidatePath('/guia-estudos'); // Atualizado
 }
 
 export async function deleteConcurso(id: number) {
@@ -373,4 +378,11 @@ export async function deletePagina(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('paginas').delete().eq('id', id);
   revalidatePath('/disciplinas');
+}
+
+// ADICIONE ESTA NOVA FUNÇÃO NO FINAL DO ARQUIVO:
+export async function updateConcursoStatus(id: number, status: 'ativo' | 'previsto' | 'arquivado') {
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('concursos').update({ status }).eq('id', id);
+  revalidatePath('/guia-estudos');
 }

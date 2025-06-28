@@ -1,50 +1,43 @@
-// src/app/materiais/page.tsx
-'use client';
-import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { type EnrichedConcurso, type Disciplina } from '@/lib/types';
-import { ConcursoForm } from "@/components/ConcursoForm";
-import { ConcursosList } from '@/components/ConcursosList';
+// src/app/guia-estudos/page.tsx
 
-export default function MateriaisPage() {
-  const [concursos, setConcursos] = useState<EnrichedConcurso[]>([]);
-  const [allDisciplinas, setAllDisciplinas] = useState<Disciplina[]>([]);
-  const supabase = createClientComponentClient();
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { ConcursosClient } from '@/components/ConcursosClient';
 
-  useEffect(() => {
-    const getData = async () => {
-      const { data: concursosData } = await supabase
-        .from('concursos')
-        .select('*, concurso_disciplinas(disciplinas(id, nome, emoji))')
-        .order('created_at', { ascending: false });
-      
-      const { data: disciplinasData } = await supabase
-        .from('disciplinas')
-        .select('*')
-        .order('nome');
+export const dynamic = 'force-dynamic';
 
-      const formattedConcursos = (concursosData as any[] ?? []).map(c => ({
-        ...c,
-        linkedDisciplinaIds: c.concurso_disciplinas.map((cd: any) => cd.disciplinas?.id).filter(Boolean)
-      }));
-      
-      setConcursos(formattedConcursos);
-      setAllDisciplinas(disciplinasData ?? []);
-    };
-    getData();
-  }, [supabase]);
+export default async function GuiaDeEstudosPage() {
+  const supabase = createServerComponentClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect('/login');
 
+  const { data: concursos, error } = await supabase
+    .from('concursos')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('data_prova', { ascending: true });
+    
+  if (error) {
+    console.error("Erro ao buscar concursos:", error);
+  }
+  
+  // Separa os concursos por status
+  const ativos = concursos?.filter(c => c.status === 'ativo') || [];
+  const previstos = concursos?.filter(c => c.status === 'previsto') || [];
+  const arquivados = concursos?.filter(c => c.status === 'arquivado') || [];
+  
   return (
-    <div className="space-y-10">
-      <section>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">Gerenciar Concursos</h2>
-          <ConcursoForm />
-        </div>
-        <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700">
-          <ConcursosList concursos={concursos} allDisciplinas={allDisciplinas} />
-        </div>
-      </section>
+    <div>
+      <header className="text-left mb-8">
+        <h1 className="text-3xl font-bold">Central de Concursos</h1>
+        <p className="text-gray-400">Gerencie todos os seus concursos, ativos e futuros.</p>
+      </header>
+      <ConcursosClient
+        ativos={ativos}
+        previstos={previstos}
+        arquivados={arquivados}
+      />
     </div>
   );
 }
