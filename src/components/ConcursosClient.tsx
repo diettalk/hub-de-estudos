@@ -5,16 +5,19 @@
 import { useState, useTransition } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Archive, ArchiveRestore, Edit, Trash2 } from "lucide-react";
-import { deleteConcurso, updateConcursoStatus } from '@/app/actions';
-import { ConcursoFormModal } from './ConcursoFormModal'; // Importamos o novo modal
+import { Input } from "@/components/ui/input'; // Importamos o Input
+import { Archive, ArchiveRestore, Edit, Trash2, FileText, Upload } from "lucide-react";
+import { deleteConcurso, updateConcursoStatus, uploadEdital } from '@/app/actions';
+import { ConcursoFormModal } from './ConcursoFormModal';
 
+// O tipo Concurso agora inclui o campo edital_url
 type Concurso = {
   id: number;
   nome: string;
   banca: string;
   data_prova: string;
   status: 'ativo' | 'previsto' | 'arquivado';
+  edital_url: string | null; // Novo campo
 };
 
 type ConcursosClientProps = {
@@ -23,7 +26,6 @@ type ConcursosClientProps = {
   arquivados: Concurso[];
 };
 
-// O componente de card agora recebe funções para abrir o modal de edição
 const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => void }) => {
   const [isPending, startTransition] = useTransition();
 
@@ -43,8 +45,30 @@ const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => 
         <h3 className="font-bold text-lg">{concurso.nome}</h3>
         <p className="text-sm text-gray-400">{concurso.banca}</p>
         <p className="text-sm text-gray-400 mt-1">Data da Prova: {dataFormatada}</p>
+        
+        {/* LÓGICA DO EDITAL */}
+        <div className="mt-4">
+          {concurso.edital_url ? (
+            <a href={concurso.edital_url} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" className="w-full">
+                <FileText className="h-4 w-4 mr-2" />
+                Ver Edital
+              </Button>
+            </a>
+          ) : (
+            <form action={(formData) => startTransition(() => uploadEdital(formData))} className="flex flex-col gap-2">
+              <input type="hidden" name="concursoId" value={concurso.id} />
+              <Label htmlFor={`edital-${concurso.id}`} className="text-xs text-gray-400">Anexar Edital (PDF)</Label>
+              <Input id={`edital-${concurso.id}`} name="edital" type="file" accept=".pdf" className="text-xs" required />
+              <Button type="submit" disabled={isPending} size="sm">
+                <Upload className="h-4 w-4 mr-2" />
+                {isPending ? 'Enviando...' : 'Enviar'}
+              </Button>
+            </form>
+          )}
+        </div>
       </div>
-      <div className="flex justify-end gap-2 mt-4">
+      <div className="flex justify-end gap-2 mt-4 border-t border-gray-700 pt-4">
         <Button variant="ghost" size="icon" disabled={isPending} onClick={onEdit} title="Editar"><Edit className="h-4 w-4" /></Button>
         {concurso.status !== 'arquivado' ? (
           <Button variant="ghost" size="icon" disabled={isPending} onClick={handleArchive} title="Arquivar"><Archive className="h-4 w-4" /></Button>
@@ -59,17 +83,16 @@ const ConcursoCard = ({ concurso, onEdit }: { concurso: Concurso, onEdit: () => 
 
 
 export function ConcursosClient({ ativos, previstos, arquivados }: ConcursosClientProps) {
-  // Estados para controlar o modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConcurso, setEditingConcurso] = useState<Concurso | null>(null);
 
   const handleOpenAddModal = () => {
-    setEditingConcurso(null); // Garante que está no modo "Adicionar"
+    setEditingConcurso(null);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (concurso: Concurso) => {
-    setEditingConcurso(concurso); // Passa os dados do concurso para o modo "Editar"
+    setEditingConcurso(concurso);
     setIsModalOpen(true);
   };
   
@@ -102,7 +125,6 @@ export function ConcursosClient({ ativos, previstos, arquivados }: ConcursosClie
         <TabsContent value="arquivados">{renderGrid(arquivados)}</TabsContent>
       </Tabs>
       
-      {/* O Modal é renderizado aqui, mas só fica visível quando isOpen é true */}
       <ConcursoFormModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
