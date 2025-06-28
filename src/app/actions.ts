@@ -315,3 +315,15 @@ export async function deleteAnotacao(formData: FormData) {
   await supabase.from('anotacoes').delete().eq('id', id);
   revalidatePath('/'); // Revalida o Dashboard para remover a nota
 }
+
+// Adicione esta função em src/app/actions.ts
+
+export async function updateAnotacao(formData: FormData) {
+  const id = Number(formData.get('id'));
+  const content = formData.get('content') as string;
+  if (isNaN(id) || !content || content.trim() === '') return;
+
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('anotacoes').update({ content }).eq('id', id);
+  revalidatePath('/');
+}
