@@ -1,100 +1,83 @@
 // src/app/disciplinas/page.tsx
 
-'use client';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { SidebarClient } from '@/components/SidebarClient'; // Vamos criar este componente
+import { Editor } from '@/components/Editor';
+import { updatePagina } from '@/app/actions';
 
-import { useEffect, useState, useTransition } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { updateTopicoAnotacoes } from '@/app/actions';
+// Tipo para nossas páginas/nós
+export type Pagina = {
+  id: number;
+  parent_id: number | null;
+  title: string;
+  emoji: string;
+  content: any;
+  children?: Pagina[];
+};
 
-// Tipos para os dados
-type Topico = { id: number; nome: string; anotacoes: string | null };
-type Disciplina = { id: number; nome: string; topicos: Topico[] };
+// Função helper para transformar a lista em uma árvore
+const buildTree = (pages: Pagina[]): Pagina[] => {
+  const pageMap: { [key: number]: Pagina } = {};
+  pages.forEach(page => {
+    pageMap[page.id] = { ...page, children: [] };
+  });
 
-export default function DisciplinasPage() {
-  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
-  const [selectedDisciplina, setSelectedDisciplina] = useState<Disciplina | null>(null);
-  const [selectedTopico, setSelectedTopico] = useState<Topico | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const supabase = createClientComponentClient();
+  const tree: Pagina[] = [];
+  pages.forEach(page => {
+    if (page.parent_id && pageMap[page.parent_id]) {
+      pageMap[page.parent_id].children?.push(pageMap[page.id]);
+    } else {
+      tree.push(pageMap[page.id]);
+    }
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const { data, error } = await supabase
-        .from('disciplinas')
-        .select(`*, topicos(*)`);
-      if (data) {
-        setDisciplinas(data as Disciplina[]);
-      }
-    };
-    fetchData();
-  }, [supabase]);
+  return tree;
+};
 
-  const handleSelectTopico = (disciplina: Disciplina, topico: Topico) => {
-    setSelectedDisciplina(disciplina);
-    setSelectedTopico(topico);
-  };
+export default async function DisciplinasPage({
+  searchParams,
+}: {
+  searchParams: { page: string };
+}) {
+  const supabase = createServerComponentClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect('/login');
+
+  const { data: paginas } = await supabase
+    .from('paginas')
+    .select('*')
+    .order('title', { ascending: true });
+
+  const tree = buildTree(paginas || []);
+  
+  const selectedPageId = Number(searchParams.page) || (paginas && paginas[0] ? paginas[0].id : null);
+  const selectedPage = paginas?.find(p => p.id === selectedPageId) || null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[80vh]">
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[80vh]">
       <div className="md:col-span-1 bg-gray-800 p-4 rounded-lg overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">BIBLIOTECA</h2>
-        {/* Botão + Nova (funcionalidade futura) */}
-        
-        <div className="space-y-2">
-          {disciplinas.map((disciplina) => (
-            <div key={disciplina.id}>
-              <h3 className="font-semibold px-3 py-2">{disciplina.nome}</h3>
-              <ul className="space-y-1">
-                {disciplina.topicos.map((topico) => (
-                  <li key={topico.id}>
-                    <button
-                      onClick={() => handleSelectTopico(disciplina, topico)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                        selectedTopico?.id === topico.id
-                          ? 'bg-blue-600 text-white'
-                          : 'hover:bg-gray-700'
-                      }`}
-                    >
-                      {topico.nome}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <SidebarClient tree={tree} allPages={paginas || []} />
       </div>
-
-      <div className="md:col-span-2 bg-gray-800 p-6 rounded-lg flex flex-col">
-        {selectedTopico ? (
+      <div className="md:col-span-3 bg-gray-800 p-6 rounded-lg flex flex-col">
+        {selectedPage ? (
           <>
-            <h2 className="text-2xl font-bold mb-1">
-              {selectedDisciplina?.nome}
-            </h2>
-            <p className="text-gray-400 mb-4">{selectedTopico.nome}</p>
-            
-            <form 
-              action={(formData) => startTransition(() => updateTopicoAnotacoes(formData))}
-              className="flex flex-col flex-grow"
-            >
-              <input type="hidden" name="topicoId" value={selectedTopico.id} />
-              <Textarea
-                key={selectedTopico.id} // Força a re-renderização ao mudar de tópico
-                name="anotacoes"
-                defaultValue={selectedTopico.anotacoes || ''}
-                className="flex-grow bg-gray-900 text-white border-gray-700 resize-none"
-                placeholder="Digite suas anotações sobre este tópico..."
-              />
-              <Button type="submit" disabled={isPending} className="mt-4 self-end">
-                {isPending ? 'Salvando...' : 'Salvar Anotações'}
-              </Button>
-            </form>
+            <h1 className="text-3xl font-bold mb-4 flex items-center gap-2">
+              <span className="text-2xl">{selectedPage.emoji}</span>
+              {selectedPage.title}
+            </h1>
+            <Editor 
+              pageId={selectedPage.id}
+              title={selectedPage.title}
+              emoji={selectedPage.emoji}
+              content={selectedPage.content}
+              onSave={updatePagina}
+            />
           </>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Selecione um tópico para ver os detalhes.</p>
+            <p className="text-gray-500">Selecione uma página ou crie uma nova.</p>
           </div>
         )}
       </div>

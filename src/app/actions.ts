@@ -327,3 +327,82 @@ export async function updateAnotacao(formData: FormData) {
   await supabase.from('anotacoes').update({ content }).eq('id', id);
   revalidatePath('/');
 }
+
+// Adicione este bloco em: src/app/actions.ts
+
+// --- AÇÕES DA BASE DE CONHECIMENTO (PÁGINAS) ---
+
+export async function createPagina(parentId: number | null, title: string, emoji: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado' };
+
+  const { data, error } = await supabase
+    .from('paginas')
+    .insert({
+      title,
+      emoji,
+      parent_id: parentId,
+      user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/disciplinas');
+  return { data };
+}
+
+// Adicione este bloco em: src/app/actions.ts
+
+// --- AÇÕES DA BASE DE CONHECIMENTO (PÁGINAS) ---
+
+export async function createPagina(parentId: number | null, title: string, emoji: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado' };
+
+  const { data, error } = await supabase
+    .from('paginas')
+    .insert({
+      title,
+      emoji,
+      parent_id: parentId,
+      user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/disciplinas');
+  return { data };
+}
+
+export async function updatePagina(formData: FormData) {
+  const id = Number(formData.get('id'));
+  const title = formData.get('title') as string;
+  const emoji = formData.get('emoji') as string;
+  const content = formData.get('content') as string;
+
+  if (isNaN(id)) return;
+
+  const supabase = createServerActionClient({ cookies });
+  await supabase
+    .from('paginas')
+    .update({ 
+      title, 
+      emoji,
+      content: content ? JSON.parse(content) : null 
+    })
+    .eq('id', id);
+
+  revalidatePath('/disciplinas');
+}
+
+export async function deletePagina(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('paginas').delete().eq('id', id);
+  revalidatePath('/disciplinas');
+}
