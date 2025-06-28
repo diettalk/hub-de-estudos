@@ -5,7 +5,7 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-// --- AÇÕES DE CONCURSO (CRUD COMPLETO) ---
+// --- AÇÕES DE CONCURSO ---
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -58,7 +58,7 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/materiais');
 }
 
-// --- AÇÕES DE DISCIPLINA (CRUD COMPLETO) ---
+// --- AÇÕES DE DISCIPLINA ---
 export async function addMasterDisciplina(formData: FormData) {
   const nome = formData.get('nome') as string;
   const emoji = formData.get('emoji') as string;
@@ -85,7 +85,7 @@ export async function deleteDisciplina(id: number) {
   revalidatePath('/disciplinas');
 }
 
-// --- AÇÃO DE RELACIONAMENTO ---
+// --- AÇÃO DE RELACIONAMENTO DISCIPLINA/CONCURSO ---
 export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId: number, isLinked: boolean) {
     const supabase = createServerActionClient({ cookies });
     if (isLinked) {
@@ -96,7 +96,7 @@ export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId:
     revalidatePath('/materiais');
 }
 
-// --- AÇÃO DO CICLO DE ESTUDOS (LÓGICA FINAL E CORRIGIDA) ---
+// --- AÇÕES DO CICLO DE ESTUDOS ---
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -116,7 +116,6 @@ export async function updateSessaoEstudo(formData: FormData) {
   
   const isMateriaFinalizada = formData.get('isMateriaFinalizada') === 'true';
 
-  // Lógica de Datas
   if (formData.has('data_estudo')) {
     const dataEstudoStr = formData.get('data_estudo') as string;
     updateData.data_estudo = dataEstudoStr || null;
@@ -179,6 +178,7 @@ export async function addLembrete(formData: FormData) {
   await supabase.from('lembretes').insert({ titulo, data, cor });
   revalidatePath('/calendario');
 }
+
 export async function updateLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -188,12 +188,14 @@ export async function updateLembrete(formData: FormData) {
   await supabase.from('lembretes').update({ titulo, cor }).eq('id', id);
   revalidatePath('/calendario');
 }
+
 export async function deleteLembrete(id: number) {
   const supabase = createServerActionClient({ cookies });
   if(isNaN(id)) return;
   await supabase.from('lembretes').delete().eq('id', id);
   revalidatePath('/calendario');
 }
+
 export async function updateRevisaoStatus(sessaoId: number, type: 'R1' | 'R7' | 'R30', status: boolean) {
   const supabase = createServerActionClient({ cookies });
   const fieldToUpdate = type === 'R1' ? 'r1_concluida' : type === 'R7' ? 'r2_concluida' : 'r3_concluida';
@@ -212,6 +214,7 @@ export async function addDocumento(formData: FormData) {
   await supabase.from('documentos').insert({ title, user_id: user.id, content: '' });
   revalidatePath('/documentos');
 }
+
 export async function updateDocumento(formData: FormData) {
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
@@ -221,6 +224,7 @@ export async function updateDocumento(formData: FormData) {
   await supabase.from('documentos').update({ title, content }).eq('id', id);
   revalidatePath('/documentos');
 }
+
 export async function deleteDocumento(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('documentos').delete().eq('id', id);
@@ -236,14 +240,29 @@ export async function addTopico(formData: FormData) {
   await supabase.from('topicos').insert({ nome, disciplina_id: disciplinaId });
   revalidatePath('/disciplinas');
 }
+
 export async function saveTopicoContent(topicoId: number, content: string) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('topicos').update({ conteudo_rico: content }).eq('id', topicoId);
 }
+
 export async function deleteTopico(id: number) {
   const supabase = createServerActionClient({ cookies });
   if(isNaN(id)) return;
   await supabase.from('topicos').delete().eq('id', id);
+  revalidatePath('/disciplinas');
+}
+
+export async function updateTopicoAnotacoes(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const topicoId = formData.get('topicoId') as string;
+  const anotacoes = formData.get('anotacoes') as string;
+
+  await supabase
+    .from('topicos')
+    .update({ anotacoes: anotacoes })
+    .eq('id', topicoId);
+    
   revalidatePath('/disciplinas');
 }
 
@@ -259,12 +278,14 @@ export async function addTarefa(formData: FormData) {
   revalidatePath('/tarefas');
   revalidatePath('/calendario');
 }
+
 export async function toggleTarefa(id: number, currentState: boolean) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('tarefas').update({ completed: !currentState }).eq('id', id);
   revalidatePath('/tarefas');
   revalidatePath('/calendario');
 }
+
 export async function deleteTarefa(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('tarefas').delete().eq('id', id);
@@ -272,6 +293,7 @@ export async function deleteTarefa(id: number) {
   revalidatePath('/calendario');
 }
 
+// --- AÇÕES DO PERFIL (ANOTAÇÕES RÁPIDAS) ---
 export async function updateAnotacoesRapidas(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const {
@@ -288,21 +310,6 @@ export async function updateAnotacoesRapidas(formData: FormData) {
     .from('profiles')
     .update({ anotacoes_rapidas: anotacoes })
     .eq('id', session.user.id);
-
-  // CORREÇÃO: Força a atualização da página Dashboard
+    
   revalidatePath('/');
-}
-
-export async function updateTopicoAnotacoes(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
-  const topicoId = formData.get('topicoId') as string;
-  const anotacoes = formData.get('anotacoes') as string;
-
-  await supabase
-    .from('topicos')
-    .update({ anotacoes: anotacoes })
-    .eq('id', topicoId);
-
-  // CORREÇÃO: Força a atualização da página de disciplinas
-  revalidatePath('/disciplinas');
 }

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import RevisoesPainel from '@/components/RevisoesPainel';
 import { updateAnotacoesRapidas } from '@/app/actions';
+import { PomodoroTimer } from '@/components/PomodoroTimer';
 
 export const dynamic = 'force-dynamic';
 

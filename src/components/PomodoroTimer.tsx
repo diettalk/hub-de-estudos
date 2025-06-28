@@ -1,26 +1,35 @@
 // src/components/PomodoroTimer.tsx
+
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label'; // A IMPORTAÇÃO QUE FALTAVA
 
 export function PomodoroTimer() {
   const [minutes, setMinutes] = useState(25);
   const [seconds, setSeconds] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [initialTime, setInitialTime] = useState(25);
+  const [mode, setMode] = useState<'work' | 'break'>('work');
+
+  // Referência para o áudio de alerta
+  const alarmRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
-    if (isActive && (minutes > 0 || seconds > 0)) {
+
+    if (isActive) {
       interval = setInterval(() => {
         if (seconds === 0) {
           if (minutes === 0) {
-            if(interval) clearInterval(interval);
+            // Timer zerou
+            if (alarmRef.current) {
+              alarmRef.current.play();
+            }
             setIsActive(false);
-            alert("Pomodoro concluído!");
+            // Troca de modo
+            const newMode = mode === 'work' ? 'break' : 'work';
+            setMode(newMode);
+            setMinutes(newMode === 'work' ? 25 : 5);
           } else {
             setMinutes(minutes - 1);
             setSeconds(59);
@@ -29,36 +38,67 @@ export function PomodoroTimer() {
           setSeconds(seconds - 1);
         }
       }, 1000);
-    } else if (!isActive && seconds !== 0) {
-      if(interval) clearInterval(interval);
     }
-    return () => { if(interval) clearInterval(interval) };
-  }, [isActive, seconds, minutes]);
 
-  const toggleTimer = () => setIsActive(!isActive);
-  const resetTimer = () => { setIsActive(false); setMinutes(initialTime); setSeconds(0); };
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseInt(e.target.value, 10);
-    if (!isNaN(newTime) && newTime > 0) { setInitialTime(newTime); setMinutes(newTime); }
-  }
+    // Função de limpeza para parar o intervalo
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isActive, seconds, minutes, mode]);
+
+  const toggleTimer = () => {
+    setIsActive(!isActive);
+  };
+
+  const resetTimer = () => {
+    setIsActive(false);
+    setMinutes(mode === 'work' ? 25 : 5);
+    setSeconds(0);
+  };
+
+  const setModeAndReset = (newMode: 'work' | 'break') => {
+    setMode(newMode);
+    setIsActive(false);
+    setMinutes(newMode === 'work' ? 25 : 5);
+    setSeconds(0);
+  };
 
   return (
-    <div className="card bg-gray-800 p-6 flex flex-col items-center justify-center">
-      <h3 className="text-xl font-bold mb-4">Área de Foco (Pomodoro)</h3>
-      <div className="text-6xl text-center font-bold p-6 bg-red-800/80 rounded-lg w-full">
-        {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+    <div className="card bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center h-full text-center">
+      {/* Elemento de áudio escondido */}
+      <audio ref={alarmRef} src="/alert.mp3" preload="auto"></audio>
+
+      <div className="space-x-2 mb-4">
+        <Button
+          onClick={() => setModeAndReset('work')}
+          variant={mode === 'work' ? 'secondary' : 'ghost'}
+        >
+          Pomodoro
+        </Button>
+        <Button
+          onClick={() => setModeAndReset('break')}
+          variant={mode === 'break' ? 'secondary' : 'ghost'}
+        >
+          Pausa Curta
+        </Button>
       </div>
-      <div className="flex gap-4 mt-4">
-        <Button onClick={toggleTimer}>{isActive ? 'Pausar' : 'Iniciar'}</Button>
-        <Button onClick={resetTimer} variant="secondary">Resetar</Button>
-        <Button onClick={() => setIsEditing(!isEditing)} variant="ghost" size="icon"><i className="fas fa-cog"></i></Button>
+
+      <div className="text-7xl font-bold my-4">
+        <span>{String(minutes).padStart(2, '0')}</span>
+        <span>:</span>
+        <span>{String(seconds).padStart(2, '0')}</span>
       </div>
-      {isEditing && (
-        <div className="flex items-center gap-2 mt-4">
-          <Input type="number" value={initialTime} onChange={handleTimeChange} className="w-24 bg-gray-700"/>
-          <Label>minutos</Label>
-        </div>
-      )}
+      
+      <div className="space-x-4">
+        <Button onClick={toggleTimer} className="w-28">
+          {isActive ? 'Pausar' : 'Iniciar'}
+        </Button>
+        <Button onClick={resetTimer} variant="outline">
+          Resetar
+        </Button>
+      </div>
     </div>
   );
 }
