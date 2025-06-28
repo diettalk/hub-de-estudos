@@ -14,9 +14,8 @@ export async function addConcurso(formData: FormData) {
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
-  const status = formData.get('status') as string; // Novo campo
-  const prioridadesRaw = formData.get('prioridades') as string;
-  const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
+  const status = formData.get('status') as string;
+  const edital_url = formData.get('edital_url') as string; // Campo de link
 
   if (!nome || !banca || !dataProva || !status) return;
 
@@ -24,12 +23,12 @@ export async function addConcurso(formData: FormData) {
     nome, 
     banca, 
     data_prova: dataProva, 
-    status, // Novo campo
-    prioridades, 
+    status,
+    edital_url, // Salva o link
     user_id: user.id 
   });
 
-  revalidatePath('/guia-estudos'); // Atualizado
+  revalidatePath('/guia-estudos');
 }
 
 // SUBSTITUA A SUA FUNÇÃO updateConcurso EXISTENTE POR ESTA:
@@ -39,9 +38,8 @@ export async function updateConcurso(formData: FormData) {
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
   const dataProva = formData.get('data_prova') as string;
-  const status = formData.get('status') as string; // Novo campo
-  const prioridadesRaw = formData.get('prioridades') as string;
-  const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()) : [];
+  const status = formData.get('status') as string;
+  const edital_url = formData.get('edital_url') as string; // Campo de link
 
   if (!id || !nome || !banca || !dataProva || !status) return;
 
@@ -49,11 +47,11 @@ export async function updateConcurso(formData: FormData) {
     nome, 
     banca, 
     data_prova: dataProva, 
-    status, // Novo campo
-    prioridades 
+    status,
+    edital_url // Salva o link
   }).eq('id', id);
 
-  revalidatePath('/guia-estudos'); // Atualizado
+  revalidatePath('/guia-estudos');
 }
 
 export async function deleteConcurso(id: number) {
@@ -384,58 +382,5 @@ export async function deletePagina(id: number) {
 export async function updateConcursoStatus(id: number, status: 'ativo' | 'previsto' | 'arquivado') {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('concursos').update({ status }).eq('id', id);
-  revalidatePath('/guia-estudos');
-}
-
-// Adicione esta nova função em: src/app/actions.ts
-
-export async function uploadEdital(formData: FormData) {
-  const concursoId = Number(formData.get('concursoId'));
-  const editalFile = formData.get('edital') as File;
-
-  if (isNaN(concursoId) || !editalFile || editalFile.size === 0) {
-    return { error: 'Arquivo ou ID do concurso inválido.' };
-  }
-
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: 'Usuário não autenticado.' };
-  }
-
-  // Cria um caminho único e seguro para o arquivo no Storage
-  // Ex: private/seu-user-id/123-edital_cnu.pdf
-  const filePath = `private/${user.id}/${concursoId}-${editalFile.name}`;
-
-  // 1. Faz o upload do arquivo para o Supabase Storage
-  const { error: uploadError } = await supabase.storage
-    .from('editais') // O nome do nosso bucket
-    .upload(filePath, editalFile, {
-      upsert: true, // Se já existir um arquivo com o mesmo nome, ele será substituído
-    });
-
-  if (uploadError) {
-    console.error('Erro no upload:', uploadError);
-    return { error: 'Falha ao fazer o upload do edital.' };
-  }
-
-  // 2. Pega a URL pública do arquivo que acabamos de subir
-  const { data: { publicUrl } } = supabase.storage
-    .from('editais')
-    .getPublicUrl(filePath);
-
-  // 3. Salva essa URL na tabela de concursos
-  const { error: updateError } = await supabase
-    .from('concursos')
-    .update({ edital_url: publicUrl }) // Salva a URL completa
-    .eq('id', concursoId);
-
-  if (updateError) {
-    console.error('Erro ao atualizar concurso:', updateError);
-    return { error: 'Falha ao salvar o link do edital.' };
-  }
-
-  // 4. Revalida a página para mostrar o novo link
   revalidatePath('/guia-estudos');
 }

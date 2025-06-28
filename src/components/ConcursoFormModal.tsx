@@ -22,19 +22,19 @@ import {
 } from "@/components/ui/select";
 import { addConcurso, updateConcurso } from '@/app/actions';
 
-// O tipo Concurso deve corresponder à sua tabela
 type Concurso = {
   id: number;
   nome: string;
   banca: string;
   data_prova: string;
   status: 'ativo' | 'previsto' | 'arquivado';
+  edital_url: string | null;
 };
 
 type ConcursoFormModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  concurso: Concurso | null; // Se for nulo, é para adicionar. Se não, é para editar.
+  concurso: Concurso | null;
 };
 
 export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormModalProps) {
@@ -42,7 +42,6 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
   const formRef = useRef<HTMLFormElement>(null);
   const isEditMode = concurso !== null;
 
-  // Reseta o formulário quando o modal é fechado ou o concurso muda
   useEffect(() => {
     if (!isOpen) {
       formRef.current?.reset();
@@ -53,7 +52,7 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
     const action = isEditMode ? updateConcurso : addConcurso;
     startTransition(() => {
       action(formData).then(() => {
-        onClose(); // Fecha o modal após a ação ser concluída
+        onClose();
       });
     });
   };
@@ -78,6 +77,11 @@ export function ConcursoFormModal({ isOpen, onClose, concurso }: ConcursoFormMod
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="data_prova" className="text-right">Data da Prova</Label>
               <Input id="data_prova" name="data_prova" type="date" defaultValue={concurso?.data_prova || ''} className="col-span-3 bg-gray-900" required />
+            </div>
+            {/* CAMPO DE UPLOAD TROCADO POR CAMPO DE LINK */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edital_url" className="text-right">Link do Edital</Label>
+              <Input id="edital_url" name="edital_url" type="url" placeholder="https://..." defaultValue={concurso?.edital_url || ''} className="col-span-3 bg-gray-900" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="status" className="text-right">Status</Label>
