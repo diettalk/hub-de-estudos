@@ -4,10 +4,10 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import RevisoesPainel from '@/components/RevisoesPainel';
-import { updateAnotacoesRapidas } from '@/app/actions';
 import { PomodoroTimer } from '@/components/PomodoroTimer';
+import { addAnotacao, deleteAnotacao } from '@/app/actions'; // Importa as novas ações
+import { Input } from '@/components/ui/input';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,21 +22,16 @@ export default async function Dashboard() {
     redirect('/login');
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, email, anotacoes_rapidas')
-    .eq('id', session.user.id)
-    .single();
-
-  const { count: tarefasPendentes } = await supabase
-    .from('tarefas')
-    .select('*', { count: 'exact', head: true })
-    .eq('concluida', false);
-
-  const { count: sessoesHoje } = await supabase
-    .from('sessoes_estudo')
-    .select('*', { count: 'exact', head: true })
-    .eq('data_estudo', new Date().toISOString().split('T')[0]);
+  // Busca os dados em paralelo para mais performance
+  const [
+    { count: tarefasPendentes },
+    { count: sessoesHoje },
+    { data: anotacoes }
+  ] = await Promise.all([
+    supabase.from('tarefas').select('*', { count: 'exact', head: true }).eq('concluida', false),
+    supabase.from('sessoes_estudo').select('*', { count: 'exact', head: true }).eq('data_estudo', new Date().toISOString().split('T')[0]),
+    supabase.from('anotacoes').select('*').order('created_at', { ascending: false })
+  ]);
 
   return (
     <div>
@@ -61,22 +56,40 @@ export default async function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card bg-gray-800 p-6 rounded-lg">
+        {/* NOVO CARD DE ANOTAÇÕES RÁPIDAS */}
+        <div className="card bg-gray-800 p-6 rounded-lg flex flex-col">
           <h3 className="font-bold text-lg mb-4">Anotações Rápidas</h3>
-          <form action={updateAnotacoesRapidas} className="flex flex-col h-full">
-            <Textarea
-              name="anotacoes"
-              defaultValue={profile?.anotacoes_rapidas || ''}
-              className="flex-grow bg-gray-900 text-white border-gray-700 resize-none"
-              placeholder="Digite suas anotações aqui..."
+          
+          <form action={addAnotacao} className="flex gap-2 mb-4">
+            <Input
+              name="content"
+              className="bg-gray-900 border-gray-700"
+              placeholder="Digite uma nova nota..."
+              required
             />
-            <Button type="submit" className="mt-4 self-end">Salvar Anotações</Button>
+            <Button type="submit">Adicionar</Button>
           </form>
+
+          <div className="space-y-2 overflow-y-auto flex-grow max-h-[25vh]">
+            {anotacoes && anotacoes.length > 0 ? (
+              anotacoes.map((nota) => (
+                <div key={nota.id} className="flex justify-between items-center bg-gray-900/50 p-3 rounded-md">
+                  <p className="text-sm">{nota.content}</p>
+                  <form action={deleteAnotacao}>
+                    <input type="hidden" name="id" value={nota.id} />
+                    <Button type="submit" variant="ghost" size="icon" className="h-6 w-6">
+                      <i className="fas fa-times text-xs text-red-500 hover:text-red-400"></i>
+                    </Button>
+                  </form>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center pt-8">Nenhuma anotação ainda.</p>
+            )}
+          </div>
         </div>
 
-        <div className="card bg-gray-800 p-6 rounded-lg flex items-center justify-center">
-          <p className="text-gray-500">Outra seção em breve...</p>
-        </div>
+        <PomodoroTimer />
       </div>
     </div>
   );

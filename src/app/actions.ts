@@ -293,23 +293,25 @@ export async function deleteTarefa(id: number) {
   revalidatePath('/calendario');
 }
 
-// --- AÇÕES DO PERFIL (ANOTAÇÕES RÁPIDAS) ---
-export async function updateAnotacoesRapidas(formData: FormData) {
+// Adicione estas funções em src/app/actions.ts
+
+export async function addAnotacao(formData: FormData) {
+  const content = formData.get('content') as string;
+  if (!content || content.trim() === '') return;
+
   const supabase = createServerActionClient({ cookies });
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
-  if (!session) {
-    return;
-  }
+  await supabase.from('anotacoes').insert({ content, user_id: user.id });
+  revalidatePath('/'); // Revalida o Dashboard para mostrar a nova nota
+}
 
-  const anotacoes = formData.get('anotacoes') as string;
+export async function deleteAnotacao(formData: FormData) {
+  const id = Number(formData.get('id'));
+  if (isNaN(id)) return;
 
-  await supabase
-    .from('profiles')
-    .update({ anotacoes_rapidas: anotacoes })
-    .eq('id', session.user.id);
-    
-  revalidatePath('/');
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('anotacoes').delete().eq('id', id);
+  revalidatePath('/'); // Revalida o Dashboard para remover a nota
 }
