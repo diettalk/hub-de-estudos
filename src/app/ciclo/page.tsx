@@ -1,13 +1,17 @@
 // src/app/ciclo/page.tsx
+
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+// CORREÇÃO: Adicionamos o 'useCallback' à lista de importações do React.
+import { useEffect, useState, useTransition, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { addSessaoCiclo, deleteSessaoCiclo, restoreHoraUm } from '@/app/actions'; // Adicionado restoreHoraUm
+import { addSessaoCiclo, restoreHoraUm } from '@/app/actions';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
 import { CicloTableRow } from '@/components/CicloTableRow';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 
 export default function CicloPage() {
   const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
@@ -16,10 +20,15 @@ export default function CicloPage() {
   const [isPending, startTransition] = useTransition();
   const supabase = createClientComponentClient();
 
-  // Usamos useCallback para evitar que a função seja recriada em cada render
+  // CORREÇÃO: Envolvemos a função getCicloData com o useCallback para otimização
+  // e para garantir que o useEffect funcione corretamente.
   const getCicloData = useCallback(async () => {
-    const { data: sessoesData } = await supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
-    const { data: disciplinasData } = await supabase.from('disciplinas').select('*').order('nome');
+    setLoading(true);
+    const sessoesPromise = supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
+    const disciplinasPromise = supabase.from('disciplinas').select('*').order('nome');
+    
+    const [{ data: sessoesData }, { data: disciplinasData }] = await Promise.all([sessoesPromise, disciplinasPromise]);
+    
     setSessoes((sessoesData as SessaoEstudo[]) || []);
     setDisciplinas(disciplinasData || []);
     setLoading(false);
@@ -31,26 +40,29 @@ export default function CicloPage() {
     return () => { supabase.removeChannel(channel); };
   }, [getCicloData, supabase]);
 
-  if (loading) return <div className="text-center p-12">Carregando dados do ciclo...</div>;
+  if (loading) {
+    return <div className="text-center p-12">Carregando dados do ciclo...</div>;
+  }
   
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-start">
-        <div /> {/* Espaçador */}
+        <h1 className="text-3xl font-bold">Ciclo de Estudos</h1>
         <form action={() => startTransition(() => restoreHoraUm())}>
-          <Button type="submit" variant="outline" size="sm" disabled={isPending}>Restaurar Hora 1 (se necessário)</Button>
+          <Button type="submit" variant="outline" size="sm" disabled={isPending}>Restaurar Hora 1</Button>
         </form>
       </div>
 
       <ProgressoCicloCard sessoes={sessoes} />
       
-      <details className="card p-6 bg-gray-800/50">
-        <summary className="font-semibold text-lg cursor-pointer">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</summary>
-        <div className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
-            {/* Seus textos explicativos podem vir aqui */}
-            <p>Este é o seu guia para navegar pelas fases do estudo...</p>
-        </div>
-      </details>
+      <Accordion type="single" collapsible className="w-full card bg-gray-800/50 p-6 rounded-lg">
+        <AccordionItem value="item-1">
+          <AccordionTrigger className="font-semibold text-lg">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</AccordionTrigger>
+          <AccordionContent className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
+              <p>Este é o seu guia para navegar pelas fases do estudo, garantindo uma cobertura completa e revisões estratégicas até o dia da prova.</p>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
       
       <div>
         <h2 className="text-2xl font-bold">Ciclo de Estudos - FASE 1 (Painel de Controle)</h2>
