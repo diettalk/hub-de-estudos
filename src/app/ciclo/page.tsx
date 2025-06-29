@@ -4,11 +4,12 @@
 
 import { useTransition } from 'react';
 import { updateSessaoEstudo } from '@/app/actions';
-import { Button } from './ui/button';
-import { Checkbox } from './ui/checkbox';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
+// CORREÇÃO: Todos os caminhos de importação foram ajustados para usar '@/'
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 // Tipos para os dados
 type Disciplina = { id: number; nome: string };
@@ -36,7 +37,6 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], discip
   const [isPending, startTransition] = useTransition();
 
   // Função para submeter o formulário de uma linha específica
-  // Agora dispara a cada mudança em qualquer campo do form
   const handleFormChange = (form: HTMLFormElement) => {
     const formData = new FormData(form);
     startTransition(() => {
@@ -74,7 +74,7 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], discip
               </td>
               <td className="p-2 text-center align-middle">{sessao.hora_no_ciclo}</td>
               <td className="p-2 align-middle">
-                <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id)}>
+                <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id || '')}>
                   <SelectTrigger className="bg-gray-700"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.nome}</SelectItem>)}</SelectContent>
                 </Select>
