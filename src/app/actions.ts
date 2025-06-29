@@ -112,60 +112,65 @@ export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId:
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
-
   if (isNaN(id)) return { error: 'ID da sessão inválido.' };
 
   const updateData: { [key: string]: any } = {};
-  const formEntries = Object.fromEntries(formData.entries());
-
-  // Copia os campos simples do formulário (foco, diario_de_bordo, etc.)
-  for (const key in formEntries) {
-    if (key !== 'id' && !key.startsWith('data_')) {
-      updateData[key] = formEntries[key];
-    }
-  }
   
-  // Converte os campos de checkbox para booleanos
-  updateData.concluido = formData.get('concluido') === 'true';
+  // Coleta todos os dados do formulário
+  const concluido = formData.get('concluido') === 'true';
+  const dataEstudoAtual = formData.get('data_estudo_atual') as string;
+  const dataEstudoNova = formData.get('data_estudo') as string;
+
+  updateData.foco = formData.get('foco');
+  updateData.diario_de_bordo = formData.get('diario_de_bordo');
+  updateData.questoes_acertos = Number(formData.get('questoes_acertos')) || null;
+  updateData.questoes_total = Number(formData.get('questoes_total')) || null;
+  updateData.disciplina_id = Number(formData.get('disciplina_id')) || null;
   updateData.materia_finalizada = formData.get('materia_finalizada') === 'true';
-  updateData.r1_concluida = formData.get('r1_concluida') === 'true';
-  updateData.r2_concluida = formData.get('r2_concluida') === 'true';
-  updateData.r3_concluida = formData.get('r3_concluida') === 'true';
-
-  // Lógica de datas
-  if (formData.has('data_estudo')) {
-    const dataEstudoStr = formData.get('data_estudo') as string;
-    updateData.data_estudo = dataEstudoStr || null;
-    
-    if (dataEstudoStr) {
-      const studyDate = new Date(dataEstudoStr + 'T03:00:00');
-      
-      const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
-      updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-      updateData.r1_concluida = false; // CORREÇÃO: Define explicitamente como false
-
-      const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
-      updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-      updateData.r2_concluida = false; // CORREÇÃO: Define explicitamente como false
-
-      const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
-      updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
-      updateData.r3_concluida = false; // CORREÇÃO: Define explicitamente como false
-    } else {
-      // Limpa as revisões se a data de estudo for removida
-      updateData.data_revisao_1 = null;
-      updateData.data_revisao_2 = null;
-      updateData.data_revisao_3 = null;
-    }
+  updateData.concluido = concluido;
+  
+  // LÓGICA DE DATAS CORRIGIDA
+  if (dataEstudoNova && dataEstudoNova !== dataEstudoAtual) {
+    // Cenário 1: O usuário alterou a data de estudo manualmente.
+    // Recalcula todas as revisões com base na nova data.
+    updateData.data_estudo = dataEstudoNova;
+    const studyDate = new Date(dataEstudoNova + 'T03:00:00');
+    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
+    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
+    updateData.r1_concluida = false;
+    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
+    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
+    updateData.r2_concluida = false;
+    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
+    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+    updateData.r3_concluida = false;
+  } else if (concluido && !dataEstudoAtual) {
+    // Cenário 2: O usuário marcou "OK" pela primeira vez.
+    // Define a data de estudo como HOJE e calcula as revisões.
+    const studyDate = new Date();
+    updateData.data_estudo = studyDate.toISOString().split('T')[0];
+    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
+    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
+    updateData.r1_concluida = false;
+    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
+    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
+    updateData.r2_concluida = false;
+    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
+    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+    updateData.r3_concluida = false;
+  } else {
+    // Cenário 3: O usuário alterou outras coisas (datas de revisão individuais, etc).
+    // Apenas salva as datas que foram enviadas, sem recalcular.
+    if (formData.has('data_revisao_1')) updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
+    if (formData.has('data_revisao_2')) updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
+    if (formData.has('data_revisao_3')) updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
+    updateData.r1_concluida = formData.get('r1_concluida') === 'true';
+    updateData.r2_concluida = formData.get('r2_concluida') === 'true';
+    updateData.r3_concluida = formData.get('r3_concluida') === 'true';
   }
 
-  const { error } = await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
-
-  if (error) {
-    console.error("Erro ao atualizar sessão:", error);
-    return { error: error.message };
-  }
-
+  await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
+  
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');
@@ -429,4 +434,30 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
     .match({ concurso_id: concursoId, pagina_id: paginaId });
 
   revalidatePath('/guia-estudos');
+}
+
+// Adicione esta função em: src/app/actions.ts
+
+export async function restoreHoraUm() {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Verifica se a hora 1 já existe
+  const { data: existente } = await supabase
+    .from('sessoes_estudo')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('hora_no_ciclo', 1)
+    .single();
+
+  // Se não existir, cria
+  if (!existente) {
+    await supabase.from('sessoes_estudo').insert({ 
+      hora_no_ciclo: 1, 
+      foco: 'Sessão Restaurada - Edite aqui',
+      user_id: user.id
+    });
+    revalidatePath('/ciclo');
+  }
 }
