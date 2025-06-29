@@ -13,17 +13,17 @@ export default async function RevisoesPage() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login');
 
+  // CORREÇÃO: A busca agora aceita 'is.false' OU 'is.null'
   const { data: sessoes, error } = await supabase
     .from('sessoes_estudo')
     .select('id, foco, data_revisao_1, r1_concluida, data_revisao_2, r2_concluida, data_revisao_3, r3_concluida')
-    .or('r1_concluida.is.false,r2_concluida.is.false,r3_concluida.is.false');
+    .or('r1_concluida.is.false,r1_concluida.is.null,r2_concluida.is.false,r2_concluida.is.null,r3_concluida.is.false,r3_concluida.is.null');
 
   if (error) {
     console.error('Erro ao buscar revisões:', error);
   }
 
   const hoje = startOfDay(new Date());
-  const seteDiasAtras = subDays(hoje, 7); // Aumentado para pegar mais atrasadas se necessário
   const proximosSeteDias = endOfDay(addDays(hoje, 7));
   
   const eventos: EventoRevisao[] = [];
