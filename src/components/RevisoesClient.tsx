@@ -4,8 +4,9 @@
 
 import { useTransition } from 'react';
 import { updateRevisaoStatus } from '@/app/actions';
-import { Checkbox } from './ui/checkbox';
-import { Badge } from './ui/badge';
+// CORREÇÃO: Caminho de importação ajustado para usar o atalho '@/'
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 export type EventoRevisao = {
   id: number;
@@ -47,14 +48,14 @@ const RevisaoCard = ({ revisao }: { revisao: EventoRevisao }) => {
         </label>
         <p className="text-xs text-gray-400">{dataFormatada}</p>
       </div>
-      <Badge style={{ backgroundColor: revisao.color }}>{revisao.type}</Badge>
+      <Badge style={{ backgroundColor: revisao.color, color: 'white' }}>{revisao.type}</Badge>
     </div>
   );
 };
 
 export function RevisoesClient({ atrasadas, hoje, proximos7Dias }: RevisoesClientProps) {
   const renderColuna = (titulo: string, revisoes: EventoRevisao[], corTitulo: string = 'text-white') => (
-    <div className="bg-gray-900/50 p-4 rounded-lg flex-1">
+    <div className="bg-gray-900/50 p-4 rounded-lg flex-1 min-w-[300px]">
       <h2 className={`text-xl font-bold mb-4 pb-2 border-b border-gray-700 ${corTitulo}`}>
         {titulo} <span className="text-sm font-normal text-gray-400">({revisoes.length})</span>
       </h2>
