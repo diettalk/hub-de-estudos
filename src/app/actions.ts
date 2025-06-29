@@ -118,46 +118,47 @@ export async function updateSessaoEstudo(formData: FormData) {
   const updateData: { [key: string]: any } = {};
   const formEntries = Object.fromEntries(formData.entries());
 
-  // Copia todos os campos simples do formulário para o objeto de atualização
-  // Isso inclui: foco, diario_de_bordo, questoes_acertos, etc.
+  // Copia os campos simples do formulário (foco, diario_de_bordo, etc.)
   for (const key in formEntries) {
-    if (key !== 'id' && key !== 'data_estudo' && !key.startsWith('data_revisao')) {
+    if (key !== 'id' && !key.startsWith('data_')) {
       updateData[key] = formEntries[key];
     }
   }
+  
+  // Converte os campos de checkbox para booleanos
+  updateData.concluido = formData.get('concluido') === 'true';
+  updateData.materia_finalizada = formData.get('materia_finalizada') === 'true';
+  updateData.r1_concluida = formData.get('r1_concluida') === 'true';
+  updateData.r2_concluida = formData.get('r2_concluida') === 'true';
+  updateData.r3_concluida = formData.get('r3_concluida') === 'true';
 
-  // Lógica inteligente de datas
+  // Lógica de datas
   if (formData.has('data_estudo')) {
-    // CASO 1: A DATA DE ESTUDO FOI ALTERADA DIRETAMENTE
-    // Isso dispara o recálculo de todas as datas de revisão.
     const dataEstudoStr = formData.get('data_estudo') as string;
     updateData.data_estudo = dataEstudoStr || null;
     
     if (dataEstudoStr) {
       const studyDate = new Date(dataEstudoStr + 'T03:00:00');
+      
       const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
       updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-      
+      updateData.r1_concluida = false; // CORREÇÃO: Define explicitamente como false
+
       const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
       updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-      
+      updateData.r2_concluida = false; // CORREÇÃO: Define explicitamente como false
+
       const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
       updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+      updateData.r3_concluida = false; // CORREÇÃO: Define explicitamente como false
     } else {
-      // Se a data de estudo for apagada, limpa as revisões
+      // Limpa as revisões se a data de estudo for removida
       updateData.data_revisao_1 = null;
       updateData.data_revisao_2 = null;
       updateData.data_revisao_3 = null;
     }
-  } else {
-    // CASO 2: AS DATAS DE REVISÃO FORAM ALTERADAS INDIVIDUALMENTE
-    // Atualiza apenas as datas que foram enviadas no formulário.
-    if (formData.has('data_revisao_1')) updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
-    if (formData.has('data_revisao_2')) updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
-    if (formData.has('data_revisao_3')) updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
   }
 
-  // Envia a atualização para o Supabase
   const { error } = await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
 
   if (error) {
@@ -165,7 +166,6 @@ export async function updateSessaoEstudo(formData: FormData) {
     return { error: error.message };
   }
 
-  // Revalida todas as páginas afetadas
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');

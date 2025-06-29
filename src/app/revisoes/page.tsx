@@ -4,7 +4,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { RevisoesClient, EventoRevisao } from '@/components/RevisoesClient';
-import { subDays, addDays, startOfDay, endOfDay, isBefore, isEqual, isAfter } from 'date-fns';
+import { addDays, startOfDay, endOfDay, isBefore, isEqual, isAfter } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export default async function RevisoesPage() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login');
 
-  // CORREÇÃO: A busca agora aceita 'is.false' OU 'is.null'
+  // CORREÇÃO: A busca agora aceita 'is.false' OU 'is.null', tornando-a robusta
   const { data: sessoes, error } = await supabase
     .from('sessoes_estudo')
     .select('id, foco, data_revisao_1, r1_concluida, data_revisao_2, r2_concluida, data_revisao_3, r3_concluida')
@@ -29,18 +29,18 @@ export default async function RevisoesPage() {
   const eventos: EventoRevisao[] = [];
 
   sessoes?.forEach(r => {
+    // A condição !r.rX_concluida funciona para `false` e para `null` em JavaScript
     if (r.data_revisao_1 && !r.r1_concluida) {
-      eventos.push({ id: r.id, title: r.foco, type: 'R1', completed: r.r1_concluida, color: '#EF4444', data: r.data_revisao_1 });
+      eventos.push({ id: r.id, title: r.foco, type: 'R1', completed: false, color: '#EF4444', data: r.data_revisao_1 });
     }
     if (r.data_revisao_2 && !r.r2_concluida) {
-      eventos.push({ id: r.id, title: r.foco, type: 'R7', completed: r.r2_concluida, color: '#F59E0B', data: r.data_revisao_2 });
+      eventos.push({ id: r.id, title: r.foco, type: 'R7', completed: false, color: '#F59E0B', data: r.data_revisao_2 });
     }
     if (r.data_revisao_3 && !r.r3_concluida) {
-      eventos.push({ id: r.id, title: r.foco, type: 'R30', completed: r.r3_concluida, color: '#10B981', data: r.data_revisao_3 });
+      eventos.push({ id: r.id, title: r.foco, type: 'R30', completed: false, color: '#10B981', data: r.data_revisao_3 });
     }
   });
   
-  // Categoriza os eventos
   const atrasadas = eventos.filter(e => isBefore(startOfDay(new Date(e.data + 'T03:00:00')), hoje)).sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime());
   const paraHoje = eventos.filter(e => isEqual(startOfDay(new Date(e.data + 'T03:00:00')), hoje));
   const proximos7Dias = eventos.filter(e => {
