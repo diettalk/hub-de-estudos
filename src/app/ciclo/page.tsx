@@ -1,8 +1,6 @@
 // src/app/ciclo/page.tsx
-
 'use client';
 
-// CORREÇÃO: Adicionamos o 'useCallback' à lista de importações do React.
 import { useEffect, useState, useTransition, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { addSessaoCiclo, restoreHoraUm } from '@/app/actions';
@@ -12,7 +10,6 @@ import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
 import { CicloTableRow } from '@/components/CicloTableRow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-
 export default function CicloPage() {
   const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
   const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
@@ -20,14 +17,10 @@ export default function CicloPage() {
   const [isPending, startTransition] = useTransition();
   const supabase = createClientComponentClient();
 
-  // CORREÇÃO: Envolvemos a função getCicloData com o useCallback para otimização
-  // e para garantir que o useEffect funcione corretamente.
   const getCicloData = useCallback(async () => {
-    setLoading(true);
-    const sessoesPromise = supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
-    const disciplinasPromise = supabase.from('disciplinas').select('*').order('nome');
-    
-    const [{ data: sessoesData }, { data: disciplinasData }] = await Promise.all([sessoesPromise, disciplinasPromise]);
+    // Não precisamos mais do 'setLoading(true)' aqui para evitar piscar a tela
+    const { data: sessoesData } = await supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
+    const { data: disciplinasData } = await supabase.from('disciplinas').select('*').order('nome');
     
     setSessoes((sessoesData as SessaoEstudo[]) || []);
     setDisciplinas(disciplinasData || []);
@@ -40,9 +33,32 @@ export default function CicloPage() {
     return () => { supabase.removeChannel(channel); };
   }, [getCicloData, supabase]);
 
-  if (loading) {
-    return <div className="text-center p-12">Carregando dados do ciclo...</div>;
-  }
+  const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos. Quero evoluir para a **Fase [PREENCHA: 2 para Expansão ou 3 para Ataque Final]**.
+
+Abaixo estão os dados do meu desempenho para você analisar e criar o novo ciclo:
+
+**1. DIÁRIO DE BORDO (RESUMO):**
+* **Matérias com 100% dos tópicos da Fase 1 estudados:** [Liste aqui as matérias que você finalizou os tópicos previstos na Fase 1. Ex: LP, RLM, G.GOV.]
+* **Matérias com estudo em andamento:** [Liste as matérias e em qual tópico você está. Ex: P.PUB - estou em 50% de Modelos de Análise.]
+
+**2. DADOS DA REVISÃO FAROL (ANKI OU MANUAL):**
+* **TOP 3 Matérias com mais cartões 🔴 VERMELHOS (maiores dificuldades):**
+    1.  [Nome da Matéria 1]
+    2.  [Nome da Matéria 2]
+    3.  [Nome da Matéria 3]
+* **TOP 3 Matérias com mais cartões 🟢 VERDES (maiores facilidades):**
+    1.  [Nome da Matéria 1]
+    2.  [Nome da Matéria 2]
+    3.  [Nome da Matéria 3]
+
+**3. PERCEPÇÃO PESSOAL:**
+* **Matéria que me sinto MAIS CONFIANTE:** [Sua resposta]
+* **Matéria que sinto MAIS DIFICULDADE:** [Sua resposta]
+* **Observações adicionais:** [Qualquer outra informação que julgue relevante]
+
+Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**, introduzindo as novas matérias do nosso Guia Estratégico e ajustando a frequência das matérias da Fase 1`;
+
+  if (loading) return <div className="text-center p-12">Carregando dados do ciclo...</div>;
   
   return (
     <div className="space-y-8">
@@ -82,6 +98,7 @@ export default function CicloPage() {
                   <th className="text-center p-3">R1</th>
                   <th className="text-center p-3">R7</th>
                   <th className="text-center p-3">R30</th>
+                  <th className="p-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
@@ -96,6 +113,15 @@ export default function CicloPage() {
           </div>
         </div>
       </div>
+
+      <Accordion type="single" collapsible className="w-full card bg-gray-800/50 p-6 rounded-lg">
+        <AccordionItem value="item-1">
+            <AccordionTrigger className="font-semibold">Comando para Evolução do Ciclo (Para uso futuro)</AccordionTrigger>
+            <AccordionContent>
+                <pre className="mt-4 bg-gray-900 p-4 rounded-md text-xs whitespace-pre-wrap font-mono">{comandoEvolucao}</pre>
+            </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
