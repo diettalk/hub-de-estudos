@@ -18,8 +18,7 @@ export default function CicloPage() {
   const supabase = createClientComponentClient();
 
   const getCicloData = useCallback(async () => {
-    // Não precisamos mais do 'setLoading(true)' aqui para evitar piscar a tela
-    const { data: sessoesData } = await supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
+    const { data: sessoesData } = await supabase.from('sessoes_estudo').select(`*`).order('hora_no_ciclo');
     const { data: disciplinasData } = await supabase.from('disciplinas').select('*').order('nome');
     
     setSessoes((sessoesData as SessaoEstudo[]) || []);
@@ -75,6 +74,7 @@ Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**,
         <AccordionItem value="item-1">
           <AccordionTrigger className="font-semibold text-lg">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</AccordionTrigger>
           <AccordionContent className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
+              <h4 className="font-bold text-white">Tutorial de Evolução do Ciclo</h4>
               <p>Este é o seu guia para navegar pelas fases do estudo, garantindo uma cobertura completa e revisões estratégicas até o dia da prova.</p>
           </AccordionContent>
         </AccordionItem>
@@ -113,15 +113,16 @@ Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**,
           </div>
         </div>
       </div>
-
+      
       <Accordion type="single" collapsible className="w-full card bg-gray-800/50 p-6 rounded-lg">
         <AccordionItem value="item-1">
-            <AccordionTrigger className="font-semibold">Comando para Evolução do Ciclo (Para uso futuro)</AccordionTrigger>
-            <AccordionContent>
-                <pre className="mt-4 bg-gray-900 p-4 rounded-md text-xs whitespace-pre-wrap font-mono">{comandoEvolucao}</pre>
-            </AccordionContent>
+          <AccordionTrigger className="font-semibold">Comando para Evolução do Ciclo (Para uso futuro)</AccordionTrigger>
+          <AccordionContent>
+              <pre className="mt-4 bg-gray-900 p-4 rounded-md text-xs whitespace-pre-wrap font-mono">{comandoEvolucao}</pre>
+          </AccordionContent>
         </AccordionItem>
       </Accordion>
+
     </div>
   );
 }
