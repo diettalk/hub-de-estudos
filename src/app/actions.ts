@@ -107,7 +107,7 @@ export async function toggleDisciplinaConcurso(concursoId: number, disciplinaId:
     revalidatePath('/materiais');
 }
 
-// SUBSTITUA a sua função updateSessaoEstudo existente por esta:
+// COLE ESTA VERSÃO CORRIGIDA NO LUGAR DA SUA updateSessaoEstudo ATUAL
 
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
@@ -116,61 +116,69 @@ export async function updateSessaoEstudo(formData: FormData) {
 
   const updateData: { [key: string]: any } = {};
   
-  // Coleta todos os dados do formulário
-  const concluido = formData.get('concluido') === 'true';
+  // Coleta os dados do formulário
+  // Um checkbox marcado envia 'on' ou 'true' dependendo do navegador/situação. Checamos ambos.
+  const concluido = formData.get('concluido') === 'on' || formData.get('concluido') === 'true';
   const dataEstudoAtual = formData.get('data_estudo_atual') as string;
   const dataEstudoNova = formData.get('data_estudo') as string;
 
+  // Atualiza os campos de texto e números
   updateData.foco = formData.get('foco');
   updateData.diario_de_bordo = formData.get('diario_de_bordo');
-  updateData.questoes_acertos = Number(formData.get('questoes_acertos')) || null;
-  updateData.questoes_total = Number(formData.get('questoes_total')) || null;
-  updateData.disciplina_id = Number(formData.get('disciplina_id')) || null;
-  updateData.materia_finalizada = formData.get('materia_finalizada') === 'true';
+  updateData.questoes_acertos = formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null;
+  updateData.questoes_total = formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null;
+  updateData.disciplina_id = formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null;
   updateData.concluido = concluido;
   
-  // LÓGICA DE DATAS CORRIGIDA
-  if (dataEstudoNova && dataEstudoNova !== dataEstudoAtual) {
-    // Cenário 1: O usuário alterou a data de estudo manualmente.
+  // A LÓGICA DE DATAS MAIS INTELIGENTE
+  if (concluido && !dataEstudoAtual) {
+    // CENÁRIO 1: O usuário marcou "OK" pela primeira vez (data de estudo estava vazia).
+    // Define a data de estudo como HOJE e calcula todas as revisões.
+    const studyDate = new Date();
+    updateData.data_estudo = studyDate.toISOString().split('T')[0];
+    
+    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
+    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
+    updateData.r1_concluida = false;
+
+    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
+    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
+    updateData.r2_concluida = false;
+
+    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
+    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+    updateData.r3_concluida = false;
+
+  } else if (dataEstudoNova && dataEstudoNova !== dataEstudoAtual) {
+    // CENÁRIO 2: O usuário alterou a data de estudo manualmente.
     // Recalcula todas as revisões com base na nova data.
     updateData.data_estudo = dataEstudoNova;
     const studyDate = new Date(dataEstudoNova + 'T03:00:00');
+
     const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
     updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
     updateData.r1_concluida = false;
+
     const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
     updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
     updateData.r2_concluida = false;
+    
     const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
     updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
     updateData.r3_concluida = false;
-  } else if (concluido && !dataEstudoAtual) {
-    // Cenário 2: O usuário marcou "OK" pela primeira vez.
-    // Define a data de estudo como HOJE e calcula as revisões.
-    const studyDate = new Date();
-    updateData.data_estudo = studyDate.toISOString().split('T')[0];
-    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
-    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-    updateData.r1_concluida = false;
-    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
-    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-    updateData.r2_concluida = false;
-    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
-    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
-    updateData.r3_concluida = false;
+
   } else {
-    // Cenário 3: O usuário alterou outras coisas (datas de revisão individuais, etc).
-    // Apenas salva as datas que foram enviadas, sem recalcular.
-    if (formData.has('data_revisao_1')) updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
-    if (formData.has('data_revisao_2')) updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
-    if (formData.has('data_revisao_3')) updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
+    // CENÁRIO 3: Outras alterações (ex: datas de revisão individuais)
+    // Apenas salva o que foi enviado, sem recalcular.
     updateData.r1_concluida = formData.get('r1_concluida') === 'true';
     updateData.r2_concluida = formData.get('r2_concluida') === 'true';
     updateData.r3_concluida = formData.get('r3_concluida') === 'true';
   }
 
+  // Envia a atualização para o banco de dados
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
   
+  // Revalida todas as páginas afetadas para mostrar os dados novos
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');

@@ -1,99 +1,89 @@
-// src/components/CicloTable.tsx
-
+// src/app/ciclo/page.tsx
 'use client';
 
-import { useTransition } from 'react';
-import { updateSessaoEstudo } from '@/app/actions';
-// CORREÇÃO: Todos os caminhos de importação foram ajustados para usar '@/'
+import { useEffect, useState, useTransition } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { addSessaoCiclo, deleteSessaoCiclo, restoreHoraUm } from '@/app/actions'; // Adicionado restoreHoraUm
+import { type SessaoEstudo, type Disciplina } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
+import { CicloTableRow } from '@/components/CicloTableRow';
 
-// Tipos para os dados
-type Disciplina = { id: number; nome: string };
-type Sessao = {
-  id: number;
-  hora_no_ciclo: number;
-  foco: string | null;
-  diario_de_bordo: string | null;
-  questoes_acertos: number | null;
-  questoes_total: number | null;
-  data_estudo: string | null;
-  data_revisao_1: string | null;
-  data_revisao_2: string | null;
-  data_revisao_3: string | null;
-  concluido: boolean;
-  materia_finalizada: boolean;
-  disciplina_id: number | null;
-  disciplina: { nome: string } | null;
-  r1_concluida: boolean;
-  r2_concluida: boolean;
-  r3_concluida: boolean;
-};
-
-export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], disciplinas: Disciplina[] }) {
+export default function CicloPage() {
+  const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
+  const [disciplinas, setDisciplinas] = useState<Disciplina[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const supabase = createClientComponentClient();
 
-  // Função para submeter o formulário de uma linha específica
-  const handleFormChange = (form: HTMLFormElement) => {
-    const formData = new FormData(form);
-    startTransition(() => {
-      updateSessaoEstudo(formData);
-    });
-  };
+  // Usamos useCallback para evitar que a função seja recriada em cada render
+  const getCicloData = useCallback(async () => {
+    const { data: sessoesData } = await supabase.from('sessoes_estudo').select(`*, disciplina:disciplinas(id, nome)`).order('hora_no_ciclo');
+    const { data: disciplinasData } = await supabase.from('disciplinas').select('*').order('nome');
+    setSessoes((sessoesData as SessaoEstudo[]) || []);
+    setDisciplinas(disciplinasData || []);
+    setLoading(false);
+  }, [supabase]);
 
+  useEffect(() => {
+    getCicloData();
+    const channel = supabase.channel('realtime-ciclo-page').on('postgres_changes', { event: '*', schema: 'public', table: 'sessoes_estudo' }, getCicloData).subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [getCicloData, supabase]);
+
+  if (loading) return <div className="text-center p-12">Carregando dados do ciclo...</div>;
+  
   return (
-    <table className="min-w-full text-sm text-left">
-      <thead className="bg-gray-800">
-        <tr>
-          <th className="p-3">OK</th>
-          <th className="p-3">HORA</th>
-          <th className="p-3">MATÉRIA</th>
-          <th className="p-3 w-1/4">FOCO SUGERIDO</th>
-          <th className="p-3 w-1/4">DIÁRIO DE BORDO</th>
-          <th className="p-3 text-center">QUESTÕES</th>
-          <th className="p-3">DATA ESTUDO</th>
-          <th className="p-3">R1 (24H)</th>
-          <th className="p-3">R7 (7D)</th>
-          <th className="p-3">R30 (30D)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sessoes.map((sessao) => (
-          <tr key={sessao.id} className="border-b border-gray-700">
-            {/* O formulário agora envolve a linha toda para capturar qualquer mudança */}
-            <form onChange={(e) => handleFormChange(e.currentTarget)}>
-              <input type="hidden" name="id" value={sessao.id} />
-              {/* Enviamos a data de estudo atual para a action poder comparar */}
-              <input type="hidden" name="data_estudo_atual" value={sessao.data_estudo || ''} />
-              
-              <td className="p-2 text-center align-middle">
-                <Checkbox name="concluido" value="true" defaultChecked={sessao.concluido} />
-              </td>
-              <td className="p-2 text-center align-middle">{sessao.hora_no_ciclo}</td>
-              <td className="p-2 align-middle">
-                <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id || '')}>
-                  <SelectTrigger className="bg-gray-700"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.nome}</SelectItem>)}</SelectContent>
-                </Select>
-              </td>
-              <td className="p-2 align-middle"><Input name="foco" defaultValue={sessao.foco || ''} className="bg-gray-700" /></td>
-              <td className="p-2 align-middle"><Textarea name="diario_de_bordo" defaultValue={sessao.diario_de_bordo || ''} className="bg-gray-700 h-10" /></td>
-              <td className="p-2 flex items-center gap-1 align-middle">
-                <Input name="questoes_acertos" type="number" defaultValue={sessao.questoes_acertos || ''} className="bg-gray-700 w-16" placeholder="C" />
-                <span className="text-gray-400">/</span>
-                <Input name="questoes_total" type="number" defaultValue={sessao.questoes_total || ''} className="bg-gray-700 w-16" placeholder="T" />
-              </td>
-              <td className="p-2 align-middle"><Input name="data_estudo" type="date" defaultValue={sessao.data_estudo || ''} className="bg-gray-700" /></td>
-              <td className="p-2 align-middle"><Input name="data_revisao_1" type="date" defaultValue={sessao.data_revisao_1 || ''} className="bg-gray-700" /></td>
-              <td className="p-2 align-middle"><Input name="data_revisao_2" type="date" defaultValue={sessao.data_revisao_2 || ''} className="bg-gray-700" /></td>
-              <td className="p-2 align-middle"><Input name="data_revisao_3" type="date" defaultValue={sessao.data_revisao_3 || ''} className="bg-gray-700" /></td>
-            </form>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="space-y-8">
+      <div className="flex justify-between items-start">
+        <div /> {/* Espaçador */}
+        <form action={() => startTransition(() => restoreHoraUm())}>
+          <Button type="submit" variant="outline" size="sm" disabled={isPending}>Restaurar Hora 1 (se necessário)</Button>
+        </form>
+      </div>
+
+      <ProgressoCicloCard sessoes={sessoes} />
+      
+      <details className="card p-6 bg-gray-800/50">
+        <summary className="font-semibold text-lg cursor-pointer">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</summary>
+        <div className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
+            {/* Seus textos explicativos podem vir aqui */}
+            <p>Este é o seu guia para navegar pelas fases do estudo...</p>
+        </div>
+      </details>
+      
+      <div>
+        <h2 className="text-2xl font-bold">Ciclo de Estudos - FASE 1 (Painel de Controle)</h2>
+        <p className="text-gray-400 mt-1">Foco: Construir a base para os cargos de Especialista (HFA), Analista (MGI) e Analista (INSS).</p>
+        <div className="bg-gray-800/50 rounded-lg shadow-lg overflow-hidden border border-gray-700 mt-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-300">
+              <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
+                <tr>
+                  <th className="p-3">OK</th>
+                  <th className="p-3">Hora</th>
+                  <th className="p-3">Matéria</th>
+                  <th className="p-3 min-w-[350px]">Foco Sugerido</th>
+                  <th className="p-3 min-w-[250px]">Diário de Bordo</th>
+                  <th className="p-3 min-w-[200px]">Questões</th>
+                  <th className="p-3 min-w-[150px]">Data Estudo</th>
+                  <th className="text-center p-3">R1</th>
+                  <th className="text-center p-3">R7</th>
+                  <th className="text-center p-3">R30</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {sessoes.map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao} disciplinas={disciplinas} />)}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2 flex justify-center border-t border-gray-700">
+            <Button onClick={() => startTransition(() => addSessaoCiclo())} variant="ghost" size="sm" disabled={isPending}>
+              {isPending ? 'Adicionando...' : '+ Adicionar Linha ao Ciclo'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
