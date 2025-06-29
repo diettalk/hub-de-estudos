@@ -4,12 +4,11 @@
 
 import { useTransition } from 'react';
 import { updateSessaoEstudo } from '@/app/actions';
-// CORREÇÃO: Todos os caminhos de importação foram ajustados para usar '@/'
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Textarea } from './ui/textarea';
 
 // Tipos para os dados
 type Disciplina = { id: number; nome: string };
@@ -36,7 +35,6 @@ type Sessao = {
 export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], disciplinas: Disciplina[] }) {
   const [isPending, startTransition] = useTransition();
 
-  // Função para submeter o formulário de uma linha específica
   const handleFormChange = (form: HTMLFormElement) => {
     const formData = new FormData(form);
     startTransition(() => {
@@ -45,28 +43,32 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], discip
   };
 
   return (
-    <table className="min-w-full text-sm text-left">
+    <table className="min-w-full text-sm text-left table-fixed">
       <thead className="bg-gray-800">
         <tr>
-          <th className="p-3">OK</th>
-          <th className="p-3">HORA</th>
-          <th className="p-3">MATÉRIA</th>
+          <th className="p-3 w-12">OK</th>
+          <th className="p-3 w-16">HORA</th>
+          <th className="p-3 w-48">MATÉRIA</th>
           <th className="p-3 w-1/4">FOCO SUGERIDO</th>
           <th className="p-3 w-1/4">DIÁRIO DE BORDO</th>
-          <th className="p-3 text-center">QUESTÕES</th>
-          <th className="p-3">DATA ESTUDO</th>
-          <th className="p-3">R1 (24H)</th>
-          <th className="p-3">R7 (7D)</th>
-          <th className="p-3">R30 (30D)</th>
+          <th className="p-3 w-40 text-center">QUESTÕES</th>
+          <th className="p-3 w-40">DATA ESTUDO</th>
+          <th className="p-3 w-40">R1 (24H)</th>
+          <th className="p-3 w-40">R7 (7D)</th>
+          <th className="p-3 w-40">R30 (30D)</th>
         </tr>
       </thead>
-      <tbody>
+      {/* CORREÇÃO: A tag <tbody> agora envolve os formulários */}
+      <tbody style={{ display: 'contents' }}>
         {sessoes.map((sessao) => (
-          <tr key={sessao.id} className="border-b border-gray-700">
-            {/* O formulário agora envolve a linha toda para capturar qualquer mudança */}
-            <form onChange={(e) => handleFormChange(e.currentTarget)}>
+          // CORREÇÃO: A tag <form> agora tem o estilo 'display: contents' para não quebrar a tabela
+          <form 
+            key={sessao.id} 
+            onChange={(e) => handleFormChange(e.currentTarget)} 
+            style={{ display: 'contents' }}
+          >
+            <tr className="border-b border-gray-700">
               <input type="hidden" name="id" value={sessao.id} />
-              {/* Enviamos a data de estudo atual para a action poder comparar */}
               <input type="hidden" name="data_estudo_atual" value={sessao.data_estudo || ''} />
               
               <td className="p-2 text-center align-middle">
@@ -90,8 +92,8 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: Sessao[], discip
               <td className="p-2 align-middle"><Input name="data_revisao_1" type="date" defaultValue={sessao.data_revisao_1 || ''} className="bg-gray-700" /></td>
               <td className="p-2 align-middle"><Input name="data_revisao_2" type="date" defaultValue={sessao.data_revisao_2 || ''} className="bg-gray-700" /></td>
               <td className="p-2 align-middle"><Input name="data_revisao_3" type="date" defaultValue={sessao.data_revisao_3 || ''} className="bg-gray-700" /></td>
-            </form>
-          </tr>
+            </tr>
+          </form>
         ))}
       </tbody>
     </table>
