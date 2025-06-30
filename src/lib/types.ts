@@ -1,10 +1,13 @@
 // src/lib/types.ts
+
+// Define a estrutura para as suas Disciplinas/Páginas
 export type Disciplina = {
   id: number;
   nome: string;
   emoji?: string;
 };
 
+// Define a estrutura completa para cada linha do seu Ciclo de Estudos
 export type SessaoEstudo = {
   id: number;
   ordem: number;
@@ -22,6 +25,7 @@ export type SessaoEstudo = {
   materia_finalizada: boolean;
 };
 
+// Define a estrutura para os eventos de revisão que serão gerados
 export type EventoRevisao = {
   id: number;
   sessao_id: number;

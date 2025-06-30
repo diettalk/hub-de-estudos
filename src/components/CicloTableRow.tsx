@@ -1,87 +1,92 @@
 // src/components/CicloTableRow.tsx
 'use client';
 
-import { useTransition, useRef } from 'react';
+import { useState, useEffect, useTransition, useCallback } from 'react';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo, toggleMateriaFinalizada } from '@/app/actions';
+import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo } from '@/app/actions';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
-import { Trash2, Save, CheckCircle2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; disciplinas: Disciplina[] }) {
   const [isPending, startTransition] = useTransition();
-  const formRef = useRef<HTMLFormElement>(null);
+  const [rowData, setRowData] = useState(sessao);
 
-  const handleSave = () => {
-    if (formRef.current) {
-      const formData = new FormData(formRef.current);
-      startTransition(() => updateSessaoEstudo(formData));
-    }
+  // Sincroniza o estado interno se a prop do servidor mudar
+  useEffect(() => {
+    setRowData(sessao);
+  }, [sessao]);
+
+  const handleFieldChange = (field: keyof SessaoEstudo, value: any) => {
+    setRowData(prev => ({ ...prev, [field]: value }));
   };
+
+  // Efeito de AUTO-SAVE com "debounce"
+  useEffect(() => {
+    // Não salva se os dados forem idênticos aos que vieram do servidor
+    if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
+
+    const handler = setTimeout(() => {
+      startTransition(() => updateSessaoEstudo(rowData));
+    }, 1500); // Salva 1.5 segundos após a última alteração
+
+    return () => clearTimeout(handler);
+  }, [rowData, sessao]);
   
-  const dataFinalizada = sessao.data_estudo ? new Date(sessao.data_estudo + 'T03:00:00').toLocaleDateString('pt-BR') : 'Pendente';
-  const percAcerto = sessao.questoes_total && sessao.questoes_acertos ? Math.round((sessao.questoes_acertos / sessao.questoes_total) * 100) : 0;
+  const percAcerto = rowData.questoes_total && rowData.questoes_acertos ? Math.round((rowData.questoes_acertos / rowData.questoes_total) * 100) : 0;
 
   return (
-    <tr ref={formRef} className={`border-b border-gray-700 ${sessao.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
-      {/* Célula de Ações movida para o início */}
-      <td className="p-2 align-middle text-center">
-        <div className="flex items-center justify-center gap-1">
-          <Button type="button" onClick={handleSave} variant="ghost" size="icon" title="Salvar Alterações Manuais" disabled={isPending}>
-            <Save className="h-4 w-4 text-blue-400" />
-          </Button>
-          <form action={(formData) => startTransition(() => concluirSessaoEstudo(formData))}>
-            <input type="hidden" name="id" value={sessao.id} />
-            <Button type="submit" variant="ghost" size="icon" title="Concluir Sessão (OK e Gerar Revisões)" disabled={isPending || sessao.concluida}>
-              <CheckCircle2 className="h-4 w-4 text-green-400" />
-            </Button>
-          </form>
-          <form action={(formData) => startTransition(() => deleteSessaoCiclo(formData))}>
-            <input type="hidden" name="id" value={sessao.id} />
-            <Button type="submit" variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}>
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </form>
-        </div>
-      </td>
-
-      {/* Célula para o checkbox "Finalizada" com ação imediata */}
+    <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <td className="p-2 text-center align-middle">
-        <Checkbox
-          id={`finalizada-${sessao.id}`}
-          checked={sessao.materia_finalizada}
+        <Checkbox // O CHECKBOX OK
+          checked={rowData.concluida}
+          disabled={rowData.concluida || isPending}
           onCheckedChange={() => {
-            startTransition(() => toggleMateriaFinalizada(sessao.id, sessao.materia_finalizada));
+            if (!rowData.concluida) {
+              startTransition(() => concluirSessaoEstudo(rowData.id));
+            }
           }}
         />
       </td>
-      
-      {/* Inputs para os dados da sessão */}
-      <input type="hidden" name="id" value={sessao.id} />
-      <td className="p-2 text-center align-middle">{sessao.ordem}</td>
+      <td className="p-2 text-center align-middle">{rowData.ordem}</td>
       <td className="p-2 align-middle">
-        <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id || '')}>
+        <Select
+          value={String(rowData.disciplina_id || '')}
+          onValueChange={(value) => handleFieldChange('disciplina_id', Number(value))}
+        >
           <SelectTrigger className="bg-gray-700 w-[180px]"><SelectValue placeholder="Vincular Matéria" /></SelectTrigger>
           <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
         </Select>
       </td>
-      <td className="p-2 align-middle"><Input name="foco_sugerido" defaultValue={sessao.foco_sugerido || ''} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Textarea name="diario_de_bordo" defaultValue={sessao.diario_de_bordo || ''} rows={1} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input value={rowData.foco_sugerido || ''} onChange={(e) => handleFieldChange('foco_sugerido', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Textarea value={rowData.diario_de_bordo || ''} onChange={(e) => handleFieldChange('diario_de_bordo', e.target.value)} rows={1} className="bg-gray-700" /></td>
       <td className="p-2 align-middle text-center">
         <div className="flex items-center gap-1 justify-center">
-          <Input name="questoes_acertos" type="number" defaultValue={sessao.questoes_acertos || ''} className="bg-gray-700 w-16" placeholder="C" />
+          <Input type="number" value={rowData.questoes_acertos || ''} onChange={(e) => handleFieldChange('questoes_acertos', e.target.value)} className="bg-gray-700 w-16" placeholder="C" />
           <span className="text-gray-400">/</span>
-          <Input name="questoes_total" type="number" defaultValue={sessao.questoes_total || ''} className="bg-gray-700 w-16" placeholder="T" />
+          <Input type="number" value={rowData.questoes_total || ''} onChange={(e) => handleFieldChange('questoes_total', e.target.value)} className="bg-gray-700 w-16" placeholder="T" />
         </div>
-        {sessao.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
+        {rowData.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
       </td>
-      <td className="p-2 align-middle text-center">{dataFinalizada}</td>
-      <td className="p-2 align-middle"><Input name="data_revisao_1" type="date" defaultValue={sessao.data_revisao_1 || ''} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input name="data_revisao_2" type="date" defaultValue={sessao.data_revisao_2 || ''} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input name="data_revisao_3" type="date" defaultValue={sessao.data_revisao_3 || ''} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={rowData.data_estudo || ''} onChange={(e) => handleFieldChange('data_estudo', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_1 || ''} onChange={(e) => handleFieldChange('data_revisao_1', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_2 || ''} onChange={(e) => handleFieldChange('data_revisao_2', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_3 || ''} onChange={(e) => handleFieldChange('data_revisao_3', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 text-center align-middle">
+        <Checkbox
+          checked={rowData.materia_finalizada}
+          onCheckedChange={(checked) => handleFieldChange('materia_finalizada', !!checked)}
+        />
+      </td>
+      <td className="p-2 text-center align-middle">
+        <form action={(formData) => startTransition(() => deleteSessaoCiclo(formData))}>
+          <input type="hidden" name="id" value={rowData.id} />
+          <Button type="submit" variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+        </form>
+      </td>
     </tr>
   );
 }
