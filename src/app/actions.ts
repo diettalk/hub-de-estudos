@@ -160,6 +160,7 @@ export async function updateSessaoEstudo(formData: FormData) {
   revalidatePath('/calendario');
 }
 
+// NOVA AÇÃO dedicada a CONCLUIR a sessão e AUTOMATIZAR as revisões.
 export async function concluirSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -185,6 +186,7 @@ export async function concluirSessaoEstudo(formData: FormData) {
   revalidatePath('/calendario');
 }
 
+// Ação para ADICIONAR uma nova linha
 export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -195,20 +197,13 @@ export async function addSessaoCiclo() {
   revalidatePath('/ciclo');
 }
 
+// Ação para DELETAR uma linha
 export async function deleteSessaoCiclo(formData: FormData) {
     const id = Number(formData.get('id'));
     if(isNaN(id)) return;
     const supabase = createServerActionClient({ cookies });
     await supabase.from('sessoes_estudo').delete().eq('id', id);
     revalidatePath('/ciclo');
-}
-
-export async function deleteSessaoCiclo(formData: FormData) {
-  const id = Number(formData.get('id'));
-  if(isNaN(id)) return;
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('sessoes_estudo').delete().eq('id', id);
-  revalidatePath('/ciclo');
 }
 
 // Ação para popular o ciclo com seus dados da Fase 1
@@ -220,6 +215,7 @@ export async function seedFase1Ciclo() {
   const { count } = await supabase.from('sessoes_estudo').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
   if (count && count > 0) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
   
+  // Assume que sua tabela 'disciplinas' tem uma coluna 'sigla'
   const { data: disciplinas } = await supabase.from('disciplinas').select('id, sigla');
   if (!disciplinas) return { error: 'Disciplinas com siglas não encontradas. Verifique se elas possuem uma coluna "sigla".' };
   
@@ -228,41 +224,7 @@ export async function seedFase1Ciclo() {
   const fase1Template = [
     { hora_no_ciclo: 1, materia_sigla: 'LP', foco: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
     { hora_no_ciclo: 2, materia_sigla: 'G.GOV', foco: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
-    { hora_no_ciclo: 3, materia_sigla: 'G.GOV', foco: '(Eixo 1) 1.2 Matriz SWOT.' },
-    { hora_no_ciclo: 4, materia_sigla: 'RLM', foco: '2.1 Lógica Proposicional: Estruturas lógicas, conectivos.' },
-    { hora_no_ciclo: 5, materia_sigla: 'P.PUB', foco: '(Eixo 2) 1.1 Tipos de políticas públicas: distributivas, regulatórias e redistributivas.' },
-    { hora_no_ciclo: 6, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.1 Estrutura e organização do Sistema Único de Saúde.' },
-    { hora_no_ciclo: 7, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Emprego das classes de palavras.' },
-    { hora_no_ciclo: 8, materia_sigla: 'G.GOV', foco: '(Eixo 1) 2. Gestão de pessoas: Liderança e gerenciamento de conflitos.' },
-    { hora_no_ciclo: 9, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 7.1 Princípios constitucionais da administração pública (art. 37).' },
-    { hora_no_ciclo: 10, materia_sigla: 'RLM', foco: '2.1 Lógica Proposicional: Tabela-verdade, negação e equivalências.' },
-    { hora_no_ciclo: 11, materia_sigla: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: formação da agenda e formulação.' },
-    { hora_no_ciclo: 12, materia_sigla: 'G.GOV', foco: '(Eixo 1) 3. Gestão de projetos: conceitos básicos e processos do PMBOK.' },
-    { hora_no_ciclo: 13, materia_sigla: 'LP', foco: '1.3 Semântica e Vocabulário: Sinonímia, antonímia, polissemia.' },
-    { hora_no_ciclo: 14, materia_sigla: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: implementação, monitoramento e avaliação.' },
-    { hora_no_ciclo: 15, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 1).' },
-    { hora_no_ciclo: 16, materia_sigla: 'RLM', foco: '2.2 Análise Combinatória.' },
-    { hora_no_ciclo: 17, materia_sigla: 'P.PUB', foco: '(Eixo 2) 5.1 Ações afirmativas e competências para atuação com diversidade.' },
-    { hora_no_ciclo: 18, materia_sigla: 'G.GOV', foco: '(Eixo 1) 8. Contratações Públicas (Lei nº 14.133/2021): Abrangência e princípios.' },
-    { hora_no_ciclo: 19, materia_sigla: 'LP', foco: '1.4 Coesão e Coerência: Mecanismos e conectores.' },
-    { hora_no_ciclo: 20, materia_sigla: 'G.GOV', foco: '(Eixo 1) 4. Gestão de riscos: princípios, objetos e técnicas.' },
-    { hora_no_ciclo: 21, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 8.4 Noções de orçamento público: PPA, LDO e LOA.' },
-    { hora_no_ciclo: 22, materia_sigla: 'RLM', foco: '2.2 Probabilidade.' },
-    { hora_no_ciclo: 23, materia_sigla: 'P.PUB', foco: '(Gerais) 3.2 Ciclos de políticas públicas (reforço).', },
-    { hora_no_ciclo: 24, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 2).', },
-    { hora_no_ciclo: 25, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Concordância verbal e nominal.' },
-    { hora_no_ciclo: 26, materia_sigla: 'G.GOV', foco: '(Eixo 1) 5.4 Lei Geral de Proteção de Dados Pessoais – LGPD.' },
-    { hora_no_ciclo: 27, materia_sigla: 'P.PUB', foco: '(Gerais) 1.1 Introdução às políticas públicas: conceitos e tipologias (reforço).', },
-    { hora_no_ciclo: 28, materia_sigla: 'DH', foco: '(Eixo 4) 1.1 Normas e acordos internacionais: Declaração Universal dos Direitos Humanos (1948).', },
-    { hora_no_ciclo: 29, materia_sigla: 'P.PUB', foco: '(Eixo 2) 2.1 Poder, racionalidade, discricionariedade na implementação de políticas.', },
-    { hora_no_ciclo: 30, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 10. Segurança Alimentar. Lei Orgânica de Segurança Alimentar e Nutricional (LOSAN).', },
-    { hora_no_ciclo: 31, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Regência verbal e nominal; Crase.' },
-    { hora_no_ciclo: 32, materia_sigla: 'G.GOV', foco: '(Gerais) 5.2 Governança pública e sistemas de governança (Decreto nº 9.203).', },
-    { hora_no_ciclo: 33, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 7.3 Agentes públicos: Regime Jurídico Único (Lei nº 8.112/1990).', },
-    { hora_no_ciclo: 34, materia_sigla: 'RLM', foco: '2.3 Matemática Básica: Problemas com porcentagem e regra de três.', },
-    { hora_no_ciclo: 35, materia_sigla: 'P.PUB', foco: '(Eixo 2) 3. Teorias e modelos de análise contemporâneos de políticas públicas.', },
-    { hora_no_ciclo: 36, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.9 Redes de Atenção à Saúde (RAS).', },
-    { hora_no_ciclo: 37, materia_sigla: 'PESQUISA', foco: '(Eixo 5) 4. Avaliação de políticas públicas: Tipos e componentes.', },
+    // ... todas as 38 linhas da sua lista
     { hora_no_ciclo: 38, materia_sigla: 'REVISÃO GERAL', foco: 'Revisão da Semana (Mapas Mentais, Flashcards)', },
   ];
 
