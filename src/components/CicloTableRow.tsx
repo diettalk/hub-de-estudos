@@ -1,5 +1,6 @@
 // src/components/CicloTableRow.tsx
 'use client';
+
 import { useTransition } from 'react';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
 import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo } from '@/app/actions';
@@ -24,7 +25,7 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
   return (
     <tr className={`border-b border-gray-700 ${sessao.materia_finalizada ? 'bg-gray-800/50 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <form action={(formData) => startTransition(() => updateSessaoEstudo(formData))}>
-        {/* Truque para o form se comportar como uma linha de tabela */}
+        {/* Usamos 'display: contents' para que o form se comporte como uma linha de tabela, sem quebrar o layout */}
         <td style={{ display: 'contents' }}>
           <input type="hidden" name="id" value={sessao.id} />
           
@@ -34,7 +35,7 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
           <td className="p-2 text-center align-middle">{sessao.ordem}</td>
           <td className="p-2 align-middle">
             <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id || '')}>
-              <SelectTrigger className="bg-gray-700 w-[180px]"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectTrigger className="bg-gray-700 w-[180px]"><SelectValue placeholder="Vincular Matéria" /></SelectTrigger>
               <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
             </Select>
           </td>
@@ -59,9 +60,10 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
                 <Save className="h-4 w-4 text-blue-400" />
               </Button>
 
+              {/* O botão de Concluir Sessão tem seu próprio formulário para chamar a action correta */}
               <form action={concluirSessaoEstudo}>
                 <input type="hidden" name="id" value={sessao.id} />
-                <Button type="submit" variant="ghost" size="icon" title="Concluir Sessão (Gera Revisões)" disabled={isPending || sessao.concluida}>
+                <Button type="submit" variant="ghost" size="icon" title="Concluir Sessão (OK e Gerar Revisões)" disabled={isPending || sessao.concluida}>
                   <CheckCircle2 className="h-4 w-4 text-green-400" />
                 </Button>
               </form>
