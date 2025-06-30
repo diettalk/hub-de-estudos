@@ -6,7 +6,7 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
-import { type SessaoEstudo } from '@/lib/types'; // Importamos o tipo para usar
+import { type SessaoEstudo } from '@/lib/types';
 
 // --- TODAS AS SUAS OUTRAS AÇÕES (addConcurso, etc.) PERMANECEM AQUI, INALTERADAS ---
 // ... (cole todas as suas outras ações aqui, desde addConcurso até unlinkPastaFromConcurso)
@@ -141,17 +141,20 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
 
 // --- AÇÕES DO CICLO DE ESTUDOS ---
 
-// Ação de Auto-Save, agora corrigida para salvar os campos corretos
+// VERSÃO DE DEBUG: Ação para o AUTO-SAVE com LOGS
 export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
+  console.log("--- INICIANDO updateSessaoEstudo ---");
   const supabase = createServerActionClient({ cookies });
   const { id, ...data } = sessaoData;
-  if (!id) return { error: 'ID da sessão é necessário para atualização.' };
 
-  // Criamos um objeto limpo APENAS com os campos que o usuário pode editar na linha.
-  // Isso evita que o auto-save sobrescreva as datas geradas pela automação.
+  if (!id) {
+    console.error("ERRO: ID da sessão não foi recebido.");
+    return { error: 'ID da sessão é necessário para atualização.' };
+  }
+  
   const updateData = {
     disciplina_id: data.disciplina_id,
-    materia_nome: data.materia_nome, // Agora salvamos o nome também!
+    materia_nome: data.materia_nome,
     foco_sugerido: data.foco_sugerido,
     diario_de_bordo: data.diario_de_bordo,
     questoes_acertos: data.questoes_acertos,
@@ -159,46 +162,47 @@ export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { i
     materia_finalizada: data.materia_finalizada,
   };
 
-  const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
-  if (error) {
-    console.error("Erro ao atualizar sessão:", error);
-    return { error: "Falha ao salvar alterações da sessão." };
+  console.log(`[Sessão ID: ${id}] Dados recebidos para atualizar:`, JSON.stringify(updateData, null, 2));
+
+  try {
+    const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
+
+    if (error) {
+      // Se o Supabase retornar um erro, nós o jogamos para ser pego pelo catch.
+      throw error;
+    }
+
+    console.log(`[Sessão ID: ${id}] Sessão atualizada com SUCESSO no banco.`);
+    revalidatePath('/ciclo');
+    return { success: true };
+
+  } catch (error) {
+    console.error(`[Sessão ID: ${id}] ERRO DETALHADO DO SUPABASE AO ATUALIZAR:`, error);
+    return { error: "Falha ao salvar alterações. Verifique os logs do servidor." };
+  } finally {
+    console.log("--- FINALIZANDO updateSessaoEstudo ---");
   }
-  revalidatePath('/ciclo');
 }
 
-
-// Ação unificada para concluir e reverter, agora corrigida
+// Deixamos a versão anterior desta função aqui, sem logs por enquanto.
 export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user || isNaN(sessaoId)) {
-    return { error: 'Ação inválida ou usuário não autenticado.' };
-  }
-
+  if (!user || isNaN(sessaoId)) return { error: 'Ação inválida ou usuário não autenticado.' };
   try {
-    // Passo crucial que estava faltando: buscamos os dados da sessão ANTES de qualquer coisa.
     const { data: sessao, error: sessaoError } = await supabase
-      .from('ciclo_sessoes')
-      .select('disciplina_id, foco_sugerido, materia_nome')
-      .eq('id', sessaoId)
-      .single();
-      
-    // Se a query falhar ou não retornar uma sessão, o erro é lançado aqui.
+      .from('ciclo_sessoes').select('disciplina_id, foco_sugerido, materia_nome')
+      .eq('id', sessaoId).single();
     if (sessaoError || !sessao) throw new Error('Sessão de estudo não encontrada.');
-
     if (isCompleting) {
       const studyDate = new Date();
       const rev1 = add(studyDate, { days: 1 });
       const rev7 = add(studyDate, { days: 7 });
       const rev30 = add(studyDate, { days: 30 });
-
       await supabase.from('ciclo_sessoes').update({
         concluida: true, data_estudo: studyDate.toISOString(),
         data_revisao_1: rev1.toISOString(), data_revisao_2: rev7.toISOString(), data_revisao_3: rev30.toISOString(),
       }).eq('id', sessaoId);
-
       await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
       await supabase.from('revisoes').insert([
         { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev1.toISOString(), tipo_revisao: '24h', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
@@ -211,16 +215,13 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
       }).eq('id', sessaoId);
       await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
     }
-    
     revalidatePath('/ciclo');
     revalidatePath('/revisoes');
     revalidatePath('/calendario');
     revalidatePath('/');
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
     console.error("Erro em toggleConclusaoSessao:", errorMessage);
-    // Retornamos a mensagem de erro específica que vem do "throw new Error(...)"
     return { error: `Erro no servidor: ${errorMessage}` };
   }
 }
