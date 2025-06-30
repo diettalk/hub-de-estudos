@@ -133,53 +133,65 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
   revalidatePath('/guia-estudos');
 }
 
-// SUBSTITUA AS FUNÇÕES DO CICLO DE ESTUDOS POR ESTAS 3:
+// --- AÇÕES DO CICLO DE ESTUDOS ---
 
+// Ação para SALVAR alterações manuais em uma linha (foco, diário, etc.)
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
-  if (isNaN(id)) return;
+  if (isNaN(id)) return { error: 'ID da sessão inválido.' };
 
   const updateData = {
-    foco: formData.get('foco') as string,
+    disciplina_id: formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null,
+    foco_sugerido: formData.get('foco_sugerido') as string,
     diario_de_bordo: formData.get('diario_de_bordo') as string,
     questoes_acertos: formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null,
     questoes_total: formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null,
-    disciplina_id: formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null,
-    data_estudo: formData.get('data_estudo') as string || null,
     data_revisao_1: formData.get('data_revisao_1') as string || null,
     data_revisao_2: formData.get('data_revisao_2') as string || null,
     data_revisao_3: formData.get('data_revisao_3') as string || null,
     materia_finalizada: formData.get('materia_finalizada') === 'on',
   };
-  
-  await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
-  
+
+  await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');
 }
 
-// NOVA AÇÃO dedicada a CONCLUIR a sessão e AUTOMATIZAR as revisões.
+// Ação dedicada para CONCLUIR a sessão e AUTOMATIZAR as revisões
 export async function concluirSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;
-  
+
+  // Pega os dados da sessão para usar no nome da revisão
+  const { data: sessao } = await supabase.from('ciclo_sessoes').select('materia_nome, foco_sugerido').eq('id', id).single();
+  if (!sessao) return;
+
   const studyDate = new Date();
   const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
   const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
   const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
-  
-  const updateData = {
-    concluido: true,
-    data_estudo: studyDate.toISOString().split('T')[0],
-    data_revisao_1: rev1.toISOString().split('T')[0], r1_concluida: false,
-    data_revisao_2: rev7.toISOString().split('T')[0], r2_concluida: false,
-    data_revisao_3: rev30.toISOString().split('T')[0], r3_concluida: false,
-  };
 
-  await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
+  // 1. Atualiza a sessão no ciclo
+  await supabase.from('ciclo_sessoes').update({
+    concluida: true,
+    data_estudo: studyDate.toISOString().split('T')[0],
+    data_revisao_1: rev1.toISOString().split('T')[0],
+    data_revisao_2: rev7.toISOString().split('T')[0],
+    data_revisao_3: rev30.toISOString().split('T')[0],
+  }).eq('id', id);
+
+  // 2. Apaga revisões antigas desta sessão para evitar duplicatas
+  await supabase.from('revisoes').delete().eq('ciclo_sessao_id', id);
+
+  // 3. Insere as 3 novas revisões na tabela `revisoes`
+  await supabase.from('revisoes').insert([
+    { ciclo_sessao_id: id, data_revisao: rev1.toISOString().split('T')[0], tipo_revisao: '24h', materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+    { ciclo_sessao_id: id, data_revisao: rev7.toISOString().split('T')[0], tipo_revisao: '7 dias', materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+    { ciclo_sessao_id: id, data_revisao: rev30.toISOString().split('T')[0], tipo_revisao: '30 dias', materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+  ]);
 
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
@@ -191,19 +203,19 @@ export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-  const { data: ultimaSessao } = await supabase.from('sessoes_estudo').select('hora_no_ciclo').eq('user_id', user.id).order('hora_no_ciclo', { ascending: false }).limit(1).single();
-  const proximaHora = (ultimaSessao?.hora_no_ciclo || 0) + 1;
-  await supabase.from('sessoes_estudo').insert({ hora_no_ciclo: proximaHora, foco: 'Nova sessão', user_id: user.id });
+  const { data: ultimaSessao } = await supabase.from('ciclo_sessoes').select('ordem').eq('user_id', user.id).order('ordem', { ascending: false }).limit(1).single();
+  const proximaOrdem = (ultimaSessao?.ordem || 0) + 1;
+  await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, materia_nome: 'Nova Matéria', user_id: user.id });
   revalidatePath('/ciclo');
 }
 
 // Ação para DELETAR uma linha
 export async function deleteSessaoCiclo(formData: FormData) {
-    const id = Number(formData.get('id'));
-    if(isNaN(id)) return;
-    const supabase = createServerActionClient({ cookies });
-    await supabase.from('sessoes_estudo').delete().eq('id', id);
-    revalidatePath('/ciclo');
+  const id = Number(formData.get('id'));
+  if(isNaN(id)) return;
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('ciclo_sessoes').delete().eq('id', id);
+  revalidatePath('/ciclo');
 }
 
 // Ação para popular o ciclo com seus dados da Fase 1
@@ -212,30 +224,56 @@ export async function seedFase1Ciclo() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
-  const { count } = await supabase.from('sessoes_estudo').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+  const { count } = await supabase.from('ciclo_sessoes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
   if (count && count > 0) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
-  
-  // Assume que sua tabela 'disciplinas' tem uma coluna 'sigla'
-  const { data: disciplinas } = await supabase.from('disciplinas').select('id, sigla');
-  if (!disciplinas) return { error: 'Disciplinas com siglas não encontradas. Verifique se elas possuem uma coluna "sigla".' };
-  
-  const disciplinaMap = new Map(disciplinas.map(d => [d.sigla, d.id]));
 
   const fase1Template = [
-    { hora_no_ciclo: 1, materia_sigla: 'LP', foco: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
-    { hora_no_ciclo: 2, materia_sigla: 'G.GOV', foco: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
-    // ... todas as 38 linhas da sua lista
-    { hora_no_ciclo: 38, materia_sigla: 'REVISÃO GERAL', foco: 'Revisão da Semana (Mapas Mentais, Flashcards)', },
+    { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
+    { ordem: 2, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
+    { ordem: 3, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.2 Matriz SWOT.' },
+    { ordem: 4, materia_nome: 'RLM', foco_sugerido: '2.1 Lógica Proposicional: Estruturas lógicas, conectivos.' },
+    { ordem: 5, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 1.1 Tipos de políticas públicas: distributivas, regulatórias e redistributivas.' },
+    { ordem: 6, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.1 Estrutura e organização do Sistema Único de Saúde.' },
+    { ordem: 7, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Emprego das classes de palavras.' },
+    { ordem: 8, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 2. Gestão de pessoas: Liderança e gerenciamento de conflitos.' },
+    { ordem: 9, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 7.1 Princípios constitucionais da administração pública (art. 37).' },
+    { ordem: 10, materia_nome: 'RLM', foco_sugerido: '2.1 Lógica Proposicional: Tabela-verdade, negação e equivalências.' },
+    { ordem: 11, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 4. Políticas Públicas e suas fases: formação da agenda e formulação.' },
+    { ordem: 12, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 3. Gestão de projetos: conceitos básicos e processos do PMBOK.' },
+    { ordem: 13, materia_nome: 'LP', foco_sugerido: '1.3 Semântica e Vocabulário: Sinonímia, antonímia, polissemia.' },
+    { ordem: 14, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 4. Políticas Públicas e suas fases: implementação, monitoramento e avaliação.' },
+    { ordem: 15, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 1).' },
+    { ordem: 16, materia_nome: 'RLM', foco_sugerido: '2.2 Análise Combinatória.' },
+    { ordem: 17, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 5.1 Ações afirmativas e competências para atuação com diversidade.' },
+    { ordem: 18, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 8. Contratações Públicas (Lei nº 14.133/2021): Abrangência e princípios.' },
+    { ordem: 19, materia_nome: 'LP', foco_sugerido: '1.4 Coesão e Coerência: Mecanismos e conectores.' },
+    { ordem: 20, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 4. Gestão de riscos: princípios, objetos e técnicas.' },
+    { ordem: 21, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 8.4 Noções de orçamento público: PPA, LDO e LOA.' },
+    { ordem: 22, materia_nome: 'RLM', foco_sugerido: '2.2 Probabilidade.' },
+    { ordem: 23, materia_nome: 'P.PUB', foco_sugerido: '(Gerais) 3.2 Ciclos de políticas públicas (reforço).' },
+    { ordem: 24, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 2).' },
+    { ordem: 25, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Concordância verbal e nominal.' },
+    { ordem: 26, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 5.4 Lei Geral de Proteção de Dados Pessoais – LGPD.' },
+    { ordem: 27, materia_nome: 'P.PUB', foco_sugerido: '(Gerais) 1.1 Introdução às políticas públicas: conceitos e tipologias (reforço).' },
+    { ordem: 28, materia_nome: 'DH', foco_sugerido: '(Eixo 4) 1.1 Normas e acordos internacionais: Declaração Universal dos Direitos Humanos (1948).' },
+    { ordem: 29, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 2.1 Poder, racionalidade, discricionariedade na implementação de políticas.' },
+    { ordem: 30, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 10. Segurança Alimentar. Lei Orgânica de Segurança Alimentar e Nutricional (LOSAN).' },
+    { ordem: 31, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Regência verbal e nominal; Crase.' },
+    { ordem: 32, materia_nome: 'G.GOV', foco_sugerido: '(Gerais) 5.2 Governança pública e sistemas de governança (Decreto nº 9.203).' },
+    { ordem: 33, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 7.3 Agentes públicos: Regime Jurídico Único (Lei nº 8.112/1990).' },
+    { ordem: 34, materia_nome: 'RLM', foco_sugerido: '2.3 Matemática Básica: Problemas com porcentagem e regra de três.' },
+    { ordem: 35, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 3. Teorias e modelos de análise contemporâneos de políticas públicas.' },
+    { ordem: 36, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.9 Redes de Atenção à Saúde (RAS).' },
+    { ordem: 37, materia_nome: 'PESQUISA', foco_sugerido: '(Eixo 5) 4. Avaliação de políticas públicas: Tipos e componentes.' },
+    { ordem: 38, materia_nome: 'REVISÃO GERAL', foco_sugerido: 'Revisão da Semana (Mapas Mentais, Flashcard' },
   ];
 
   const sessoesParaInserir = fase1Template.map(sessao => ({
-    hora_no_ciclo: sessao.hora_no_ciclo,
-    foco: sessao.foco,
-    user_id: user.id,
-    disciplina_id: disciplinaMap.get(sessao.materia_sigla) || null,
+    ...sessao,
+    user_id: user.id
   }));
 
-  await supabase.from('sessoes_estudo').insert(sessoesParaInserir);
+  await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
   revalidatePath('/ciclo');
   return { message: 'Ciclo Fase 1 criado com sucesso!' };
 }
