@@ -1,5 +1,6 @@
 // src/components/CicloTable.tsx
 'use client';
+
 import { useTransition } from 'react';
 import { addSessaoCiclo } from '@/app/actions';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
@@ -15,7 +16,7 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: SessaoEstudo[], 
         <table className="w-full text-sm text-left text-gray-300">
           <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
             <tr>
-              <th className="p-3">Finalizada</th>
+              {/* COLUNAS REORDENADAS AQUI */}
               <th className="p-3">Hora</th>
               <th className="p-3">Matéria</th>
               <th className="p-3 min-w-[350px]">Foco Sugerido</th>
@@ -26,6 +27,7 @@ export function CicloTable({ sessoes, disciplinas }: { sessoes: SessaoEstudo[], 
               <th className="text-center p-3">R7 (7d)</th>
               <th className="text-center p-3">R30 (30d)</th>
               <th className="p-3">Ações</th>
+              <th className="p-3">Finalizada</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
