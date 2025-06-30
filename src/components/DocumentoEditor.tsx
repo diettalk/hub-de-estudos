@@ -1,16 +1,15 @@
-// src/components/DocumentoEditor.tsx
+// src/components/DocumentoEditor.tsx (VERSÃO CORRIGIDA)
 'use client';
 
 import { useState, useTransition, useEffect } from 'react';
 import { Button } from './ui/button';
-// DialogDescription foi removido porque não estava sendo usado.
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { TextEditor } from './TextEditor';
 import { addDocumento, updateDocumento, deleteDocumento } from '@/app/actions';
+import { toast } from 'sonner';
 
-// O tipo do 'content' foi especificado como string.
 type Documento = {
   id: number;
   title: string;
@@ -24,10 +23,12 @@ export function DocumentoEditor({ documento }: { documento?: Documento }) {
   const [editorContent, setEditorContent] = useState('');
 
   useEffect(() => {
-    if (isEditMode && documento) {
-      setEditorContent(documento.content || '');
-    } else {
-      setEditorContent('');
+    if (open) {
+      if (isEditMode && documento) {
+        setEditorContent(documento.content || '');
+      } else {
+        setEditorContent('');
+      }
     }
   }, [documento, isEditMode, open]);
 
@@ -37,8 +38,10 @@ export function DocumentoEditor({ documento }: { documento?: Documento }) {
       if (isEditMode) {
         formData.append('id', String(documento.id));
         await updateDocumento(formData);
+        toast.success("Documento atualizado com sucesso!");
       } else {
         await addDocumento(formData);
+        toast.success("Documento criado com sucesso!");
       }
       setOpen(false);
     });
@@ -48,6 +51,7 @@ export function DocumentoEditor({ documento }: { documento?: Documento }) {
     if (isEditMode && window.confirm(`Tem certeza que deseja excluir o documento "${documento.title}"?`)) {
       startTransition(async () => {
         await deleteDocumento(documento.id);
+        toast.info("Documento excluído.");
         setOpen(false);
       });
     }
@@ -57,7 +61,10 @@ export function DocumentoEditor({ documento }: { documento?: Documento }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {isEditMode ? (
-          <Button variant="ghost" size="icon" title="Editar Documento"><i className="fas fa-pencil-alt"></i></Button>
+          // CORREÇÃO: Adicionamos classes de cor ao ícone
+          <Button variant="ghost" size="icon" title="Editar Documento">
+            <i className="fas fa-pencil-alt text-gray-400 hover:text-white transition-colors"></i>
+          </Button>
         ) : (
           <Button>+ Adicionar Documento</Button>
         )}

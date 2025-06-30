@@ -353,32 +353,41 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
   revalidatePath('/calendario');
 }
 
-
 // --- AÇÕES PARA DOCUMENTOS ---
+
+// CORREÇÃO: A função agora lê o 'content' do formData
 export async function addDocumento(formData: FormData) {
-  const title = formData.get('title') as string;
-  if (!title) return;
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase.from('documentos').insert({ title, user_id: user.id, content: '' });
-  revalidatePath('/documentos');
+  const title = formData.get('title') as string;
+  const content = formData.get('content') as string; // Lendo o conteúdo do editor
+
+  if (!title) return;
+
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Agora inserimos o título E o conteúdo
+  await supabase.from('documentos').insert({ title, user_id: user.id, content: content || '' });
+  
+  revalidatePath('/documentos');
 }
 
 export async function updateDocumento(formData: FormData) {
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const content = formData.get('content') as string;
-  if (!id) return;
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('documentos').update({ title, content }).eq('id', id);
-  revalidatePath('/documentos');
+  const id = Number(formData.get('id'));
+  const title = formData.get('title') as string;
+  const content = formData.get('content') as string; // updateDocumento já estava correto
+
+  if (!id) return;
+
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('documentos').update({ title, content }).eq('id', id);
+  revalidatePath('/documentos');
 }
 
 export async function deleteDocumento(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('documentos').delete().eq('id', id);
-  revalidatePath('/documentos');
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('documentos').delete().eq('id', id);
+  revalidatePath('/documentos');
 }
 
 // --- AÇÕES PARA TAREFAS ---
