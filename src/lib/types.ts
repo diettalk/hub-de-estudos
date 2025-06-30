@@ -8,7 +8,6 @@ export type Disciplina = {
 export type SessaoEstudo = {
   id: number;
   ordem: number;
-  disciplina_id: number | null;
   materia_nome: string;
   foco_sugerido: string | null;
   diario_de_bordo: string | null;
@@ -20,4 +19,15 @@ export type SessaoEstudo = {
   data_revisao_2: string | null;
   data_revisao_3: string | null;
   materia_finalizada: boolean;
+};
+
+// Tipo para a página de Revisão
+export type EventoRevisao = {
+  id: number; // id da revisão, não da sessão
+  sessao_id: number;
+  title: string;
+  type: '24h' | '7 dias' | '30 dias';
+  completed: boolean;
+  color: string;
+  data: string;
 };
