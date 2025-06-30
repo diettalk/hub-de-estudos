@@ -1,13 +1,12 @@
-// src/app/disciplinas/page.tsx
+// src/app/disciplinas/page.tsx (VERSÃO CORRIGIDA)
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { SidebarClient } from '@/components/SidebarClient'; // Vamos criar este componente
+import { SidebarClient } from '@/components/SidebarClient';
 import { Editor } from '@/components/Editor';
 import { updatePagina } from '@/app/actions';
 
-// Tipo para nossas páginas/nós
 export type Pagina = {
   id: number;
   parent_id: number | null;
@@ -17,7 +16,6 @@ export type Pagina = {
   children?: Pagina[];
 };
 
-// Função helper para transformar a lista em uma árvore
 const buildTree = (pages: Pagina[]): Pagina[] => {
   const pageMap: { [key: number]: Pagina } = {};
   pages.forEach(page => {
@@ -42,8 +40,8 @@ export default async function DisciplinasPage({
   searchParams: { page: string };
 }) {
   const supabase = createServerComponentClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  const { data: { user } } = await supabase.auth.getUser(); // Usando getUser() como boa prática
+  if (!user) redirect('/login');
 
   const { data: paginas } = await supabase
     .from('paginas')
@@ -67,7 +65,9 @@ export default async function DisciplinasPage({
               <span className="text-2xl">{selectedPage.emoji}</span>
               {selectedPage.title}
             </h1>
+            {/* ***** A CORREÇÃO ESTÁ AQUI ***** */}
             <Editor 
+              key={selectedPage.id} // Adicionamos a KEY para forçar a recriação do componente
               pageId={selectedPage.id}
               title={selectedPage.title}
               emoji={selectedPage.emoji}
