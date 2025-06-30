@@ -3,19 +3,16 @@
 'use client';
 
 import { useTransition } from 'react';
+import { toast } from 'sonner';
+// Ação para marcar a revisão como concluída
 import { updateRevisaoStatus } from '@/app/actions';
-// CORREÇÃO: Caminho de importação ajustado para usar o atalho '@/'
+// Componentes da UI
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+// ***** CORREÇÃO PRINCIPAL: Importamos o tipo correto do arquivo central *****
+import { type EventoRevisao } from '@/lib/types';
 
-export type EventoRevisao = {
-  id: number;
-  title: string;
-  type: 'R1' | 'R7' | 'R30';
-  completed: boolean;
-  color: string;
-  data: string;
-};
+// A definição de tipo local foi REMOVIDA daqui.
 
 type RevisoesClientProps = {
   atrasadas: EventoRevisao[];
@@ -25,25 +22,30 @@ type RevisoesClientProps = {
 
 const RevisaoCard = ({ revisao }: { revisao: EventoRevisao }) => {
   const [isPending, startTransition] = useTransition();
-  const dataFormatada = new Date(revisao.data + 'T03:00:00').toLocaleDateString('pt-BR');
+  // Formata a data para exibição, tratando o fuso horário de forma segura
+  const dataFormatada = new Date(revisao.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
-  const handleToggle = () => {
-    startTransition(() => {
-      updateRevisaoStatus(revisao.id, revisao.type, !revisao.completed);
+  const handleToggle = (isChecked: boolean) => {
+    startTransition(async () => {
+      // ***** CORREÇÃO PRINCIPAL: A chamada agora passa os argumentos corretos *****
+      const result = await updateRevisaoStatus(revisao.id, isChecked);
+      if (result?.error) {
+        toast.error(result.error);
+      }
     });
   };
 
   return (
     <div className={`flex items-center gap-4 p-3 rounded-lg border-l-4 transition-opacity ${revisao.completed ? 'opacity-40' : 'bg-gray-800'}`} style={{ borderColor: revisao.color }}>
       <Checkbox
-        id={`revisao-${revisao.id}-${revisao.type}`}
+        id={`revisao-${revisao.id}`}
         checked={revisao.completed}
         onCheckedChange={handleToggle}
         disabled={isPending}
         className="h-5 w-5"
       />
       <div className="flex-grow">
-        <label htmlFor={`revisao-${revisao.id}-${revisao.type}`} className={`font-medium cursor-pointer ${revisao.completed ? 'line-through text-gray-500' : ''}`}>
+        <label htmlFor={`revisao-${revisao.id}`} className={`font-medium cursor-pointer ${revisao.completed ? 'line-through text-gray-500' : ''}`}>
           {revisao.title}
         </label>
         <p className="text-xs text-gray-400">{dataFormatada}</p>
@@ -61,7 +63,7 @@ export function RevisoesClient({ atrasadas, hoje, proximos7Dias }: RevisoesClien
       </h2>
       <div className="space-y-3 overflow-y-auto max-h-[60vh] pr-2">
         {revisoes.length > 0 ? (
-          revisoes.map(revisao => <RevisaoCard key={`${revisao.id}-${revisao.type}`} revisao={revisao} />)
+          revisoes.map(revisao => <RevisaoCard key={revisao.id} revisao={revisao} />)
         ) : (
           <p className="text-gray-500 text-center pt-8">Nenhuma revisão nesta categoria.</p>
         )}

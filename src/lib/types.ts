@@ -26,12 +26,13 @@ export type SessaoEstudo = {
 };
 
 // Define a estrutura para os eventos de revisão que serão gerados
+// Esta é a nossa ÚNICA fonte da verdade para o que é uma revisão.
 export type EventoRevisao = {
   id: number;
-  sessao_id: number;
+  sessao_id: number; // ID da sessão de estudo original
   title: string;
-  type: '24h' | '7 dias' | '30 dias';
+  type: '24h' | '7 dias' | '30 dias'; // Tipos corretos
   completed: boolean;
   color: string;
-  data: string;
+  data: string; // Data no formato ISO (ex: "2025-07-01T...")
 };
