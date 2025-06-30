@@ -141,43 +141,42 @@ export async function updateSessaoEstudo(formData: FormData) {
 
   const updateData: { [key: string]: any } = {};
   
-  const concluido = formData.get('concluido') === 'on' || formData.get('concluido') === 'true';
+  const concluido = formData.get('concluido') === 'on';
   const dataEstudoAtual = formData.get('data_estudo_atual') as string;
-  const dataEstudoNova = formData.get('data_estudo') as string;
-
+  
+  // Atualiza todos os campos da linha
   updateData.foco = formData.get('foco');
   updateData.diario_de_bordo = formData.get('diario_de_bordo');
   updateData.questoes_acertos = formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null;
   updateData.questoes_total = formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null;
   updateData.disciplina_id = formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null;
+  updateData.data_estudo = formData.get('data_estudo') || null;
   updateData.concluido = concluido;
-  updateData.r1_concluida = formData.get('r1_concluida') === 'on';
-  updateData.r2_concluida = formData.get('r2_concluida') === 'on';
-  updateData.r3_concluida = formData.get('r3_concluida') === 'on';
   
+  // A LÓGICA DE AUTOMAÇÃO
   if (concluido && !dataEstudoAtual) {
+    // Cenário: "OK" marcado pela 1ª vez. Define data de estudo para HOJE e calcula revisões.
     const studyDate = new Date();
     updateData.data_estudo = studyDate.toISOString().split('T')[0];
+    
     const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
     updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
     updateData.r1_concluida = false;
+
     const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
     updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
     updateData.r2_concluida = false;
+
     const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
     updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
     updateData.r3_concluida = false;
-  } else if (dataEstudoNova && dataEstudoNova !== dataEstudoAtual) {
-    updateData.data_estudo = dataEstudoNova;
-    const studyDate = new Date(dataEstudoNova + 'T03:00:00');
-    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
-    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
-    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
-    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
+  } else {
+    // Se não for o primeiro "OK", apenas salva as datas como estão no formulário
+    updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
+    updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
+    updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
   }
-
+  
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
   
   revalidatePath('/ciclo');
@@ -203,34 +202,18 @@ export async function deleteSessaoCiclo(formData: FormData) {
   revalidatePath('/ciclo');
 }
 
-export async function restoreHoraUm() {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { data: existente } = await supabase.from('sessoes_estudo').select('id').eq('user_id', user.id).eq('hora_no_ciclo', 1).single();
-
-  if (!existente) {
-    await supabase.from('sessoes_estudo').insert({ 
-      hora_no_ciclo: 1, 
-      foco: 'Interpretação de texto (Foco FGV)',
-      user_id: user.id
-    });
-    revalidatePath('/ciclo');
-  }
-}
-
+// Popula o ciclo com seus dados da Fase 1
 export async function seedFase1Ciclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
   const { count } = await supabase.from('sessoes_estudo').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-  if (count !== 0 && count !== null) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
+  if (count && count > 0) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
   
-  // NOTE: This assumes you have a 'sigla' column in your 'disciplinas' table ('LP', 'G.GOV', etc.)
   const { data: disciplinas } = await supabase.from('disciplinas').select('id, sigla');
-  if (!disciplinas) return { error: 'Disciplinas não encontradas.' };
+  if (!disciplinas) return { error: 'Disciplinas com siglas não encontradas. Verifique se elas possuem uma coluna "sigla".' };
+  
   const disciplinaMap = new Map(disciplinas.map(d => [d.sigla, d.id]));
 
   const fase1Template = [
