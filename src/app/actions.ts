@@ -141,88 +141,108 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
 
 // --- AÇÕES DO CICLO DE ESTUDOS ---
 
-// VERSÃO DE DEBUG: Ação para o AUTO-SAVE com LOGS
 export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
-  console.log("--- INICIANDO updateSessaoEstudo ---");
   const supabase = createServerActionClient({ cookies });
   const { id, ...data } = sessaoData;
-
-  if (!id) {
-    console.error("ERRO: ID da sessão não foi recebido.");
-    return { error: 'ID da sessão é necessário para atualização.' };
-  }
-  
+  if (!id) return { error: 'ID da sessão é necessário para atualização.' };
   const updateData = {
-    disciplina_id: data.disciplina_id,
-    materia_nome: data.materia_nome,
-    foco_sugerido: data.foco_sugerido,
-    diario_de_bordo: data.diario_de_bordo,
-    questoes_acertos: data.questoes_acertos,
-    questoes_total: data.questoes_total,
-    materia_finalizada: data.materia_finalizada,
+    disciplina_id: data.disciplina_id, materia_nome: data.materia_nome, foco_sugerido: data.foco_sugerido,
+    diario_de_bordo: data.diario_de_bordo, questoes_acertos: data.questoes_acertos,
+    questoes_total: data.questoes_total, materia_finalizada: data.materia_finalizada,
   };
-
-  console.log(`[Sessão ID: ${id}] Dados recebidos para atualizar:`, JSON.stringify(updateData, null, 2));
-
-  try {
-    const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
-
-    if (error) {
-      // Se o Supabase retornar um erro, nós o jogamos para ser pego pelo catch.
-      throw error;
-    }
-
-    console.log(`[Sessão ID: ${id}] Sessão atualizada com SUCESSO no banco.`);
-    revalidatePath('/ciclo');
-    return { success: true };
-
-  } catch (error) {
-    console.error(`[Sessão ID: ${id}] ERRO DETALHADO DO SUPABASE AO ATUALIZAR:`, error);
-    return { error: "Falha ao salvar alterações. Verifique os logs do servidor." };
-  } finally {
-    console.log("--- FINALIZANDO updateSessaoEstudo ---");
+  const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
+  if (error) {
+    console.error("Erro ao atualizar sessão:", error);
+    return { error: "Falha ao salvar alterações da sessão." };
   }
+  revalidatePath('/ciclo');
 }
 
-// Deixamos a versão anterior desta função aqui, sem logs por enquanto.
+// AÇÃO CORRIGIDA: Agora insere os dados exatamente como a tabela 'revisoes' espera.
 export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user || isNaN(sessaoId)) return { error: 'Ação inválida ou usuário não autenticado.' };
+
+  if (!user || isNaN(sessaoId)) {
+    return { error: 'Ação inválida ou usuário não autenticado.' };
+  }
+
   try {
-    const { data: sessao, error: sessaoError } = await supabase
-      .from('ciclo_sessoes').select('disciplina_id, foco_sugerido, materia_nome')
-      .eq('id', sessaoId).single();
-    if (sessaoError || !sessao) throw new Error('Sessão de estudo não encontrada.');
     if (isCompleting) {
       const studyDate = new Date();
+      const { data: sessao, error: sessaoError } = await supabase
+        .from('ciclo_sessoes').select('disciplina_id, foco_sugerido, materia_nome')
+        .eq('id', sessaoId).single();
+      if (sessaoError) throw new Error(`Falha ao buscar sessão: ${sessaoError.message}`);
+      if (!sessao) throw new Error('Sessão de estudo não encontrada.');
+
       const rev1 = add(studyDate, { days: 1 });
       const rev7 = add(studyDate, { days: 7 });
       const rev30 = add(studyDate, { days: 30 });
+      
       await supabase.from('ciclo_sessoes').update({
         concluida: true, data_estudo: studyDate.toISOString(),
         data_revisao_1: rev1.toISOString(), data_revisao_2: rev7.toISOString(), data_revisao_3: rev30.toISOString(),
       }).eq('id', sessaoId);
+      
       await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
-      await supabase.from('revisoes').insert([
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev1.toISOString(), tipo_revisao: '24h', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev7.toISOString(), tipo_revisao: '7 dias', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev30.toISOString(), tipo_revisao: '30 dias', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
-      ]);
+
+      // ***** INÍCIO DA CORREÇÃO PRINCIPAL *****
+      const revisoesParaInserir = [
+        { 
+          ciclo_sessao_id: sessaoId, 
+          user_id: user.id, 
+          // CORREÇÃO 1: Formata a data para 'YYYY-MM-DD'
+          data_revisao: rev1.toISOString().split('T')[0], 
+          tipo_revisao: '24h', 
+          concluida: false, 
+          // CORREÇÃO 2: Removemos o campo 'disciplina_id' que não existe na tabela
+          materia_nome: sessao.materia_nome, 
+          foco_sugerido: sessao.foco_sugerido 
+        },
+        { 
+          ciclo_sessao_id: sessaoId, 
+          user_id: user.id, 
+          data_revisao: rev7.toISOString().split('T')[0], 
+          tipo_revisao: '7 dias', 
+          concluida: false, 
+          materia_nome: sessao.materia_nome, 
+          foco_sugerido: sessao.foco_sugerido 
+        },
+        { 
+          ciclo_sessao_id: sessaoId, 
+          user_id: user.id, 
+          data_revisao: rev30.toISOString().split('T')[0], 
+          tipo_revisao: '30 dias', 
+          concluida: false, 
+          materia_nome: sessao.materia_nome, 
+          foco_sugerido: sessao.foco_sugerido 
+        },
+      ];
+      // ***** FIM DA CORREÇÃO PRINCIPAL *****
+      
+      const { error: insertError } = await supabase.from('revisoes').insert(revisoesParaInserir);
+      if (insertError) {
+        throw new Error(`Falha ao inserir novas revisões: ${insertError.message}`);
+      }
+
     } else {
       await supabase.from('ciclo_sessoes').update({
         concluida: false, data_estudo: null, data_revisao_1: null, data_revisao_2: null, data_revisao_3: null,
       }).eq('id', sessaoId);
       await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
     }
+    
     revalidatePath('/ciclo');
     revalidatePath('/revisoes');
     revalidatePath('/calendario');
     revalidatePath('/');
+    return { success: true };
+
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
-    console.error("Erro em toggleConclusaoSessao:", errorMessage);
-    return { error: `Erro no servidor: ${errorMessage}` };
+    console.error("[toggleConclusaoSessao] Erro Capturado:", errorMessage);
+    return { error: errorMessage };
   }
 }
 
