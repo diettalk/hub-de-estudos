@@ -1,4 +1,4 @@
-// src/app/revisoes/page.tsx (VERSÃO DE DEBUG)
+// src/app/revisoes/page.tsx (VERSÃO DE DEBUG FINAL)
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -11,31 +11,27 @@ export const dynamic = 'force-dynamic';
 
 export default async function RevisoesPage() {
   const supabase = createServerComponentClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  // CORREÇÃO: Usando getUser()
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
-  // Adicionamos um log para ver se a busca inicia
   console.log("--- [Revisões Page] Buscando revisões no Supabase... ---");
   
   const { data: revisoes, error } = await supabase
     .from('revisoes')
     .select('*')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id) // Usando user.id diretamente
     .eq('concluida', false);
 
-  if (error) {
-    console.error('[Revisões Page] Erro ao buscar revisões:', error.message);
-  }
+  if (error) console.error('[Revisões Page] Erro ao buscar revisões:', error.message);
 
-  // Adicionamos um log para ver o que o Supabase retornou
   console.log(`[Revisões Page] Supabase retornou ${revisoes?.length || 0} revisões.`);
-  // Se houver revisões, mostramos a primeira para inspecionar os dados
   if (revisoes && revisoes.length > 0) {
     console.log("[Revisões Page] Exemplo de revisão recebida:", JSON.stringify(revisoes[0], null, 2));
   }
 
   const eventos: EventoRevisao[] = (revisoes || []).map(revisao => {
-    let color = '#8B5CF6'; // Roxo padrão
+    let color = '#8B5CF6';
     if (revisao.tipo_revisao === '24h') color = '#EF4444';
     if (revisao.tipo_revisao === '7 dias') color = '#F59E0B';
     if (revisao.tipo_revisao === '30 dias') color = '#10B981';
@@ -68,7 +64,6 @@ export default async function RevisoesPage() {
     })
     .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
-  // A lista do "Super-Espião": todos os eventos, sem filtro de data.
   const todasAsRevisoes = eventos.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
   return (
@@ -81,7 +76,7 @@ export default async function RevisoesPage() {
         atrasadas={atrasadas}
         hoje={paraHoje}
         proximos7Dias={proximos7Dias}
-        todasAsRevisoes={todasAsRevisoes} // Passamos a nova lista para o componente
+        todasAsRevisoes={todasAsRevisoes}
       />
     </div>
   );
