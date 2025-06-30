@@ -1,13 +1,15 @@
 // src/app/actions.ts
+
 'use server';
 
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
-import { add } from 'date-fns'; // Importamos a função 'add' para manipular datas
+import { add } from 'date-fns';
+import { type SessaoEstudo } from '@/lib/types'; // Importamos o tipo para usar
 
-// [ ... suas outras ações como addConcurso, updateConcurso, etc., permanecem inalteradas ... ]
-// --- AÇÕES DE CONCURSOS (GUIA DE ESTUDOS) ---
+// --- TODAS AS SUAS OUTRAS AÇÕES (addConcurso, etc.) PERMANECEM AQUI, INALTERADAS ---
+// ... (cole todas as suas outras ações aqui, desde addConcurso até unlinkPastaFromConcurso)
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -135,10 +137,95 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
   revalidatePath('/guia-estudos');
 }
 
+// ***** INÍCIO DAS MODIFICAÇÕES NO CÓDIGO DO CICLO *****
 
-// --- AÇÕES DO CICLO DE ESTUDOS (VERSÃO DEFINITIVA) ---
+// --- AÇÕES DO CICLO DE ESTUDOS ---
 
-// Popula o ciclo com as 38 horas
+// Ação de Auto-Save, agora corrigida para salvar os campos corretos
+export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
+  const supabase = createServerActionClient({ cookies });
+  const { id, ...data } = sessaoData;
+  if (!id) return { error: 'ID da sessão é necessário para atualização.' };
+
+  // Criamos um objeto limpo APENAS com os campos que o usuário pode editar na linha.
+  // Isso evita que o auto-save sobrescreva as datas geradas pela automação.
+  const updateData = {
+    disciplina_id: data.disciplina_id,
+    materia_nome: data.materia_nome, // Agora salvamos o nome também!
+    foco_sugerido: data.foco_sugerido,
+    diario_de_bordo: data.diario_de_bordo,
+    questoes_acertos: data.questoes_acertos,
+    questoes_total: data.questoes_total,
+    materia_finalizada: data.materia_finalizada,
+  };
+
+  const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
+  if (error) {
+    console.error("Erro ao atualizar sessão:", error);
+    return { error: "Falha ao salvar alterações da sessão." };
+  }
+  revalidatePath('/ciclo');
+}
+
+
+// Ação unificada para concluir e reverter, agora corrigida
+export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user || isNaN(sessaoId)) {
+    return { error: 'Ação inválida ou usuário não autenticado.' };
+  }
+
+  try {
+    // Passo crucial que estava faltando: buscamos os dados da sessão ANTES de qualquer coisa.
+    const { data: sessao, error: sessaoError } = await supabase
+      .from('ciclo_sessoes')
+      .select('disciplina_id, foco_sugerido, materia_nome')
+      .eq('id', sessaoId)
+      .single();
+      
+    // Se a query falhar ou não retornar uma sessão, o erro é lançado aqui.
+    if (sessaoError || !sessao) throw new Error('Sessão de estudo não encontrada.');
+
+    if (isCompleting) {
+      const studyDate = new Date();
+      const rev1 = add(studyDate, { days: 1 });
+      const rev7 = add(studyDate, { days: 7 });
+      const rev30 = add(studyDate, { days: 30 });
+
+      await supabase.from('ciclo_sessoes').update({
+        concluida: true, data_estudo: studyDate.toISOString(),
+        data_revisao_1: rev1.toISOString(), data_revisao_2: rev7.toISOString(), data_revisao_3: rev30.toISOString(),
+      }).eq('id', sessaoId);
+
+      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
+      await supabase.from('revisoes').insert([
+        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev1.toISOString(), tipo_revisao: '24h', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev7.toISOString(), tipo_revisao: '7 dias', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev30.toISOString(), tipo_revisao: '30 dias', disciplina_id: sessao.disciplina_id, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
+      ]);
+    } else {
+      await supabase.from('ciclo_sessoes').update({
+        concluida: false, data_estudo: null, data_revisao_1: null, data_revisao_2: null, data_revisao_3: null,
+      }).eq('id', sessaoId);
+      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
+    }
+    
+    revalidatePath('/ciclo');
+    revalidatePath('/revisoes');
+    revalidatePath('/calendario');
+    revalidatePath('/');
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
+    console.error("Erro em toggleConclusaoSessao:", errorMessage);
+    // Retornamos a mensagem de erro específica que vem do "throw new Error(...)"
+    return { error: `Erro no servidor: ${errorMessage}` };
+  }
+}
+
+// As outras ações do ciclo (seed, add, delete) permanecem como estavam.
 export async function seedFase1Ciclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -148,7 +235,6 @@ export async function seedFase1Ciclo() {
   if (count && count > 0) return { message: 'O ciclo já possui dados.' };
 
   const fase1Template = [
-    // ... seu template de 38 sessoes continua aqui, sem alterações
     { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
     { ordem: 2, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
     { ordem: 3, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.2 Matriz SWOT.' },
@@ -192,110 +278,6 @@ export async function seedFase1Ciclo() {
   await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
   revalidatePath('/ciclo');
 }
-
-
-export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
-  const supabase = createServerActionClient({ cookies });
-  const { id, ...data } = sessaoData;
-  if (!id) return { error: 'ID da sessão é necessário para atualização.' };
-  
-  const updateData = {
-    disciplina_id: data.disciplina_id,
-    foco_sugerido: data.foco_sugerido,
-    diario_de_bordo: data.diario_de_bordo,
-    questoes_acertos: data.questoes_acertos,
-    questoes_total: data.questoes_total,
-    materia_finalizada: data.materia_finalizada,
-  };
-
-  await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
-  revalidatePath('/ciclo');
-}
-
-
-// ***** INÍCIO DA MODIFICAÇÃO *****
-
-// REMOVIDAS as funções 'concluirSessaoEstudo' e 'desconcluirSessaoEstudo'
-
-// NOVA AÇÃO UNIFICADA que o componente CicloTableRow chama
-export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user || isNaN(sessaoId)) {
-    return { error: 'Ação inválida ou usuário não autenticado.' };
-  }
-
-  try {
-    if (isCompleting) {
-      // --- LÓGICA PARA MARCAR COMO CONCLUÍDO ---
-      const studyDate = new Date();
-
-      // Buscamos os dados da sessão para duplicar nas revisões, como você já fazia
-      const { data: sessao, error: sessaoError } = await supabase
-        .from('ciclo_sessoes')
-        .select('disciplina_id, foco_sugerido')
-        .eq('id', sessaoId)
-        .single();
-        
-      if (sessaoError || !sessao) throw new Error('Sessão de estudo não encontrada.');
-
-      // Usando date-fns para um cálculo de datas mais seguro
-      const rev1 = add(studyDate, { days: 1 });
-      const rev7 = add(studyDate, { days: 7 });
-      const rev30 = add(studyDate, { days: 30 });
-
-      // 1. Atualiza a sessão no ciclo com as datas calculadas
-      const { error: updateError } = await supabase.from('ciclo_sessoes').update({
-        concluida: true,
-        data_estudo: studyDate.toISOString(),
-        data_revisao_1: rev1.toISOString(),
-        data_revisao_2: rev7.toISOString(),
-        data_revisao_3: rev30.toISOString(),
-      }).eq('id', sessaoId);
-      if (updateError) throw updateError;
-
-      // 2. Apaga revisões antigas desta sessão para evitar duplicatas
-      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
-
-      // 3. Insere as 3 novas revisões na tabela `revisoes`
-      const { error: insertError } = await supabase.from('revisoes').insert([
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev1.toISOString(), concluida: false, tipo_revisao: '24h', disciplina_id: sessao.disciplina_id, foco_sugerido: sessao.foco_sugerido },
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev7.toISOString(), concluida: false, tipo_revisao: '7 dias', disciplina_id: sessao.disciplina_id, foco_sugerido: sessao.foco_sugerido },
-        { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev30.toISOString(), concluida: false, tipo_revisao: '30 dias', disciplina_id: sessao.disciplina_id, foco_sugerido: sessao.foco_sugerido },
-      ]);
-      if (insertError) throw insertError;
-
-    } else {
-      // --- LÓGICA PARA DESMARCAR (REVERTER) ---
-      // 1. Limpa os dados de conclusão e revisão da sessão
-      const { error: updateError } = await supabase.from('ciclo_sessoes').update({
-        concluida: false,
-        data_estudo: null,
-        data_revisao_1: null,
-        data_revisao_2: null,
-        data_revisao_3: null,
-      }).eq('id', sessaoId);
-      if (updateError) throw updateError;
-
-      // 2. Apaga as revisões que foram geradas
-      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
-    }
-
-    // 3. Revalida todas as páginas afetadas para mostrar os dados atualizados
-    revalidatePath('/ciclo');
-    revalidatePath('/revisoes');
-    revalidatePath('/calendario');
-    revalidatePath('/'); // Revalida o dashboard também, caso tenha algum card de revisão
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
-    console.error("Erro em toggleConclusaoSessao:", errorMessage);
-    return { error: `Erro no servidor: ${errorMessage}` };
-  }
-}
-
-// Ações simples de adicionar e deletar linhas
 export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -305,8 +287,6 @@ export async function addSessaoCiclo() {
   await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, user_id: user.id });
   revalidatePath('/ciclo');
 }
-
-// CORREÇÃO: A função agora extrai o 'id' do FormData
 export async function deleteSessaoCiclo(formData: FormData) {
   const id = Number(formData.get('id'));
   const supabase = createServerActionClient({ cookies });
@@ -315,11 +295,7 @@ export async function deleteSessaoCiclo(formData: FormData) {
   revalidatePath('/ciclo');
 }
 
-
-// ***** FIM DA MODIFICAÇÃO *****
-
-
-// [ ... suas outras ações como addLembrete, updateTarefa, etc., permanecem inalteradas ... ]
+// ... (cole aqui o resto das suas ações, de addLembrete em diante)
 // --- AÇÕES DO CALENDÁRIO ---
 export async function addLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
