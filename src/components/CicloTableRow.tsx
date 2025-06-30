@@ -3,19 +3,20 @@
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo } from '@/app/actions';
+// MODIFICAÇÃO: Renomeamos a action para ser mais clara e vamos criá-la no próximo passo.
+import { updateSessaoEstudo, deleteSessaoCiclo, toggleConclusaoSessao } from '@/app/actions'; 
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner'; // Adicionado para feedback ao usuário
 
 export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; disciplinas: Disciplina[] }) {
   const [isPending, startTransition] = useTransition();
   const [rowData, setRowData] = useState(sessao);
 
-  // Sincroniza o estado interno se a prop do servidor mudar
   useEffect(() => {
     setRowData(sessao);
   }, [sessao]);
@@ -24,30 +25,48 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
     setRowData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Efeito de AUTO-SAVE com "debounce"
   useEffect(() => {
-    // Não salva se os dados forem idênticos aos que vieram do servidor
     if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
-
     const handler = setTimeout(() => {
       startTransition(() => updateSessaoEstudo(rowData));
-    }, 1500); // Salva 1.5 segundos após a última alteração
-
+    }, 1500);
     return () => clearTimeout(handler);
   }, [rowData, sessao]);
-  
+
+  // MODIFICAÇÃO: Criamos uma função dedicada para o checkbox
+  const handleToggleConclusao = (checked: boolean) => {
+    startTransition(async () => {
+      // Chamamos a nova Server Action, passando o ID e o novo estado (marcado ou desmarcado)
+      const result = await toggleConclusaoSessao(rowData.id, checked);
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(checked ? 'Estudo concluído! Revisões agendadas.' : 'Conclusão revertida.');
+      }
+    });
+  };
+
   const percAcerto = rowData.questoes_total && rowData.questoes_acertos ? Math.round((rowData.questoes_acertos / rowData.questoes_total) * 100) : 0;
+
+  // MODIFICAÇÃO: A data de estudo agora é formatada para exibição
+  const displayDate = (dateString: string | null) => {
+    if (!dateString) return '';
+    // Garante que a data seja interpretada corretamente, sem problemas de fuso horário
+    const [year, month, day] = dateString.split('T')[0].split('-');
+    return `${year}-${month}-${day}`;
+  };
 
   return (
     <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <td className="p-2 text-center align-middle">
-        <Checkbox // O CHECKBOX OK
+        {/* ***** MODIFICAÇÃO PRINCIPAL NO CHECKBOX ***** */}
+        <Checkbox
           checked={rowData.concluida}
-          disabled={rowData.concluida || isPending}
-          onCheckedChange={() => {
-            if (!rowData.concluida) {
-              startTransition(() => concluirSessaoEstudo(rowData.id));
-            }
+          disabled={isPending} // Apenas desabilita durante a transição
+          onCheckedChange={(checked) => {
+            // O 'checked' aqui pode ser um booleano ou 'indeterminate'. Garantimos que seja booleano.
+            handleToggleConclusao(!!checked);
+
           }}
         />
       </td>
@@ -65,16 +84,17 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
       <td className="p-2 align-middle"><Textarea value={rowData.diario_de_bordo || ''} onChange={(e) => handleFieldChange('diario_de_bordo', e.target.value)} rows={1} className="bg-gray-700" /></td>
       <td className="p-2 align-middle text-center">
         <div className="flex items-center gap-1 justify-center">
-          <Input type="number" value={rowData.questoes_acertos || ''} onChange={(e) => handleFieldChange('questoes_acertos', e.target.value)} className="bg-gray-700 w-16" placeholder="C" />
+          <Input type="number" value={rowData.questoes_acertos || ''} onChange={(e) => handleFieldChange('questoes_acertos', e.target.valueAsNumber)} className="bg-gray-700 w-16" placeholder="C" />
           <span className="text-gray-400">/</span>
-          <Input type="number" value={rowData.questoes_total || ''} onChange={(e) => handleFieldChange('questoes_total', e.target.value)} className="bg-gray-700 w-16" placeholder="T" />
+          <Input type="number" value={rowData.questoes_total || ''} onChange={(e) => handleFieldChange('questoes_total', e.target.valueAsNumber)} className="bg-gray-700 w-16" placeholder="T" />
         </div>
         {rowData.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
       </td>
-      <td className="p-2 align-middle"><Input type="date" value={rowData.data_estudo || ''} onChange={(e) => handleFieldChange('data_estudo', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_1 || ''} onChange={(e) => handleFieldChange('data_revisao_1', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_2 || ''} onChange={(e) => handleFieldChange('data_revisao_2', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={rowData.data_revisao_3 || ''} onChange={(e) => handleFieldChange('data_revisao_3', e.target.value)} className="bg-gray-700" /></td>
+      {/* ***** MODIFICAÇÃO PRINCIPAL NAS DATAS ***** */}
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_estudo)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_1)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_2)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_3)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
       <td className="p-2 text-center align-middle">
         <Checkbox
           checked={rowData.materia_finalizada}
