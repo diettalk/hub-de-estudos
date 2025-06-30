@@ -7,6 +7,7 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NavItem } from "@/components/NavItem";
+import { Toaster } from "sonner"; // MODIFICAÇÃO: Importa o componente Toaster
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -52,6 +53,9 @@ export default async function RootLayout({
         )}
 
         <main className="p-6">{children}</main>
+
+        {/* MODIFICAÇÃO: Adiciona o componente Toaster aqui */}
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );
