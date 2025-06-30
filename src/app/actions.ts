@@ -355,20 +355,23 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
 
 // --- AÇÕES PARA DOCUMENTOS ---
 
-// CORREÇÃO: A função agora aceita o título e parentId como argumentos diretos
-// e retorna o novo documento criado para podermos redirecionar para ele.
-export async function addDocumento(parentId: number | null, title: string) {
+// Função unificada para adicionar documentos (raiz ou sub-documento)
+export async function addDocumento(formData: FormData) {
+  const title = formData.get('title') as string;
+  const parentIdRaw = formData.get('parent_id');
+  const parent_id = parentIdRaw ? Number(parentIdRaw) : null;
+
   if (!title) return { error: 'O título é obrigatório.' };
 
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.'};
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-  // O conteúdo inicial é sempre vazio no novo fluxo
+  // Documentos são sempre criados com conteúdo nulo.
   const { data, error } = await supabase
     .from('documentos')
-    .insert({ title, user_id: user.id, content: null, parent_id: parentId })
-    .select('id, title, content, parent_id') // Selecionamos o novo doc para retornar
+    .insert({ title, user_id: user.id, content: null, parent_id })
+    .select('id') // Selecionamos apenas o ID para o redirecionamento
     .single();
 
   if (error) {
@@ -377,38 +380,35 @@ export async function addDocumento(parentId: number | null, title: string) {
   }
   
   revalidatePath('/documentos');
-  return { data }; // Retornamos o novo documento
+  return { data }; // Retornamos o novo documento com seu ID
 }
 
-// A função de Update não precisa de mudanças, mas a de baixo sim.
-// Esta função é para o modal de criação de documentos raiz, que não vamos mais usar no sidebar.
-// Mantemos ela caso você use o <DocumentoEditor /> em outro lugar.
-export async function addDocumentoFromModal(formData: FormData) {
-  const title = formData.get('title') as string;
-  const content = formData.get('content') as string;
-
-  if (!title) return { error: 'O título é obrigatório.' };
-
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.'};
-
-  await supabase.from('documentos').insert({ title, user_id: user.id, content: content || '' });
-  revalidatePath('/documentos');
-}
-
-
+// Ação de update corrigida para ser mais robusta
 export async function updateDocumento(formData: FormData) {
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
-  const content = formData.get('content') as string;
+  const contentJSON = formData.get('content') as string; // O conteúdo vem como string JSON
 
   if (!id) return { error: "ID do documento é necessário."};
+  if (!title) return { error: "O título não pode ser vazio."};
 
   const supabase = createServerActionClient({ cookies });
-  // CORREÇÃO: Agora o conteúdo é salvo corretamente como JSON
-  await supabase.from('documentos').update({ title, content: content ? JSON.parse(content) : null }).eq('id', id);
-  revalidatePath('/documentos');
+  
+  try {
+    // Validamos se o conteúdo é um JSON válido antes de tentar parsear
+    const contentToSave = contentJSON ? JSON.parse(contentJSON) : null;
+    
+    const { error } = await supabase.from('documentos').update({ title, content: contentToSave }).eq('id', id);
+    if (error) throw error;
+
+    revalidatePath('/documentos');
+    return { success: true };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
+    console.error("Erro ao atualizar documento:", errorMessage);
+    return { error: `Falha ao salvar: ${errorMessage}` };
+  }
 }
 
 export async function deleteDocumento(id: number) {
