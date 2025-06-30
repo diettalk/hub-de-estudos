@@ -189,12 +189,27 @@ export async function seedFase1Ciclo() {
   revalidatePath('/ciclo');
 }
 
-// --- AÇÕES DO CICLO DE ESTUDOS (VERSÃO FINAL E CORRIGIDA) ---
-// Ação para o AUTO-SAVE e edições manuais
+// --- AÇÕES DO CICLO DE ESTUDOS (VERSÃO FINAL COM AUTO-SAVE) ---
+
+// Ação para o AUTO-SAVE e edições manuais, agora mais específica
 export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
   const supabase = createServerActionClient({ cookies });
-  const { id, ...updateData } = sessaoData; // Separa o ID do resto dos dados
+  const { id, ...data } = sessaoData; // Separa o ID do resto dos dados
   if (!id) return { error: 'ID da sessão é necessário para atualização.' };
+
+  // Objeto explícito para garantir que apenas os campos corretos sejam atualizados
+  const updateData = {
+    disciplina_id: data.disciplina_id,
+    foco_sugerido: data.foco_sugerido,
+    diario_de_bordo: data.diario_de_bordo,
+    questoes_acertos: data.questoes_acertos,
+    questoes_total: data.questoes_total,
+    data_estudo: data.data_estudo,
+    data_revisao_1: data.data_revisao_1,
+    data_revisao_2: data.data_revisao_2,
+    data_revisao_3: data.data_revisao_3,
+    materia_finalizada: data.materia_finalizada,
+  };
 
   await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
   revalidatePath('/ciclo');
@@ -202,7 +217,7 @@ export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { i
   revalidatePath('/calendario');
 }
 
-// Ação para o checkbox "OK", que dispara a automação
+// Ação para o checkbox "OK" (Concluir)
 export async function concluirSessaoEstudo(id: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -240,7 +255,29 @@ export async function concluirSessaoEstudo(id: number) {
   revalidatePath('/calendario');
 }
 
-// Ação para ADICIONAR uma nova linha
+// NOVA AÇÃO para DESFAZER a conclusão
+export async function desconcluirSessaoEstudo(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  if (isNaN(id)) return;
+  
+  // Limpa os dados de conclusão e revisão da sessão
+  await supabase.from('ciclo_sessoes').update({
+    concluida: false,
+    data_estudo: null,
+    data_revisao_1: null,
+    data_revisao_2: null,
+    data_revisao_3: null,
+  }).eq('id', id);
+  
+  // Apaga as revisões que foram geradas
+  await supabase.from('revisoes').delete().eq('ciclo_sessao_id', id);
+  
+  revalidatePath('/ciclo');
+  revalidatePath('/revisoes');
+  revalidatePath('/calendario');
+}
+
+// Ações simples de adicionar e deletar linhas
 export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -250,8 +287,6 @@ export async function addSessaoCiclo() {
   await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, materia_nome: 'Nova Matéria', user_id: user.id });
   revalidatePath('/ciclo');
 }
-
-// Ação para DELETAR uma linha
 export async function deleteSessaoCiclo(id: number) {
   const supabase = createServerActionClient({ cookies });
   if (isNaN(id)) return;

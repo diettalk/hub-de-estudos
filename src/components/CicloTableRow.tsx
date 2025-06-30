@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo, desconcluirSessaoEstudo, toggleMateriaFinalizada } from '@/app/actions';
+import { updateSessaoEstudo, deleteSessaoCiclo, concluirSessaoEstudo } from '@/app/actions';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -15,45 +15,48 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
   const [isPending, startTransition] = useTransition();
   const [rowData, setRowData] = useState(sessao);
 
-  useEffect(() => { setRowData(sessao); }, [sessao]);
+  // Sincroniza o estado interno se a prop do servidor mudar
+  useEffect(() => {
+    setRowData(sessao);
+  }, [sessao]);
 
   const handleFieldChange = (field: keyof SessaoEstudo, value: any) => {
     setRowData(prev => ({ ...prev, [field]: value }));
   };
 
-  const debouncedUpdate = useCallback(() => {
-    if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
-    startTransition(() => updateSessaoEstudo(rowData));
-  }, [rowData, sessao]);
-
+  // Efeito de AUTO-SAVE com "debounce"
   useEffect(() => {
-    const handler = setTimeout(debouncedUpdate, 1500);
+    // Não salva se os dados forem idênticos aos que vieram do servidor
+    if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
+
+    const handler = setTimeout(() => {
+      startTransition(() => updateSessaoEstudo(rowData));
+    }, 1500); // Salva 1.5 segundos após a última alteração
+
     return () => clearTimeout(handler);
-  }, [rowData, debouncedUpdate]);
+  }, [rowData, sessao]);
   
   const percAcerto = rowData.questoes_total && rowData.questoes_acertos ? Math.round((rowData.questoes_acertos / rowData.questoes_total) * 100) : 0;
 
   return (
     <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <td className="p-2 text-center align-middle">
-        <Checkbox // O CHECKBOX OK, agora reversível
-          id={`ok-${rowData.id}`}
+        <Checkbox // O CHECKBOX OK
           checked={rowData.concluida}
-          disabled={isPending}
-          onCheckedChange={(checked) => {
-            startTransition(() => {
-              if (checked) {
-                concluirSessaoEstudo(rowData.id);
-              } else {
-                desconcluirSessaoEstudo(rowData.id);
-              }
-            });
+          disabled={rowData.concluida || isPending}
+          onCheckedChange={() => {
+            if (!rowData.concluida) {
+              startTransition(() => concluirSessaoEstudo(rowData.id));
+            }
           }}
         />
       </td>
       <td className="p-2 text-center align-middle">{rowData.ordem}</td>
       <td className="p-2 align-middle">
-        <Select value={String(rowData.disciplina_id || '')} onValueChange={(value) => handleFieldChange('disciplina_id', Number(value))}>
+        <Select
+          value={String(rowData.disciplina_id || '')}
+          onValueChange={(value) => handleFieldChange('disciplina_id', Number(value))}
+        >
           <SelectTrigger className="bg-gray-700 w-[180px]"><SelectValue placeholder="Vincular Matéria" /></SelectTrigger>
           <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
         </Select>
@@ -79,9 +82,10 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
         />
       </td>
       <td className="p-2 text-center align-middle">
-        <Button onClick={() => startTransition(() => deleteSessaoCiclo(rowData.id))} variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}>
-          <Trash2 className="h-4 w-4 text-red-500" />
-        </Button>
+        <form action={(formData) => startTransition(() => deleteSessaoCiclo(formData))}>
+          <input type="hidden" name="id" value={rowData.id} />
+          <Button type="submit" variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+        </form>
       </td>
     </tr>
   );
