@@ -1,4 +1,4 @@
-// src/components/DocumentosSidebar.tsx (VERSÃO HIERÁRQUICA)
+// src/components/DocumentosSidebar.tsx (NOVO FLUXO DE CRIAÇÃO)
 
 'use client';
 
@@ -7,8 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { addDocumento, deleteDocumento } from '@/app/actions';
 import { PlusCircle, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { DocumentoEditor } from './DocumentoEditor'; // Importamos o editor para o botão raiz
 
-// O tipo de um documento na árvore
 export type DocumentoNode = {
   id: number;
   parent_id: number | null;
@@ -16,7 +16,6 @@ export type DocumentoNode = {
   children: DocumentoNode[];
 };
 
-// Componente recursivo para renderizar cada nó da árvore
 const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -24,32 +23,31 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
   const searchParams = useSearchParams();
   const selectedId = Number(searchParams.get('id'));
 
+  // NOVA LÓGICA DE CRIAÇÃO: Sem prompt, criação direta
   const handleCreate = () => {
-    const title = prompt('Nome do novo documento/pasta:');
-    if (!title) return;
-    
-    const formData = new FormData();
-    formData.append('title', title);
-    formData.append('parent_id', String(doc.id));
-
     startTransition(async () => {
-      const result = await addDocumento(formData);
-      if (result?.error) toast.error(result.error);
-      else toast.success(`'${title}' criado com sucesso.`);
+      const result = await addDocumento(doc.id, "Novo Documento"); // Cria com nome padrão
+      if (result?.error) {
+        toast.error(result.error);
+      } else if (result?.data) {
+        toast.success(`'Novo Documento' criado.`);
+        // Redireciona para o documento recém-criado
+        router.push(`/documentos?id=${result.data.id}`);
+      }
     });
   };
   
   const handleDelete = () => {
     if (confirm(`Tem certeza que deseja excluir "${doc.title}" e TUDO dentro dele?`)) {
-        startTransition(async () => {
-            const result = await deleteDocumento(doc.id);
-            if (result?.error) toast.error(result.error);
-            else {
-              toast.info(`'${doc.title}' foi excluído.`);
-              // Se o item deletado era o selecionado, volta para a pág. principal de documentos
-              if (selectedId === doc.id) router.push('/documentos');
-            }
-        });
+      startTransition(async () => {
+        const result = await deleteDocumento(doc.id);
+        if (result?.error) {
+          toast.error(result.error);
+        } else {
+          toast.info(`'${doc.title}' foi excluído.`);
+          if (selectedId === doc.id) router.push('/documentos');
+        }
+      });
     }
   }
 
@@ -82,33 +80,17 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
 };
 
 export function DocumentosSidebar({ tree }: { tree: DocumentoNode[] }) {
-    const [isPending, startTransition] = useTransition();
-
-    const handleCreateRoot = () => {
-        const title = prompt('Nome do novo documento/pasta raiz:');
-        if (!title) return;
-        
-        const formData = new FormData();
-        formData.append('title', title);
-        
-        startTransition(async () => {
-            const result = await addDocumento(formData);
-            if (result?.error) toast.error(result.error);
-            else toast.success(`'${title}' criado com sucesso.`);
-        });
-    };
-
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">DOCUMENTOS</h2>
-                <button onClick={handleCreateRoot} className="p-1 text-gray-400 hover:text-white" title="Adicionar documento raiz">
-                    <PlusCircle size={18}/>
-                </button>
-            </div>
-            <div className="space-y-1">
-                {tree.map(rootDoc => <Node key={rootDoc.id} doc={rootDoc} level={0} />)}
-            </div>
-        </div>
-    );
+  // A criação de um documento raiz agora usa o modal <DocumentoEditor />
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">DOCUMENTOS</h2>
+        {/* O DocumentoEditor sem props abre o modal de criação de um doc raiz */}
+        <DocumentoEditor />
+      </div>
+      <div className="space-y-1">
+        {tree.map(rootDoc => <Node key={rootDoc.id} doc={rootDoc} level={0} />)}
+      </div>
+    </div>
+  );
 }
