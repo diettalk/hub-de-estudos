@@ -2,16 +2,12 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { seedFase1Ciclo, addSessaoCiclo, deleteSessaoCiclo, updateSessaoEstudo, concluirSessaoEstudo } from '@/app/actions';
+import { seedFase1Ciclo, addSessaoCiclo } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
+import { CicloTableRow } from '@/components/CicloTableRow';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Save, CheckCircle2 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +15,11 @@ export default async function CicloPage() {
   const supabase = createServerComponentClient({ cookies });
   
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  if (!session) {
+    redirect('/login');
+  }
 
+  // LÓGICA DE CRIAÇÃO AUTOMÁTICA
   let { data: sessoes } = await supabase.from('ciclo_sessoes').select(`*`).eq('user_id', session.user.id).order('ordem');
 
   if (!sessoes || sessoes.length === 0) {
@@ -31,79 +30,86 @@ export default async function CicloPage() {
 
   const { data: disciplinas } = await supabase.from('paginas').select('id, nome:title, emoji').order('title');
 
-  const comandoEvolucao = `Olá, David! ... (seu texto completo aqui)`;
+  const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos... (seu texto completo aqui)`;
 
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold">Ciclo de Estudos</h1>
+
       <ProgressoCicloCard sessoes={sessoes || []} />
-      {/* ... Seus textos de apoio (Accordion, etc.) ... */}
-      <div className="bg-gray-800/50 rounded-lg shadow-lg overflow-hidden border border-gray-700 mt-4">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-gray-300">
-            <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
-              <tr>
-                <th className="p-3">Finalizada</th>
-                <th className="p-3">Hora</th>
-                <th className="p-3">Matéria</th>
-                {/* ... outros headers ... */}
-                <th className="p-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {(sessoes || []).map((sessao) => {
-                const dataFinalizada = sessao.data_estudo ? new Date(sessao.data_estudo + 'T03:00:00').toLocaleDateString('pt-BR') : 'Pendente';
-                const percAcerto = sessao.questoes_total && sessao.questoes_acertos ? Math.round((sessao.questoes_acertos / sessao.questoes_total) * 100) : 0;
-                
-                return (
-                  <tr key={sessao.id} className={`border-b border-gray-700 ${sessao.materia_finalizada ? 'bg-gray-800/50 text-gray-500 line-through' : ''}`}>
-                    <form action={updateSessaoEstudo}>
-                      <td style={{ display: 'contents' }}>
-                        <input type="hidden" name="id" value={sessao.id} />
-                        <td className="p-2 text-center align-middle"><Checkbox name="materia_finalizada" defaultChecked={sessao.materia_finalizada} /></td>
-                        <td className="p-2 text-center align-middle">{sessao.ordem}</td>
-                        <td className="p-2 align-middle">
-                          <Select name="disciplina_id" defaultValue={String(sessao.disciplina_id || '')}>
-                            <SelectTrigger className="bg-gray-700 w-[180px]"><SelectValue placeholder="Vincular Matéria" /></SelectTrigger>
-                            <SelectContent>{(disciplinas as Disciplina[] || []).map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </td>
-                        <td className="p-2 align-middle"><Input name="foco_sugerido" defaultValue={sessao.foco_sugerido || ''} className="bg-gray-700" /></td>
-                        <td className="p-2 align-middle"><Textarea name="diario_de_bordo" defaultValue={sessao.diario_de_bordo || ''} rows={1} className="bg-gray-700" /></td>
-                        <td className="p-2 align-middle text-center">
-                          <div className="flex items-center gap-1 justify-center">
-                            <Input name="questoes_acertos" type="number" defaultValue={sessao.questoes_acertos || ''} className="bg-gray-700 w-16" placeholder="C" />
-                            <span className="text-gray-400">/</span>
-                            <Input name="questoes_total" type="number" defaultValue={sessao.questoes_total || ''} className="bg-gray-700 w-16" placeholder="T" />
-                          </div>
-                          {sessao.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
-                        </td>
-                        <td className="p-2 align-middle text-center">{dataFinalizada}</td>
-                        <td className="p-2 align-middle"><Input name="data_revisao_1" type="date" defaultValue={sessao.data_revisao_1 || ''} className="bg-gray-700" /></td>
-                        <td className="p-2 align-middle"><Input name="data_revisao_2" type="date" defaultValue={sessao.data_revisao_2 || ''} className="bg-gray-700" /></td>
-                        <td className="p-2 align-middle"><Input name="data_revisao_3" type="date" defaultValue={sessao.data_revisao_3 || ''} className="bg-gray-700" /></td>
-                        <td className="p-2 align-middle text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Button formAction={updateSessaoEstudo} type="submit" variant="ghost" size="icon" title="Salvar Alterações Manuais"><Save className="h-4 w-4 text-blue-400" /></Button>
-                            <Button formAction={concluirSessaoEstudo} type="submit" variant="ghost" size="icon" title="Concluir Sessão (OK e Gerar Revisões)" disabled={sessao.concluida}><CheckCircle2 className="h-4 w-4 text-green-400" /></Button>
-                            <Button formAction={deleteSessaoCiclo} type="submit" variant="ghost" size="icon" title="Excluir Linha"><Trash2 className="h-4 w-4 text-red-500" /></Button>
-                          </div>
-                        </td>
-                      </td>
-                    </form>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-2 flex justify-center border-t border-gray-700">
-          <form action={addSessaoCiclo}>
-            <Button type="submit" variant="ghost" size="sm">+ Adicionar Linha ao Ciclo</Button>
-          </form>
+
+      <Accordion type="single" collapsible className="w-full card bg-gray-800/50 p-6 rounded-lg">
+        <AccordionItem value="item-1">
+          <AccordionTrigger className="font-semibold text-lg">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</AccordionTrigger>
+          <AccordionContent className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
+            <div>
+              <h5 className="font-semibold text-white">Análise de Tempo (Referência: 18/06/2025)</h5>
+              <p>Prova: 05 de Outubro de 2025.<br/>Semanas Disponíveis: ~15 semanas.<br/>Total de Horas Líquidas: 15 semanas x 37.5h = ~560 horas de estudo. É tempo mais do que suficiente. Confie no processo.</p>
+            </div>
+            <div>
+              <h5 className="font-semibold text-white">As 3 Fases do Estudo:</h5>
+              <ol className="list-decimal list-inside space-y-2">
+                <li><strong>FASE 1: A Fundação (18 de Junho a 22 de Julho - 5 semanas)</strong><br/>Objetivo: Dominar os fundamentos das matérias de maior peso.</li>
+                <li><strong>FASE 2: A Expansão e Inclusão (23 de Julho a 31 de Agosto - ~6 semanas)</strong><br/>Objetivo: Introduzir gradualmente as matérias restantes.</li>
+                <li><strong>FASE 3: Refinamento e Ataque Final (01 de Setembro até a Prova - ~5 semanas)</strong><br/>Objetivo: Focar em questões, revisão e simulados.</li>
+              </ol>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <div>
+        <h2 className="text-2xl font-bold">Ciclo de Estudos - FASE 1 (Painel de Controle)</h2>
+        <p className="text-gray-400 mt-1">Foco: Construir a base para os cargos de Especialista (HFA), Analista (MGI) e Analista (INSS).</p>
+        
+        <div className="bg-gray-800/50 rounded-lg shadow-lg overflow-hidden border border-gray-700 mt-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-300">
+              <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
+                <tr>
+                  <th className="p-3">Ações</th>
+                  <th className="p-3">Finalizada</th>
+                  <th className="p-3">Hora</th>
+                  <th className="p-3">Matéria</th>
+                  <th className="p-3 min-w-[350px]">Foco Sugerido</th>
+                  <th className="p-3 min-w-[250px]">Diário de Bordo</th>
+                  <th className="p-3 min-w-[200px]">Questões</th>
+                  <th className="p-3 min-w-[150px]">Concluído em</th>
+                  <th className="text-center p-3">R1 (24h)</th>
+                  <th className="text-center p-3">R7 (7d)</th>
+                  <th className="text-center p-3">R30 (30d)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinas={disciplinas as Disciplina[] || []} />)}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2 flex justify-center border-t border-gray-700">
+            <form action={addSessaoCiclo}>
+              <Button type="submit" variant="ghost" size="sm">+ Adicionar Linha ao Ciclo</Button>
+            </form>
+          </div>
         </div>
       </div>
-       {/* ... Suas outras seções de texto (Legenda, Comando, etc) ... */}
+      
+      <div className="p-6 bg-gray-800/50 rounded-lg border border-gray-700 text-sm">
+        <h3 className="font-bold mb-2">Legenda de Matérias (Siglas)</h3>
+        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <li><strong>LP:</strong> Língua Portuguesa</li>
+            <li><strong>RLM:</strong> Raciocínio Lógico-Quantitativo</li>
+            {/* ... sua lista completa de legendas ... */}
+        </ul>
+      </div>
+
+      <Accordion type="single" collapsible className="w-full card bg-gray-800/50 p-6 rounded-lg">
+        <AccordionItem value="item-1">
+          <AccordionTrigger className="font-semibold">Comando para Evolução do Ciclo (Para uso futuro)</AccordionTrigger>
+          <AccordionContent>
+            <pre className="mt-4 bg-gray-900 p-4 rounded-md text-xs whitespace-pre-wrap font-mono">{comandoEvolucao}</pre>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
