@@ -135,11 +135,11 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
 
 // --- AÇÕES DO CICLO DE ESTUDOS ---
 
-// Ação para SALVAR alterações manuais em uma linha (foco, diário, etc.)
+// Salva alterações manuais nos campos da tabela
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
-  if (isNaN(id)) return { error: 'ID da sessão inválido.' };
+  if (isNaN(id)) return;
 
   const updateData = {
     disciplina_id: formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null,
@@ -155,17 +155,13 @@ export async function updateSessaoEstudo(formData: FormData) {
 
   await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
   revalidatePath('/ciclo');
-  revalidatePath('/revisoes');
-  revalidatePath('/calendario');
 }
 
-// Ação dedicada para CONCLUIR a sessão e AUTOMATIZAR as revisões
 export async function concluirSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;
 
-  // Pega os dados da sessão para usar no nome da revisão
   const { data: sessao } = await supabase.from('ciclo_sessoes').select('materia_nome, foco_sugerido').eq('id', id).single();
   if (!sessao) return;
 
@@ -174,7 +170,6 @@ export async function concluirSessaoEstudo(formData: FormData) {
   const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
   const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
 
-  // 1. Atualiza a sessão no ciclo
   await supabase.from('ciclo_sessoes').update({
     concluida: true,
     data_estudo: studyDate.toISOString().split('T')[0],
@@ -183,10 +178,7 @@ export async function concluirSessaoEstudo(formData: FormData) {
     data_revisao_3: rev30.toISOString().split('T')[0],
   }).eq('id', id);
 
-  // 2. Apaga revisões antigas desta sessão para evitar duplicatas
   await supabase.from('revisoes').delete().eq('ciclo_sessao_id', id);
-
-  // 3. Insere as 3 novas revisões na tabela `revisoes`
   await supabase.from('revisoes').insert([
     { ciclo_sessao_id: id, data_revisao: rev1.toISOString().split('T')[0], tipo_revisao: '24h', materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
     { ciclo_sessao_id: id, data_revisao: rev7.toISOString().split('T')[0], tipo_revisao: '7 dias', materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
@@ -198,7 +190,7 @@ export async function concluirSessaoEstudo(formData: FormData) {
   revalidatePath('/calendario');
 }
 
-// Ação para ADICIONAR uma nova linha
+// Ações simples de adicionar e deletar linhas
 export async function addSessaoCiclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -208,24 +200,22 @@ export async function addSessaoCiclo() {
   await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, materia_nome: 'Nova Matéria', user_id: user.id });
   revalidatePath('/ciclo');
 }
-
-// Ação para DELETAR uma linha
 export async function deleteSessaoCiclo(formData: FormData) {
   const id = Number(formData.get('id'));
-  if(isNaN(id)) return;
+  if (isNaN(id)) return;
   const supabase = createServerActionClient({ cookies });
   await supabase.from('ciclo_sessoes').delete().eq('id', id);
   revalidatePath('/ciclo');
 }
 
-// Ação para popular o ciclo com seus dados da Fase 1
+// Popula o ciclo com as 38 horas
 export async function seedFase1Ciclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
   const { count } = await supabase.from('ciclo_sessoes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-  if (count && count > 0) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
+  if (count && count > 0) return { message: 'O ciclo já possui dados.' };
 
   const fase1Template = [
     { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
@@ -268,10 +258,7 @@ export async function seedFase1Ciclo() {
     { ordem: 38, materia_nome: 'REVISÃO GERAL', foco_sugerido: 'Revisão da Semana (Mapas Mentais, Flashcard' },
   ];
 
-  const sessoesParaInserir = fase1Template.map(sessao => ({
-    ...sessao,
-    user_id: user.id
-  }));
+  const sessoesParaInserir = fase1Template.map(sessao => ({ ...sessao, user_id: user.id }));
 
   await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
   revalidatePath('/ciclo');
