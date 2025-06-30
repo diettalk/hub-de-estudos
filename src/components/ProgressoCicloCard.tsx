@@ -1,23 +1,17 @@
-// src/components/ProgressoCicloCard.tsx
 'use client';
-import { type SessaoEstudo } from "@/lib/types";
+import { Progress } from "./ui/progress";
+import { type SessaoEstudo } from '@/lib/types';
 
 export function ProgressoCicloCard({ sessoes }: { sessoes: SessaoEstudo[] }) {
-  if (!sessoes || sessoes.length === 0) return null;
-
-  const completedCount = sessoes.filter(s => s.concluido).length;
-  const totalCount = sessoes.length;
-  const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
+  const sessoesConcluidas = sessoes.filter(s => s.concluido).length;
+  const totalSessoes = sessoes.length;
+  const progresso = totalSessoes > 0 ? (sessoesConcluidas / totalSessoes) * 100 : 0;
+  
   return (
-    <div className="card p-6 bg-gray-800/50">
-      <h2 className="text-lg font-semibold mb-2">Progresso do Ciclo</h2>
-      <div className="w-full bg-gray-700 rounded-full h-4">
-        <div className="bg-blue-600 h-4 rounded-full text-xs font-medium text-blue-100 text-center leading-none" style={{ width: `${percentage}%` }}>
-          {percentage > 10 ? `${percentage}%` : ''}
-        </div>
-      </div>
-      <p className="text-xs text-center mt-2 text-gray-400">{completedCount} de {totalCount} sessões concluídas</p>
+    <div className="card bg-gray-800 p-6 rounded-lg">
+      <h3 className="font-bold text-lg mb-2">Progresso do Ciclo</h3>
+      <Progress value={progresso} className="w-full" />
+      <p className="text-right text-sm text-gray-400 mt-2">{sessoesConcluidas} de {totalSessoes} sessões concluídas</p>
     </div>
   );
 }

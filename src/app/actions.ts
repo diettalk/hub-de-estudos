@@ -5,7 +5,7 @@ import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-// --- AÇÕES DE CONCURSOS ---
+// --- AÇÕES DE CONCURSOS (GUIA DE ESTUDOS) ---
 export async function addConcurso(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -79,12 +79,7 @@ export async function createPagina(parentId: number | null, title: string, emoji
 
   const { data, error } = await supabase
     .from('paginas')
-    .insert({
-      title,
-      emoji,
-      parent_id: parentId,
-      user_id: user.id,
-    })
+    .insert({ title, emoji, parent_id: parentId, user_id: user.id })
     .select()
     .single();
 
@@ -105,11 +100,7 @@ export async function updatePagina(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   await supabase
     .from('paginas')
-    .update({ 
-      title, 
-      emoji,
-      content: content ? JSON.parse(content) : null 
-    })
+    .update({ title, emoji, content: content ? JSON.parse(content) : null })
     .eq('id', id);
 
   revalidatePath('/disciplinas');
@@ -124,7 +115,6 @@ export async function deletePagina(id: number) {
 // --- AÇÕES DE VÍNCULO CONCURSO/PÁGINA ---
 export async function linkPastaToConcurso(concursoId: number, paginaId: number) {
   const supabase = createServerActionClient({ cookies });
-  
   const { data: existingLink } = await supabase
     .from('concurso_paginas')
     .select()
@@ -133,21 +123,13 @@ export async function linkPastaToConcurso(concursoId: number, paginaId: number) 
 
   if (existingLink) return;
 
-  await supabase.from('concurso_paginas').insert({
-    concurso_id: concursoId,
-    pagina_id: paginaId,
-  });
-
+  await supabase.from('concurso_paginas').insert({ concurso_id: concursoId, pagina_id: paginaId });
   revalidatePath('/guia-estudos');
 }
 
 export async function unlinkPastaFromConcurso(concursoId: number, paginaId: number) {
   const supabase = createServerActionClient({ cookies });
-  await supabase
-    .from('concurso_paginas')
-    .delete()
-    .match({ concurso_id: concursoId, pagina_id: paginaId });
-
+  await supabase.from('concurso_paginas').delete().match({ concurso_id: concursoId, pagina_id: paginaId });
   revalidatePath('/guia-estudos');
 }
 
@@ -241,53 +223,65 @@ export async function restoreHoraUm() {
 export async function seedFase1Ciclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { count } = await supabase.from('sessoes_estudo').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-  if (count !== 0) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
+  if (count !== 0 && count !== null) return { message: 'O ciclo já possui dados. Ação abortada para evitar duplicatas.' };
+  
+  // NOTE: This assumes you have a 'sigla' column in your 'disciplinas' table ('LP', 'G.GOV', etc.)
+  const { data: disciplinas } = await supabase.from('disciplinas').select('id, sigla');
+  if (!disciplinas) return { error: 'Disciplinas não encontradas.' };
+  const disciplinaMap = new Map(disciplinas.map(d => [d.sigla, d.id]));
 
-  const fase1Data = [
-    { hora_no_ciclo: 1, materia: 'LP', foco: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).', user_id: user.id },
-    { hora_no_ciclo: 2, materia: 'G.GOV', foco: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).', user_id: user.id },
-    { hora_no_ciclo: 3, materia: 'G.GOV', foco: '(Eixo 1) 1.2 Matriz SWOT.', user_id: user.id },
-    { hora_no_ciclo: 4, materia: 'RLM', foco: '2.1 Lógica Proposicional: Estruturas lógicas, conectivos.', user_id: user.id },
-    { hora_no_ciclo: 5, materia: 'P.PUB', foco: '(Eixo 2) 1.1 Tipos de políticas públicas: distributivas, regulatórias e redistributivas.', user_id: user.id },
-    { hora_no_ciclo: 6, materia: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.1 Estrutura e organização do Sistema Único de Saúde.', user_id: user.id },
-    { hora_no_ciclo: 7, materia: 'LP', foco: '1.5 Morfossintaxe: Emprego das classes de palavras.', user_id: user.id },
-    { hora_no_ciclo: 8, materia: 'G.GOV', foco: '(Eixo 1) 2. Gestão de pessoas: Liderança e gerenciamento de conflitos.', user_id: user.id },
-    { hora_no_ciclo: 9, materia: 'ADM.PÚB', foco: '(Gerais) 7.1 Princípios constitucionais da administração pública (art. 37).', user_id: user.id },
-    { hora_no_ciclo: 10, materia: 'RLM', foco: '2.1 Lógica Proposicional: Tabela-verdade, negação e equivalências.', user_id: user.id },
-    { hora_no_ciclo: 11, materia: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: formação da agenda e formulação.', user_id: user.id },
-    { hora_no_ciclo: 12, materia: 'G.GOV', foco: '(Eixo 1) 3. Gestão de projetos: conceitos básicos e processos do PMBOK.', user_id: user.id },
-    { hora_no_ciclo: 13, materia: 'LP', foco: '1.3 Semântica e Vocabulário: Sinonímia, antonímia, polissemia.', user_id: user.id },
-    { hora_no_ciclo: 14, materia: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: implementação, monitoramento e avaliação.', user_id: user.id },
-    { hora_no_ciclo: 15, materia: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 1).', user_id: user.id },
-    { hora_no_ciclo: 16, materia: 'RLM', foco: '2.2 Análise Combinatória.', user_id: user.id },
-    { hora_no_ciclo: 17, materia: 'P.PUB', foco: '(Eixo 2) 5.1 Ações afirmativas e competências para atuação com diversidade.', user_id: user.id },
-    { hora_no_ciclo: 18, materia: 'G.GOV', foco: '(Eixo 1) 8. Contratações Públicas (Lei nº 14.133/2021): Abrangência e princípios.', user_id: user.id },
-    { hora_no_ciclo: 19, materia: 'LP', foco: '1.4 Coesão e Coerência: Mecanismos e conectores.', user_id: user.id },
-    { hora_no_ciclo: 20, materia: 'G.GOV', foco: '(Eixo 1) 4. Gestão de riscos: princípios, objetos e técnicas.', user_id: user.id },
-    { hora_no_ciclo: 21, materia: 'ADM.PÚB', foco: '(Gerais) 8.4 Noções de orçamento público: PPA, LDO e LOA.', user_id: user.id },
-    { hora_no_ciclo: 22, materia: 'RLM', foco: '2.2 Probabilidade.', user_id: user.id },
-    { hora_no_ciclo: 23, materia: 'P.PUB', foco: '(Gerais) 3.2 Ciclos de políticas públicas (reforço).', user_id: user.id },
-    { hora_no_ciclo: 24, materia: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 2).', user_id: user.id },
-    { hora_no_ciclo: 25, materia: 'LP', foco: '1.5 Morfossintaxe: Concordância verbal e nominal.', user_id: user.id },
-    { hora_no_ciclo: 26, materia: 'G.GOV', foco: '(Eixo 1) 5.4 Lei Geral de Proteção de Dados Pessoais – LGPD.', user_id: user.id },
-    { hora_no_ciclo: 27, materia: 'P.PUB', foco: '(Gerais) 1.1 Introdução às políticas públicas: conceitos e tipologias (reforço).', user_id: user.id },
-    { hora_no_ciclo: 28, materia: 'DH', foco: '(Eixo 4) 1.1 Normas e acordos internacionais: Declaração Universal dos Direitos Humanos (1948).', user_id: user.id },
-    { hora_no_ciclo: 29, materia: 'P.PUB', foco: '(Eixo 2) 2.1 Poder, racionalidade, discricionariedade na implementação de políticas.', user_id: user.id },
-    { hora_no_ciclo: 30, materia: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 10. Segurança Alimentar. Lei Orgânica de Segurança Alimentar e Nutricional (LOSAN).', user_id: user.id },
-    { hora_no_ciclo: 31, materia: 'LP', foco: '1.5 Morfossintaxe: Regência verbal e nominal; Crase.', user_id: user.id },
-    { hora_no_ciclo: 32, materia: 'G.GOV', foco: '(Gerais) 5.2 Governança pública e sistemas de governança (Decreto nº 9.203).', user_id: user.id },
-    { hora_no_ciclo: 33, materia: 'ADM.PÚB', foco: '(Gerais) 7.3 Agentes públicos: Regime Jurídico Único (Lei nº 8.112/1990).', user_id: user.id },
-    { hora_no_ciclo: 34, materia: 'RLM', foco: '2.3 Matemática Básica: Problemas com porcentagem e regra de três.', user_id: user.id },
-    { hora_no_ciclo: 35, materia: 'P.PUB', foco: '(Eixo 2) 3. Teorias e modelos de análise contemporâneos de políticas públicas.', user_id: user.id },
-    { hora_no_ciclo: 36, materia: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.9 Redes de Atenção à Saúde (RAS).', user_id: user.id },
-    { hora_no_ciclo: 37, materia: 'PESQUISA', foco: '(Eixo 5) 4. Avaliação de políticas públicas: Tipos e componentes.', user_id: user.id },
-    { hora_no_ciclo: 38, materia: 'REVISÃO GERAL', foco: 'Revisão da Semana (Mapas Mentais, Flashcards)', user_id: user.id },
+  const fase1Template = [
+    { hora_no_ciclo: 1, materia_sigla: 'LP', foco: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
+    { hora_no_ciclo: 2, materia_sigla: 'G.GOV', foco: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
+    { hora_no_ciclo: 3, materia_sigla: 'G.GOV', foco: '(Eixo 1) 1.2 Matriz SWOT.' },
+    { hora_no_ciclo: 4, materia_sigla: 'RLM', foco: '2.1 Lógica Proposicional: Estruturas lógicas, conectivos.' },
+    { hora_no_ciclo: 5, materia_sigla: 'P.PUB', foco: '(Eixo 2) 1.1 Tipos de políticas públicas: distributivas, regulatórias e redistributivas.' },
+    { hora_no_ciclo: 6, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.1 Estrutura e organização do Sistema Único de Saúde.' },
+    { hora_no_ciclo: 7, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Emprego das classes de palavras.' },
+    { hora_no_ciclo: 8, materia_sigla: 'G.GOV', foco: '(Eixo 1) 2. Gestão de pessoas: Liderança e gerenciamento de conflitos.' },
+    { hora_no_ciclo: 9, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 7.1 Princípios constitucionais da administração pública (art. 37).' },
+    { hora_no_ciclo: 10, materia_sigla: 'RLM', foco: '2.1 Lógica Proposicional: Tabela-verdade, negação e equivalências.' },
+    { hora_no_ciclo: 11, materia_sigla: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: formação da agenda e formulação.' },
+    { hora_no_ciclo: 12, materia_sigla: 'G.GOV', foco: '(Eixo 1) 3. Gestão de projetos: conceitos básicos e processos do PMBOK.' },
+    { hora_no_ciclo: 13, materia_sigla: 'LP', foco: '1.3 Semântica e Vocabulário: Sinonímia, antonímia, polissemia.' },
+    { hora_no_ciclo: 14, materia_sigla: 'P.PUB', foco: '(Eixo 2) 4. Políticas Públicas e suas fases: implementação, monitoramento e avaliação.' },
+    { hora_no_ciclo: 15, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 1).' },
+    { hora_no_ciclo: 16, materia_sigla: 'RLM', foco: '2.2 Análise Combinatória.' },
+    { hora_no_ciclo: 17, materia_sigla: 'P.PUB', foco: '(Eixo 2) 5.1 Ações afirmativas e competências para atuação com diversidade.' },
+    { hora_no_ciclo: 18, materia_sigla: 'G.GOV', foco: '(Eixo 1) 8. Contratações Públicas (Lei nº 14.133/2021): Abrangência e princípios.' },
+    { hora_no_ciclo: 19, materia_sigla: 'LP', foco: '1.4 Coesão e Coerência: Mecanismos e conectores.' },
+    { hora_no_ciclo: 20, materia_sigla: 'G.GOV', foco: '(Eixo 1) 4. Gestão de riscos: princípios, objetos e técnicas.' },
+    { hora_no_ciclo: 21, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 8.4 Noções de orçamento público: PPA, LDO e LOA.' },
+    { hora_no_ciclo: 22, materia_sigla: 'RLM', foco: '2.2 Probabilidade.' },
+    { hora_no_ciclo: 23, materia_sigla: 'P.PUB', foco: '(Gerais) 3.2 Ciclos de políticas públicas (reforço).', },
+    { hora_no_ciclo: 24, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 2).', },
+    { hora_no_ciclo: 25, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Concordância verbal e nominal.' },
+    { hora_no_ciclo: 26, materia_sigla: 'G.GOV', foco: '(Eixo 1) 5.4 Lei Geral de Proteção de Dados Pessoais – LGPD.' },
+    { hora_no_ciclo: 27, materia_sigla: 'P.PUB', foco: '(Gerais) 1.1 Introdução às políticas públicas: conceitos e tipologias (reforço).', },
+    { hora_no_ciclo: 28, materia_sigla: 'DH', foco: '(Eixo 4) 1.1 Normas e acordos internacionais: Declaração Universal dos Direitos Humanos (1948).', },
+    { hora_no_ciclo: 29, materia_sigla: 'P.PUB', foco: '(Eixo 2) 2.1 Poder, racionalidade, discricionariedade na implementação de políticas.', },
+    { hora_no_ciclo: 30, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 10. Segurança Alimentar. Lei Orgânica de Segurança Alimentar e Nutricional (LOSAN).', },
+    { hora_no_ciclo: 31, materia_sigla: 'LP', foco: '1.5 Morfossintaxe: Regência verbal e nominal; Crase.' },
+    { hora_no_ciclo: 32, materia_sigla: 'G.GOV', foco: '(Gerais) 5.2 Governança pública e sistemas de governança (Decreto nº 9.203).', },
+    { hora_no_ciclo: 33, materia_sigla: 'ADM.PÚB', foco: '(Gerais) 7.3 Agentes públicos: Regime Jurídico Único (Lei nº 8.112/1990).', },
+    { hora_no_ciclo: 34, materia_sigla: 'RLM', foco: '2.3 Matemática Básica: Problemas com porcentagem e regra de três.', },
+    { hora_no_ciclo: 35, materia_sigla: 'P.PUB', foco: '(Eixo 2) 3. Teorias e modelos de análise contemporâneos de políticas públicas.', },
+    { hora_no_ciclo: 36, materia_sigla: 'SAÚDE/SOCIAL', foco: '(Eixo 3) 3.9 Redes de Atenção à Saúde (RAS).', },
+    { hora_no_ciclo: 37, materia_sigla: 'PESQUISA', foco: '(Eixo 5) 4. Avaliação de políticas públicas: Tipos e componentes.', },
+    { hora_no_ciclo: 38, materia_sigla: 'REVISÃO GERAL', foco: 'Revisão da Semana (Mapas Mentais, Flashcards)', },
   ];
 
-  await supabase.from('sessoes_estudo').insert(fase1Data);
+  const sessoesParaInserir = fase1Template.map(sessao => ({
+    hora_no_ciclo: sessao.hora_no_ciclo,
+    foco: sessao.foco,
+    user_id: user.id,
+    disciplina_id: disciplinaMap.get(sessao.materia_sigla) || null,
+  }));
+
+  await supabase.from('sessoes_estudo').insert(sessoesParaInserir);
   revalidatePath('/ciclo');
   return { message: 'Ciclo Fase 1 criado com sucesso!' };
 }
@@ -359,7 +353,7 @@ export async function deleteDocumento(id: number) {
 export async function addTarefa(formData: FormData) {
   const title = formData.get('title') as string;
   const dueDate = formData.get('due_date') as string;
-  if (!title) return; //dueDate pode ser opcional
+  if (!title) return;
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
@@ -409,4 +403,67 @@ export async function deleteAnotacao(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('anotacoes').delete().eq('id', id);
   revalidatePath('/');
+}
+
+// --- AÇÕES DE DISCIPLINA E TÓPICOS (OBSOLETOS) ---
+// Estas funções foram substituídas pela Base de Conhecimento (páginas)
+// Recomenda-se remover no futuro para limpar o código.
+export async function addMasterDisciplina(formData: FormData) {
+  const nome = formData.get('nome') as string;
+  const emoji = formData.get('emoji') as string;
+  if (!nome || !emoji) return;
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('disciplinas').insert({ nome, emoji });
+  revalidatePath('/disciplinas');
+}
+
+export async function updateDisciplina(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const id = Number(formData.get('id'));
+  const nome = formData.get('nome') as string;
+  const emoji = formData.get('emoji') as string;
+  if (!id || !nome || !emoji) return;
+  await supabase.from('disciplinas').update({ nome, emoji }).eq('id', id);
+  revalidatePath('/disciplinas');
+}
+
+export async function deleteDisciplina(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  if (isNaN(id)) return;
+  await supabase.from('disciplinas').delete().eq('id', id);
+  revalidatePath('/disciplinas');
+}
+
+export async function addTopico(formData: FormData) {
+  const nome = formData.get('nome') as string;
+  const disciplinaId = Number(formData.get('disciplina_id'));
+  if (!nome || !disciplinaId) return;
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('topicos').insert({ nome, disciplina_id: disciplinaId });
+  revalidatePath('/disciplinas');
+}
+
+export async function saveTopicoContent(topicoId: number, content: string) {
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('topicos').update({ conteudo_rico: content }).eq('id', topicoId);
+}
+
+export async function deleteTopico(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  if(isNaN(id)) return;
+  await supabase.from('topicos').delete().eq('id', id);
+  revalidatePath('/disciplinas');
+}
+
+export async function updateTopicoAnotacoes(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const topicoId = formData.get('topicoId') as string;
+  const anotacoes = formData.get('anotacoes') as string;
+
+  await supabase
+    .from('topicos')
+    .update({ anotacoes: anotacoes })
+    .eq('id', topicoId);
+    
+  revalidatePath('/disciplinas');
 }
