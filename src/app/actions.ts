@@ -308,6 +308,43 @@ export async function deleteSessaoCiclo(id: number) {
   revalidatePath('/ciclo');
 }
 
+// NOVA AÇÃO PARA O CHECKBOX "FINALIZADA"
+export async function toggleFinalizarSessao(sessaoId: number, novoStatus: boolean) {
+  const supabase = createServerActionClient({ cookies });
+  if (isNaN(sessaoId)) return { error: 'ID da sessão inválido.' };
+
+  try {
+    // Se o novo status for TRUE (marcando a caixa), limpamos os agendamentos.
+    if (novoStatus) {
+      await supabase.from('ciclo_sessoes').update({ 
+        materia_finalizada: true, // Marca como finalizada
+        concluida: false,         // Desmarca o "OK" para garantir consistência
+        data_estudo: null, 
+        data_revisao_1: null, 
+        data_revisao_2: null, 
+        data_revisao_3: null,
+      }).eq('id', sessaoId);
+      
+      // Deleta as revisões que foram geradas para essa sessão.
+      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
+    } else {
+      // Se estiver desmarcando, apenas remove o status de finalizada, sem reagendar nada.
+      await supabase.from('ciclo_sessoes').update({ materia_finalizada: false }).eq('id', sessaoId);
+    }
+    
+    // Revalida todas as páginas afetadas
+    revalidatePath('/ciclo');
+    revalidatePath('/revisoes');
+    revalidatePath('/calendario');
+    return { success: true };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error("Erro ao finalizar sessão:", errorMessage);
+    return { error: errorMessage };
+  }
+}
+
 // --- AÇÕES DO CALENDÁRIO ---
 export async function addLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
