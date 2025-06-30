@@ -1,9 +1,10 @@
-// src/components/CicloTableRow.tsx
+// src/components/CicloTableRow.tsx (VERSÃO COM DATAS EDITÁVEIS)
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-import { updateSessaoEstudo, deleteSessaoCiclo, toggleConclusaoSessao } from '@/app/actions';
+// CORREÇÃO: Importamos a nova ação de datas
+import { updateSessaoEstudo, deleteSessaoCiclo, toggleConclusaoSessao, updateDatasSessaoEstudo } from '@/app/actions';
 import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -20,25 +21,16 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
     setRowData(sessao);
   }, [sessao]);
 
-  // Função para lidar com mudanças nos campos de input/textarea
   const handleInputChange = (field: keyof SessaoEstudo, value: any) => {
     setRowData(prev => ({ ...prev, [field]: value }));
   };
   
-  // Função específica para lidar com a seleção de disciplina
   const handleDisciplinaChange = (disciplinaId: string) => {
     const idAsNumber = Number(disciplinaId);
     const disciplinaSelecionada = disciplinas.find(d => d.id === idAsNumber);
-    
-    setRowData(prev => ({
-      ...prev,
-      disciplina_id: idAsNumber,
-      // Atualizamos também o materia_nome para manter a consistência!
-      materia_nome: disciplinaSelecionada?.nome || null 
-    }));
+    setRowData(prev => ({ ...prev, disciplina_id: idAsNumber, materia_nome: disciplinaSelecionada?.nome || null }));
   };
 
-  // Efeito de AUTO-SAVE com "debounce"
   useEffect(() => {
     if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
     const handler = setTimeout(() => {
@@ -50,11 +42,26 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
   const handleToggleConclusao = (checked: boolean) => {
     startTransition(async () => {
       const result = await toggleConclusaoSessao(rowData.id, checked);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success(checked ? 'Estudo concluído! Revisões agendadas.' : 'Conclusão revertida.');
-      }
+      if (result?.error) toast.error(result.error);
+      else toast.success(checked ? 'Estudo concluído! Revisões agendadas.' : 'Conclusão revertida.');
+    });
+  };
+
+  // NOVA FUNÇÃO: Lida com a mudança de qualquer campo de data
+  const handleDateChange = (
+    campo: 'data_estudo' | 'data_revisao_1' | 'data_revisao_2' | 'data_revisao_3', 
+    valor: string
+  ) => {
+    if (!valor) return; // Não faz nada se a data for limpa
+
+    // Atualiza o estado local imediatamente para o usuário ver a mudança
+    setRowData(prev => ({ ...prev, [campo]: valor }));
+
+    // Chama a nova Server Action para atualizar o banco de dados
+    startTransition(async () => {
+      const result = await updateDatasSessaoEstudo(rowData.id, campo, valor);
+      if (result?.error) toast.error(`Erro ao salvar data: ${result.error}`);
+      else toast.success("Datas atualizadas com sucesso!");
     });
   };
 
@@ -62,28 +69,18 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
 
   const displayDate = (dateString: string | null) => {
     if (!dateString) return '';
-    const [year, month, day] = dateString.split('T')[0].split('-');
-    return `${year}-${month}-${day}`;
+    return dateString.split('T')[0];
   };
 
   return (
     <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <td className="p-2 text-center align-middle">
-        <Checkbox
-          checked={rowData.concluida}
-          disabled={isPending}
-          onCheckedChange={(checked) => handleToggleConclusao(!!checked)}
-        />
+        <Checkbox checked={rowData.concluida} disabled={isPending} onCheckedChange={handleToggleConclusao} />
       </td>
       <td className="p-2 text-center align-middle">{rowData.ordem}</td>
       <td className="p-2 align-middle">
-        <Select
-          value={String(rowData.disciplina_id || '')}
-          // Agora chama a nova função específica
-          onValueChange={handleDisciplinaChange}
-        >
+        <Select value={String(rowData.disciplina_id || '')} onValueChange={handleDisciplinaChange}>
           <SelectTrigger className="bg-gray-700 w-[180px]">
-            {/* Agora ele mostra o materia_nome, que é mais confiável */}
             <SelectValue placeholder="Vincular Matéria">{rowData.materia_nome || "Vincular Matéria"}</SelectValue>
           </SelectTrigger>
           <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
@@ -99,15 +96,16 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
         </div>
         {rowData.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
       </td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_estudo)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_1)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_2)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_3)} readOnly className="bg-gray-800 border-gray-600 text-gray-400" /></td>
+      
+      {/* CORREÇÃO: Inputs de data agora são editáveis e chamam a nova função */}
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_estudo)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_1)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_2)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-gray-700" /></td>
+      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_3)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-gray-700" /></td>
+      
       <td className="p-2 text-center align-middle">
-        <Checkbox
-          checked={rowData.materia_finalizada}
-          onCheckedChange={(checked) => handleInputChange('materia_finalizada', !!checked)}
-        />
+        {/* CORREÇÃO: Este checkbox agora só chama o auto-save, sem afetar as revisões */}
+        <Checkbox checked={rowData.materia_finalizada} onCheckedChange={(checked) => handleInputChange('materia_finalizada', !!checked)} />
       </td>
       <td className="p-2 text-center align-middle">
         <form action={(formData) => startTransition(() => deleteSessaoCiclo(formData))}>
