@@ -275,26 +275,6 @@ export async function deleteSessaoCiclo(formData: FormData) {
   revalidatePath('/ciclo');
 }
 
-// Ação para popular o ciclo com seus dados da Fase 1
-export async function seedFase1Ciclo() {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-
-  const { count } = await supabase.from('ciclo_sessoes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-  if (count && count > 0) return { message: 'O ciclo já possui dados.' };
-
-  const fase1Template = [
-    { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
-    // ... TODAS AS 38 LINHAS
-    { ordem: 38, materia_nome: 'REVISÃO GERAL', foco_sugerido: 'Revisão da Semana (Mapas Mentais, Flashcard' },
-  ];
-  const sessoesParaInserir = fase1Template.map(sessao => ({ ...sessao, user_id: user.id }));
-
-  await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
-  revalidatePath('/ciclo');
-}
-
 // --- AÇÕES DO CALENDÁRIO ---
 export async function addLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
