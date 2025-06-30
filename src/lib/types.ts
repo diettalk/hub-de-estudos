@@ -3,7 +3,8 @@
 export type Disciplina = {
   id: number;
   nome: string;
-  emoji: string;
+  emoji?: string;
+  sigla?: string;
 };
 
 export type SessaoEstudo = {
@@ -23,5 +24,4 @@ export type SessaoEstudo = {
   concluido: boolean;
   materia_finalizada: boolean;
   disciplina_id: number | null;
-  disciplina?: Disciplina | null; // Opcional, para o JOIN
 };

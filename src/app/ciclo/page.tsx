@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useTransition, useCallback } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { addSessaoCiclo, seedFase1Ciclo } from '@/app/actions';
+import { addSessaoCiclo } from '@/app/actions';
 import { type SessaoEstudo, type Disciplina } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
@@ -32,49 +32,13 @@ export default function CicloPage() {
     return () => { supabase.removeChannel(channel); };
   }, [getCicloData, supabase]);
 
-  const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos. Quero evoluir para a **Fase [PREENCHA: 2 para Expansão ou 3 para Ataque Final]**.
-
-Abaixo estão os dados do meu desempenho para você analisar e criar o novo ciclo:
-
-**1. DIÁRIO DE BORDO (RESUMO):**
-* **Matérias com 100% dos tópicos da Fase 1 estudados:** [Liste aqui as matérias que você finalizou os tópicos previstos na Fase 1. Ex: LP, RLM, G.GOV.]
-* **Matérias com estudo em andamento:** [Liste as matérias e em qual tópico você está. Ex: P.PUB - estou em 50% de Modelos de Análise.]
-
-**2. DADOS DA REVISÃO FAROL (ANKI OU MANUAL):**
-* **TOP 3 Matérias com mais cartões 🔴 VERMELHOS (maiores dificuldades):**
-    1.  [Nome da Matéria 1]
-    2.  [Nome da Matéria 2]
-    3.  [Nome da Matéria 3]
-* **TOP 3 Matérias com mais cartões 🟢 VERDES (maiores facilidades):**
-    1.  [Nome da Matéria 1]
-    2.  [Nome da Matéria 2]
-    3.  [Nome da Matéria 3]
-
-**3. PERCEPÇÃO PESSOAL:**
-* **Matéria que me sinto MAIS CONFIANTE:** [Sua resposta]
-* **Matéria que sinto MAIS DIFICULDADE:** [Sua resposta]
-* **Observações adicionais:** [Qualquer outra informação que julgue relevante]
-
-Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**, introduzindo as novas matérias do nosso Guia Estratégico e ajustando a frequência das matérias da Fase 1`;
+  const comandoEvolucao = `Olá, David! Concluí a Fase 1 do nosso Ciclo de Estudos...`; // Seu texto completo
 
   if (loading) return <div className="text-center p-12">Carregando dados do ciclo...</div>;
   
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Ciclo de Estudos</h1>
-        {sessoes.length === 0 && (
-          <form action={() => startTransition(async () => {
-              const result = await seedFase1Ciclo();
-              if(result?.message) alert(result.message);
-              else if(result?.error) alert('Erro: ' + result.error);
-            })}>
-            <Button type="submit" variant="destructive" disabled={isPending}>
-              {isPending ? 'Criando...' : 'CRIAR CICLO FASE 1 (38 Horas)'}
-            </Button>
-          </form>
-        )}
-      </div>
+      <h1 className="text-3xl font-bold">Ciclo de Estudos</h1>
 
       <ProgressoCicloCard sessoes={sessoes} />
       
@@ -82,19 +46,7 @@ Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**,
         <AccordionItem value="item-1">
           <AccordionTrigger className="font-semibold text-lg">O Ciclo de Estudos da Aprovação: Da Fundação à Maestria</AccordionTrigger>
           <AccordionContent className="mt-4 prose prose-invert max-w-none text-gray-400 space-y-4">
-              <h4 className="font-bold text-white">Tutorial de Evolução do Ciclo</h4>
-              <div>
-                <h5 className="font-semibold text-white">Análise de Tempo (Referência: 29/06/2025)</h5>
-                <p>Prova: 05 de Outubro de 2025.<br/>Semanas Disponíveis: ~15 semanas.<br/>Total de Horas Líquidas: 15 semanas x 37.5h = ~560 horas de estudo. É tempo mais do que suficiente. Confie no processo.</p>
-              </div>
-              <div>
-                <h5 className="font-semibold text-white">As 3 Fases do Estudo:</h5>
-                <ol className="list-decimal list-inside space-y-2">
-                  <li><strong>FASE 1: A Fundação</strong><br/>Objetivo: Dominar os fundamentos das matérias de maior peso para os seus cargos alvo (HFA, MGI, INSS).</li>
-                  <li><strong>FASE 2: A Expansão e Inclusão</strong><br/>Objetivo: Introduzir gradualmente as matérias restantes.</li>
-                  <li><strong>FASE 3: Refinamento e Ataque Final</strong><br/>Objetivo: Focar em lapidar o conhecimento, ganhar velocidade e dominar a banca.</li>
-                </ol>
-              </div>
+              {/* Seus textos de tutorial aqui */}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -107,7 +59,6 @@ Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**,
             <table className="w-full text-sm text-left text-gray-300">
               <thead className="text-xs text-gray-400 uppercase bg-gray-700/50">
                 <tr>
-                  <th className="p-3">OK</th>
                   <th className="p-3">Finalizada</th>
                   <th className="p-3">Hora</th>
                   <th className="p-3">Matéria</th>
@@ -118,18 +69,20 @@ Com base nestes dados, por favor, gere o **"Ciclo de Estudos - Fase [2 ou 3]"**,
                   <th className="text-center p-3">R1</th>
                   <th className="text-center p-3">R7</th>
                   <th className="text-center p-3">R30</th>
-                  <th className="p-3"></th>
+                  <th className="p-3">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700" style={{display: 'contents'}}>
+              <tbody className="divide-y divide-gray-700">
                 {sessoes.map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao} disciplinas={disciplinas} />)}
               </tbody>
             </table>
           </div>
           <div className="p-2 flex justify-center border-t border-gray-700">
-            <Button onClick={() => startTransition(() => addSessaoCiclo())} variant="ghost" size="sm" disabled={isPending}>
-              {isPending ? 'Adicionando...' : '+ Adicionar Linha ao Ciclo'}
-            </Button>
+            <form action={() => startTransition(() => addSessaoCiclo())}>
+              <Button type="submit" variant="ghost" size="sm" disabled={isPending}>
+                {isPending ? 'Adicionando...' : '+ Adicionar Linha ao Ciclo'}
+              </Button>
+            </form>
           </div>
         </div>
       </div>

@@ -133,52 +133,55 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
   revalidatePath('/guia-estudos');
 }
 
-// --- AÇÕES DO CICLO DE ESTUDOS ---
+// SUBSTITUA TODAS AS SUAS FUNÇÕES DO CICLO DE ESTUDOS POR ESTAS:
+
+// Esta ação AGORA SÓ SALVA os dados do formulário, sem automação.
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
-  if (isNaN(id)) return { error: 'ID da sessão inválido.' };
+  if (isNaN(id)) return;
 
-  const updateData: { [key: string]: any } = {};
-  
-  const concluido = formData.get('concluido') === 'on';
-  const dataEstudoAtual = formData.get('data_estudo_atual') as string;
-  
-  // Atualiza todos os campos da linha
-  updateData.foco = formData.get('foco');
-  updateData.diario_de_bordo = formData.get('diario_de_bordo');
-  updateData.questoes_acertos = formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null;
-  updateData.questoes_total = formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null;
-  updateData.disciplina_id = formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null;
-  updateData.data_estudo = formData.get('data_estudo') || null;
-  updateData.concluido = concluido;
-  
-  // A LÓGICA DE AUTOMAÇÃO
-  if (concluido && !dataEstudoAtual) {
-    // Cenário: "OK" marcado pela 1ª vez. Define data de estudo para HOJE e calcula revisões.
-    const studyDate = new Date();
-    updateData.data_estudo = studyDate.toISOString().split('T')[0];
-    
-    const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
-    updateData.data_revisao_1 = rev1.toISOString().split('T')[0];
-    updateData.r1_concluida = false;
-
-    const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
-    updateData.data_revisao_2 = rev7.toISOString().split('T')[0];
-    updateData.r2_concluida = false;
-
-    const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
-    updateData.data_revisao_3 = rev30.toISOString().split('T')[0];
-    updateData.r3_concluida = false;
-  } else {
-    // Se não for o primeiro "OK", apenas salva as datas como estão no formulário
-    updateData.data_revisao_1 = formData.get('data_revisao_1') || null;
-    updateData.data_revisao_2 = formData.get('data_revisao_2') || null;
-    updateData.data_revisao_3 = formData.get('data_revisao_3') || null;
-  }
+  const updateData = {
+    foco: formData.get('foco'),
+    diario_de_bordo: formData.get('diario_de_bordo'),
+    questoes_acertos: formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null,
+    questoes_total: formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null,
+    disciplina_id: formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null,
+    data_revisao_1: formData.get('data_revisao_1') || null,
+    data_revisao_2: formData.get('data_revisao_2') || null,
+    data_revisao_3: formData.get('data_revisao_3') || null,
+    materia_finalizada: formData.get('materia_finalizada') === 'on',
+  };
   
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
   
+  revalidatePath('/ciclo');
+}
+
+// NOVA AÇÃO dedicada a CONCLUIR a sessão e AUTOMATIZAR as revisões.
+export async function concluirSessaoEstudo(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const id = Number(formData.get('id'));
+  if (isNaN(id)) return;
+  
+  const studyDate = new Date();
+  const rev1 = new Date(studyDate); rev1.setDate(studyDate.getDate() + 1);
+  const rev7 = new Date(studyDate); rev7.setDate(studyDate.getDate() + 7);
+  const rev30 = new Date(studyDate); rev30.setDate(studyDate.getDate() + 30);
+  
+  const updateData = {
+    concluido: true,
+    data_estudo: studyDate.toISOString().split('T')[0],
+    data_revisao_1: rev1.toISOString().split('T')[0],
+    r1_concluida: false,
+    data_revisao_2: rev7.toISOString().split('T')[0],
+    r2_concluida: false,
+    data_revisao_3: rev30.toISOString().split('T')[0],
+    r3_concluida: false,
+  };
+
+  await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
+
   revalidatePath('/ciclo');
   revalidatePath('/revisoes');
   revalidatePath('/calendario');
@@ -202,7 +205,7 @@ export async function deleteSessaoCiclo(formData: FormData) {
   revalidatePath('/ciclo');
 }
 
-// Popula o ciclo com seus dados da Fase 1
+// Ação para popular o ciclo com seus dados da Fase 1
 export async function seedFase1Ciclo() {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
