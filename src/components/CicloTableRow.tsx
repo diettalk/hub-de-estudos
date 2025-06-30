@@ -13,28 +13,37 @@ import { Trash2 } from 'lucide-react';
 
 export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; disciplinas: Disciplina[] }) {
   const [isPending, startTransition] = useTransition();
+  // Estado local para controlar os valores dos inputs de forma reativa
   const [rowData, setRowData] = useState(sessao);
 
-  // Sincroniza o estado interno se a prop do servidor mudar
+  // Sincroniza o estado interno se a prop do servidor mudar (ex: após uma ação)
   useEffect(() => {
     setRowData(sessao);
   }, [sessao]);
 
+  // Função central para atualizar o estado local a cada mudança
   const handleFieldChange = (field: keyof SessaoEstudo, value: any) => {
     setRowData(prev => ({ ...prev, [field]: value }));
   };
 
   // Efeito de AUTO-SAVE com "debounce"
-  useEffect(() => {
-    // Não salva se os dados forem idênticos aos que vieram do servidor
+  const debouncedUpdate = useCallback(() => {
+    // Compara o estado atual com a prop inicial para ver se houve mudança real
     if (JSON.stringify(rowData) === JSON.stringify(sessao)) return;
+    
+    // Omitimos campos que não devem ser enviados pelo auto-save
+    const { concluida, data_estudo, ...dataToSave } = rowData;
+    
+    startTransition(() => updateSessaoEstudo(dataToSave));
+  }, [rowData, sessao]);
 
+  useEffect(() => {
     const handler = setTimeout(() => {
-      startTransition(() => updateSessaoEstudo(rowData));
+      debouncedUpdate();
     }, 1500); // Salva 1.5 segundos após a última alteração
 
     return () => clearTimeout(handler);
-  }, [rowData, sessao]);
+  }, [rowData, debouncedUpdate]);
   
   const percAcerto = rowData.questoes_total && rowData.questoes_acertos ? Math.round((rowData.questoes_acertos / rowData.questoes_total) * 100) : 0;
 
@@ -42,8 +51,9 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
     <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
       <td className="p-2 text-center align-middle">
         <Checkbox // O CHECKBOX OK
+          id={`ok-${rowData.id}`}
           checked={rowData.concluida}
-          disabled={rowData.concluida || isPending}
+          disabled={rowData.concluida || isPending} // Desabilitado apenas se já concluído
           onCheckedChange={() => {
             if (!rowData.concluida) {
               startTransition(() => concluirSessaoEstudo(rowData.id));
@@ -82,10 +92,9 @@ export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; d
         />
       </td>
       <td className="p-2 text-center align-middle">
-        <form action={(formData) => startTransition(() => deleteSessaoCiclo(formData))}>
-          <input type="hidden" name="id" value={rowData.id} />
-          <Button type="submit" variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}><Trash2 className="h-4 w-4 text-red-500" /></Button>
-        </form>
+        <Button onClick={() => startTransition(() => deleteSessaoCiclo(rowData.id))} variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}>
+          <Trash2 className="h-4 w-4 text-red-500" />
+        </Button>
       </td>
     </tr>
   );
