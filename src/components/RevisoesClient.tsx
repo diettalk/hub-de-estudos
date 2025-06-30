@@ -1,33 +1,28 @@
-// src/components/RevisoesClient.tsx
+// src/components/RevisoesClient.tsx (VERSÃO DE DEBUG)
 
 'use client';
 
 import { useTransition } from 'react';
 import { toast } from 'sonner';
-// Ação para marcar a revisão como concluída
 import { updateRevisaoStatus } from '@/app/actions';
-// Componentes da UI
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-// ***** CORREÇÃO PRINCIPAL: Importamos o tipo correto do arquivo central *****
 import { type EventoRevisao } from '@/lib/types';
 
-// A definição de tipo local foi REMOVIDA daqui.
-
+// Adicionamos a nova propriedade opcional 'todasAsRevisoes'
 type RevisoesClientProps = {
   atrasadas: EventoRevisao[];
   hoje: EventoRevisao[];
   proximos7Dias: EventoRevisao[];
+  todasAsRevisoes?: EventoRevisao[]; // O '?' torna a propriedade opcional
 };
 
 const RevisaoCard = ({ revisao }: { revisao: EventoRevisao }) => {
   const [isPending, startTransition] = useTransition();
-  // Formata a data para exibição, tratando o fuso horário de forma segura
   const dataFormatada = new Date(revisao.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
   const handleToggle = (isChecked: boolean) => {
     startTransition(async () => {
-      // ***** CORREÇÃO PRINCIPAL: A chamada agora passa os argumentos corretos *****
       const result = await updateRevisaoStatus(revisao.id, isChecked);
       if (result?.error) {
         toast.error(result.error);
@@ -55,7 +50,7 @@ const RevisaoCard = ({ revisao }: { revisao: EventoRevisao }) => {
   );
 };
 
-export function RevisoesClient({ atrasadas, hoje, proximos7Dias }: RevisoesClientProps) {
+export function RevisoesClient({ atrasadas, hoje, proximos7Dias, todasAsRevisoes }: RevisoesClientProps) {
   const renderColuna = (titulo: string, revisoes: EventoRevisao[], corTitulo: string = 'text-white') => (
     <div className="bg-gray-900/50 p-4 rounded-lg flex-1 min-w-[300px]">
       <h2 className={`text-xl font-bold mb-4 pb-2 border-b border-gray-700 ${corTitulo}`}>
@@ -76,6 +71,10 @@ export function RevisoesClient({ atrasadas, hoje, proximos7Dias }: RevisoesClien
       {renderColuna('Atrasadas', atrasadas, 'text-red-400')}
       {renderColuna('Para Hoje', hoje, 'text-blue-400')}
       {renderColuna('Próximos 7 Dias', proximos7Dias, 'text-yellow-400')}
+      
+      {/* A COLUNA DO "SUPER-ESPIÃO" */}
+      {/* Ela só aparece se a lista 'todasAsRevisoes' for passada como propriedade */}
+      {todasAsRevisoes && renderColuna('DEBUG: Todas as Revisões', todasAsRevisoes, 'text-purple-400')}
     </div>
   );
 }
