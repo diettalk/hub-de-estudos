@@ -133,32 +133,33 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
   revalidatePath('/guia-estudos');
 }
 
-// SUBSTITUA TODAS AS SUAS FUNÇÕES DO CICLO DE ESTUDOS POR ESTAS:
+// SUBSTITUA AS FUNÇÕES DO CICLO DE ESTUDOS POR ESTAS 3:
 
-// Esta ação AGORA SÓ SALVA os dados do formulário, sem automação.
 export async function updateSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;
 
   const updateData = {
-    foco: formData.get('foco'),
-    diario_de_bordo: formData.get('diario_de_bordo'),
+    foco: formData.get('foco') as string,
+    diario_de_bordo: formData.get('diario_de_bordo') as string,
     questoes_acertos: formData.get('questoes_acertos') ? Number(formData.get('questoes_acertos')) : null,
     questoes_total: formData.get('questoes_total') ? Number(formData.get('questoes_total')) : null,
     disciplina_id: formData.get('disciplina_id') ? Number(formData.get('disciplina_id')) : null,
-    data_revisao_1: formData.get('data_revisao_1') || null,
-    data_revisao_2: formData.get('data_revisao_2') || null,
-    data_revisao_3: formData.get('data_revisao_3') || null,
+    data_estudo: formData.get('data_estudo') as string || null,
+    data_revisao_1: formData.get('data_revisao_1') as string || null,
+    data_revisao_2: formData.get('data_revisao_2') as string || null,
+    data_revisao_3: formData.get('data_revisao_3') as string || null,
     materia_finalizada: formData.get('materia_finalizada') === 'on',
   };
   
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
   
   revalidatePath('/ciclo');
+  revalidatePath('/revisoes');
+  revalidatePath('/calendario');
 }
 
-// NOVA AÇÃO dedicada a CONCLUIR a sessão e AUTOMATIZAR as revisões.
 export async function concluirSessaoEstudo(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -172,12 +173,9 @@ export async function concluirSessaoEstudo(formData: FormData) {
   const updateData = {
     concluido: true,
     data_estudo: studyDate.toISOString().split('T')[0],
-    data_revisao_1: rev1.toISOString().split('T')[0],
-    r1_concluida: false,
-    data_revisao_2: rev7.toISOString().split('T')[0],
-    r2_concluida: false,
-    data_revisao_3: rev30.toISOString().split('T')[0],
-    r3_concluida: false,
+    data_revisao_1: rev1.toISOString().split('T')[0], r1_concluida: false,
+    data_revisao_2: rev7.toISOString().split('T')[0], r2_concluida: false,
+    data_revisao_3: rev30.toISOString().split('T')[0], r3_concluida: false,
   };
 
   await supabase.from('sessoes_estudo').update(updateData).eq('id', id);
@@ -195,6 +193,14 @@ export async function addSessaoCiclo() {
   const proximaHora = (ultimaSessao?.hora_no_ciclo || 0) + 1;
   await supabase.from('sessoes_estudo').insert({ hora_no_ciclo: proximaHora, foco: 'Nova sessão', user_id: user.id });
   revalidatePath('/ciclo');
+}
+
+export async function deleteSessaoCiclo(formData: FormData) {
+    const id = Number(formData.get('id'));
+    if(isNaN(id)) return;
+    const supabase = createServerActionClient({ cookies });
+    await supabase.from('sessoes_estudo').delete().eq('id', id);
+    revalidatePath('/ciclo');
 }
 
 export async function deleteSessaoCiclo(formData: FormData) {
