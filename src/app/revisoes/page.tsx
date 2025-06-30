@@ -1,4 +1,4 @@
-// src/app/revisoes/page.tsx (VERSÃO DE DEBUG FINAL)
+// src/app/revisoes/page.tsx (VERSÃO DE TESTE RADICAL)
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -11,25 +11,29 @@ export const dynamic = 'force-dynamic';
 
 export default async function RevisoesPage() {
   const supabase = createServerComponentClient({ cookies });
-  // CORREÇÃO: Usando getUser()
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  console.log("--- [Revisões Page] Buscando revisões no Supabase... ---");
+  console.log("--- [Revisões Page - TESTE RADICAL] Buscando TODAS as revisões... ---");
   
+  // ****** MUDANÇA PRINCIPAL: Comentamos os filtros .eq() ******
+  // Isso vai tentar buscar todas as linhas da tabela, ignorando permissões e status.
   const { data: revisoes, error } = await supabase
     .from('revisoes')
-    .select('*')
-    .eq('user_id', user.id) // Usando user.id diretamente
-    .eq('concluida', false);
+    .select('*');
+    // .eq('user_id', user.id)  // <-- TEMPORARIAMENTE DESATIVADO
+    // .eq('concluida', false); // <-- TEMPORARIAMENTE DESATIVADO
 
-  if (error) console.error('[Revisões Page] Erro ao buscar revisões:', error.message);
-
-  console.log(`[Revisões Page] Supabase retornou ${revisoes?.length || 0} revisões.`);
-  if (revisoes && revisoes.length > 0) {
-    console.log("[Revisões Page] Exemplo de revisão recebida:", JSON.stringify(revisoes[0], null, 2));
+  if (error) {
+    console.error('[Revisões Page] Erro na busca radical:', error.message);
   }
 
+  console.log(`[Revisões Page] A busca radical retornou ${revisoes?.length || 0} revisões.`);
+  if (revisoes && revisoes.length > 0) {
+    console.log("[Revisões Page] Exemplo de revisão (busca radical):", JSON.stringify(revisoes[0], null, 2));
+  }
+
+  // O resto do código continua o mesmo para processar o que quer que a busca retorne.
   const eventos: EventoRevisao[] = (revisoes || []).map(revisao => {
     let color = '#8B5CF6';
     if (revisao.tipo_revisao === '24h') color = '#EF4444';
