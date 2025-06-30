@@ -1,13 +1,32 @@
-// src/app/documentos/page.tsx (VERSÃO REFATORADA)
+// src/app/documentos/page.tsx (VERSÃO FINAL HIERÁRQUICA)
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Editor } from '@/components/Editor'; // Reutilizamos o mesmo editor da pág. de Disciplinas
-import { DocumentosSidebar } from '@/components/DocumentosSidebar'; // Importamos nosso novo sidebar
-import { updateDocumento } from '@/app/actions'; // A ação de salvar que será passada para o Editor
+import { Editor } from '@/components/Editor';
+import { DocumentosSidebar, type DocumentoNode } from '@/components/DocumentosSidebar'; // Importamos nosso novo sidebar
+import { updateDocumento } from '@/app/actions';
 
 export const dynamic = 'force-dynamic';
+
+// Helper para construir a árvore, agora dentro deste arquivo
+const buildTree = (documentos: Omit<DocumentoNode, 'children'>[]): DocumentoNode[] => {
+  const docMap: { [key: number]: DocumentoNode } = {};
+  documentos.forEach(doc => {
+    docMap[doc.id] = { ...doc, children: [] };
+  });
+
+  const tree: DocumentoNode[] = [];
+  documentos.forEach(doc => {
+    if (doc.parent_id && docMap[doc.parent_id]) {
+      docMap[doc.parent_id].children?.push(docMap[doc.id]);
+    } else {
+      tree.push(docMap[doc.id]);
+    }
+  });
+
+  return tree;
+};
 
 export default async function DocumentosPage({
   searchParams,
@@ -18,14 +37,14 @@ export default async function DocumentosPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // 1. Buscamos todos os documentos
   const { data: documentos } = await supabase
     .from('documentos')
-    .select('id, title, content') // Selecionamos apenas o necessário
+    .select('id, title, content, parent_id')
     .eq('user_id', user.id)
     .order('title');
 
-  // Se não houver documentos, mostramos uma mensagem amigável
+  const tree = buildTree(documentos || []);
+
   if (!documentos || documentos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh]">
@@ -33,34 +52,30 @@ export default async function DocumentosPage({
            <h3 className="font-bold text-lg">Nenhum documento encontrado.</h3>
            <p className="text-gray-400 mt-2">Clique no botão abaixo para criar o seu primeiro.</p>
            <div className="mt-4">
-             <DocumentoEditor />
+             {/* O DocumentoEditor para criar o primeiro item */}
+             <DocumentoEditor /> 
            </div>
          </div>
       </div>
     );
   }
 
-  // 2. Determinamos qual documento está selecionado a partir da URL
-  const selectedDocumentId = Number(searchParams.id) || documentos[0].id;
+  const selectedDocumentId = Number(searchParams.id) || tree[0]?.id;
   const selectedDocument = documentos.find(doc => doc.id === selectedDocumentId);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[85vh]">
-      {/* Coluna da Esquerda: O novo Sidebar */}
       <div className="md:col-span-1 bg-gray-800 p-4 rounded-lg overflow-y-auto">
-        <DocumentosSidebar documentos={documentos} />
+        <DocumentosSidebar tree={tree} />
       </div>
 
-      {/* Coluna da Direita: O Editor de Texto */}
       <div className="md:col-span-3 bg-gray-800 p-6 rounded-lg flex flex-col">
         {selectedDocument ? (
-          // Usamos o mesmo componente Editor, passando a key, o conteúdo e a ação de salvar correta
           <Editor
             key={selectedDocument.id}
             pageId={selectedDocument.id}
             content={selectedDocument.content}
-            onSave={updateDocumento} // Passamos a ação 'updateDocumento'
-            // As props de título e emoji não são necessárias aqui
+            onSave={updateDocumento}
             title="" 
             emoji=""
           />

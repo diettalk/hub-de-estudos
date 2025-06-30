@@ -355,38 +355,60 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
 
 // --- AÇÕES PARA DOCUMENTOS ---
 
-// CORREÇÃO: A função agora lê o 'content' do formData
+// CORREÇÃO: A função agora aceita um parentId para criar sub-pastas
 export async function addDocumento(formData: FormData) {
   const title = formData.get('title') as string;
-  const content = formData.get('content') as string; // Lendo o conteúdo do editor
+  const content = formData.get('content') as string;
+  const parentIdRaw = formData.get('parent_id');
+  const parent_id = parentIdRaw ? Number(parentIdRaw) : null;
 
-  if (!title) return;
+  if (!title) return { error: 'O título é obrigatório.' };
 
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: 'Usuário não autenticado.'};
 
-  // Agora inserimos o título E o conteúdo
-  await supabase.from('documentos').insert({ title, user_id: user.id, content: content || '' });
+  const { data, error } = await supabase
+    .from('documentos')
+    .insert({ title, user_id: user.id, content: content || '', parent_id: parent_id })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro ao adicionar documento:", error);
+    return { error: error.message };
+  }
   
   revalidatePath('/documentos');
+  return { data }; // Retornamos o novo documento criado
 }
 
 export async function updateDocumento(formData: FormData) {
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
-  const content = formData.get('content') as string; // updateDocumento já estava correto
+  const content = formData.get('content') as string;
 
-  if (!id) return;
+  if (!id) return { error: "ID do documento é necessário."};
 
   const supabase = createServerActionClient({ cookies });
   await supabase.from('documentos').update({ title, content }).eq('id', id);
   revalidatePath('/documentos');
 }
 
+// CORREÇÃO: A função agora chama a nossa função SQL para deletar em cascata
 export async function deleteDocumento(id: number) {
+  if (isNaN(id)) return { error: "ID inválido." };
+  
   const supabase = createServerActionClient({ cookies });
-  await supabase.from('documentos').delete().eq('id', id);
+  
+  // Chamamos a função 'delete_documento_e_filhos' que criamos no banco
+  const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
+
+  if (error) {
+    console.error("Erro ao deletar documento:", error);
+    return { error: error.message };
+  }
+
   revalidatePath('/documentos');
 }
 
