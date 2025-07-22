@@ -126,8 +126,6 @@ export async function unlinkPastaFromConcurso(concursoId: number, paginaId: numb
 }
 
 // --- AÇÕES DO CICLO DE ESTUDOS ---
-
-// CORREÇÃO: Esta ação de auto-save agora IGNORA os campos de data para não criar conflitos.
 export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
   const supabase = createServerActionClient({ cookies });
   const { id, ...data } = sessaoData;
@@ -151,7 +149,6 @@ export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { i
   revalidatePath('/ciclo');
 }
 
-// NOVA AÇÃO: Função inteligente para atualizar as datas do ciclo e das revisões.
 export async function updateDatasSessaoEstudo(
   sessaoId: number, 
   campoAlterado: 'data_estudo' | 'data_revisao_1' | 'data_revisao_2' | 'data_revisao_3', 
@@ -164,7 +161,6 @@ export async function updateDatasSessaoEstudo(
 
   try {
     if (campoAlterado === 'data_estudo') {
-      // LÓGICA DE CASCATA
       const rev1 = add(dataFormatada, { days: 1 });
       const rev7 = add(dataFormatada, { days: 7 });
       const rev30 = add(dataFormatada, { days: 30 });
@@ -183,7 +179,6 @@ export async function updateDatasSessaoEstudo(
       ]);
 
     } else {
-      // LÓGICA INDIVIDUAL
       const mapaRevisao = {
         data_revisao_1: { tipo: '24h', campoDB: 'data_revisao_1' },
         data_revisao_2: { tipo: '7 dias', campoDB: 'data_revisao_2' },
@@ -216,7 +211,6 @@ export async function updateDatasSessaoEstudo(
   }
 }
 
-// A função de concluir/reverter é mantida pois é a base da automação.
 export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -274,41 +268,7 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
   }
 }
 
-export async function seedFase1Ciclo() {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-
-  const { count } = await supabase.from('ciclo_sessoes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-  if (count && count > 0) return { message: 'O ciclo já possui dados.' };
-
-  const fase1Template = [
-    { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
-    // ... e assim por diante
-  ];
-  const sessoesParaInserir = fase1Template.map(sessao => ({ ...sessao, user_id: user.id }));
-  await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
-  revalidatePath('/ciclo');
-}
-
-export async function addSessaoCiclo() {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  const { data: ultimaSessao } = await supabase.from('ciclo_sessoes').select('ordem').eq('user_id', user.id).order('ordem', { ascending: false }).limit(1).single();
-  const proximaOrdem = (ultimaSessao?.ordem || 0) + 1;
-  await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, user_id: user.id });
-  revalidatePath('/ciclo');
-}
-
-export async function deleteSessaoCiclo(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  if (isNaN(id)) return;
-  await supabase.from('ciclo_sessoes').delete().eq('id', id);
-  revalidatePath('/ciclo');
-}
-
-// NOVA AÇÃO PARA O CHECKBOX "FINALIZADA"
+// ***** NOVA FUNÇÃO PARA O CHECKBOX "FINALIZADA" *****
 export async function toggleFinalizarSessao(sessaoId: number, novoStatus: boolean) {
   const supabase = createServerActionClient({ cookies });
   if (isNaN(sessaoId)) return { error: 'ID da sessão inválido.' };
@@ -328,11 +288,10 @@ export async function toggleFinalizarSessao(sessaoId: number, novoStatus: boolea
       // Deleta as revisões que foram geradas para essa sessão.
       await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
     } else {
-      // Se estiver desmarcando, apenas remove o status de finalizada, sem reagendar nada.
+      // Se estiver desmarcando, apenas remove o status de finalizada.
       await supabase.from('ciclo_sessoes').update({ materia_finalizada: false }).eq('id', sessaoId);
     }
     
-    // Revalida todas as páginas afetadas
     revalidatePath('/ciclo');
     revalidatePath('/revisoes');
     revalidatePath('/calendario');
@@ -345,6 +304,74 @@ export async function toggleFinalizarSessao(sessaoId: number, novoStatus: boolea
   }
 }
 
+export async function seedFase1Ciclo() {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { count } = await supabase.from('ciclo_sessoes').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
+  if (count && count > 0) return { message: 'O ciclo já possui dados.' };
+
+  const fase1Template = [
+    { ordem: 1, materia_nome: 'LP', foco_sugerido: '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).' },
+    { ordem: 2, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.1 Ferramentas de gestão: Balanced Scorecard (BSC).' },
+    { ordem: 3, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 1.2 Matriz SWOT.' },
+    { ordem: 4, materia_nome: 'RLM', foco_sugerido: '2.1 Lógica Proposicional: Estruturas lógicas, conectivos.' },
+    { ordem: 5, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 1.1 Tipos de políticas públicas: distributivas, regulatórias e redistributivas.' },
+    { ordem: 6, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.1 Estrutura e organização do Sistema Único de Saúde.' },
+    { ordem: 7, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Emprego das classes de palavras.' },
+    { ordem: 8, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 2. Gestão de pessoas: Liderança e gerenciamento de conflitos.' },
+    { ordem: 9, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 7.1 Princípios constitucionais da administração pública (art. 37).' },
+    { ordem: 10, materia_nome: 'RLM', foco_sugerido: '2.1 Lógica Proposicional: Tabela-verdade, negação e equivalências.' },
+    { ordem: 11, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 4. Políticas Públicas e suas fases: formação da agenda e formulação.' },
+    { ordem: 12, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 3. Gestão de projetos: conceitos básicos e processos do PMBOK.' },
+    { ordem: 13, materia_nome: 'LP', foco_sugerido: '1.3 Semântica e Vocabulário: Sinonímia, antonímia, polissemia.' },
+    { ordem: 14, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 4. Políticas Públicas e suas fases: implementação, monitoramento e avaliação.' },
+    { ordem: 15, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 1).' },
+    { ordem: 16, materia_nome: 'RLM', foco_sugerido: '2.2 Análise Combinatória.' },
+    { ordem: 17, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 5.1 Ações afirmativas e competências para atuação com diversidade.' },
+    { ordem: 18, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 8. Contratações Públicas (Lei nº 14.133/2021): Abrangência e princípios.' },
+    { ordem: 19, materia_nome: 'LP', foco_sugerido: '1.4 Coesão e Coerência: Mecanismos e conectores.' },
+    { ordem: 20, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 4. Gestão de riscos: princípios, objetos e técnicas.' },
+    { ordem: 21, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 8.4 Noções de orçamento público: PPA, LDO e LOA.' },
+    { ordem: 22, materia_nome: 'RLM', foco_sugerido: '2.2 Probabilidade.' },
+    { ordem: 23, materia_nome: 'P.PUB', foco_sugerido: '(Gerais) 3.2 Ciclos de políticas públicas (reforço).' },
+    { ordem: 24, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.8 Legislação do SUS: Lei nº 8.080/1990 (Parte 2).' },
+    { ordem: 25, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Concordância verbal e nominal.' },
+    { ordem: 26, materia_nome: 'G.GOV', foco_sugerido: '(Eixo 1) 5.4 Lei Geral de Proteção de Dados Pessoais – LGPD.' },
+    { ordem: 27, materia_nome: 'P.PUB', foco_sugerido: '(Gerais) 1.1 Introdução às políticas públicas: conceitos e tipologias (reforço).' },
+    { ordem: 28, materia_nome: 'DH', foco_sugerido: '(Eixo 4) 1.1 Normas e acordos internacionais: Declaração Universal dos Direitos Humanos (1948).' },
+    { ordem: 29, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 2.1 Poder, racionalidade, discricionariedade na implementação de políticas.' },
+    { ordem: 30, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 10. Segurança Alimentar. Lei Orgânica de Segurança Alimentar e Nutricional (LOSAN).' },
+    { ordem: 31, materia_nome: 'LP', foco_sugerido: '1.5 Morfossintaxe: Regência verbal e nominal; Crase.' },
+    { ordem: 32, materia_nome: 'G.GOV', foco_sugerido: '(Gerais) 5.2 Governança pública e sistemas de governança (Decreto nº 9.203).' },
+    { ordem: 33, materia_nome: 'ADM.PÚB', foco_sugerido: '(Gerais) 7.3 Agentes públicos: Regime Jurídico Único (Lei nº 8.112/1990).' },
+    { ordem: 34, materia_nome: 'RLM', foco_sugerido: '2.3 Matemática Básica: Problemas com porcentagem e regra de três.' },
+    { ordem: 35, materia_nome: 'P.PUB', foco_sugerido: '(Eixo 2) 3. Teorias e modelos de análise contemporâneos de políticas públicas.' },
+    { ordem: 36, materia_nome: 'SAÚDE/SOCIAL', foco_sugerido: '(Eixo 3) 3.9 Redes de Atenção à Saúde (RAS).' },
+    { ordem: 37, materia_nome: 'PESQUISA', foco_sugerido: '(Eixo 5) 4. Avaliação de políticas públicas: Tipos e componentes.' },
+    { ordem: 38, materia_nome: 'REVISÃO GERAL', foco_sugerido: 'Revisão da Semana (Mapas Mentais, Flashcard' },
+  ];
+  const sessoesParaInserir = fase1Template.map(sessao => ({ ...sessao, user_id: user.id }));
+  await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
+  revalidatePath('/ciclo');
+}
+export async function addSessaoCiclo() {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: ultimaSessao } = await supabase.from('ciclo_sessoes').select('ordem').eq('user_id', user.id).order('ordem', { ascending: false }).limit(1).single();
+  const proximaOrdem = (ultimaSessao?.ordem || 0) + 1;
+  await supabase.from('ciclo_sessoes').insert({ ordem: proximaOrdem, user_id: user.id });
+  revalidatePath('/ciclo');
+}
+export async function deleteSessaoCiclo(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  if (isNaN(id)) return;
+  await supabase.from('ciclo_sessoes').delete().eq('id', id);
+  revalidatePath('/ciclo');
+}
+
 // --- AÇÕES DO CALENDÁRIO ---
 export async function addLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
@@ -355,7 +382,6 @@ export async function addLembrete(formData: FormData) {
   await supabase.from('lembretes').insert({ titulo, data, cor });
   revalidatePath('/calendario');
 }
-
 export async function updateLembrete(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const id = Number(formData.get('id'));
@@ -365,82 +391,54 @@ export async function updateLembrete(formData: FormData) {
   await supabase.from('lembretes').update({ titulo, cor }).eq('id', id);
   revalidatePath('/calendario');
 }
-
 export async function deleteLembrete(id: number) {
   const supabase = createServerActionClient({ cookies });
   if(isNaN(id)) return;
   await supabase.from('lembretes').delete().eq('id', id);
   revalidatePath('/calendario');
 }
-
 export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
     const supabase = createServerActionClient({ cookies });
     const { error } = await supabase.from('revisoes').update({ concluida: status }).eq('id', revisaoId);
     if (error) return { error: error.message };
-    revalidatePath('/revisoes');
-    revalidatePath('/calendario');
+    revalidatePath('/revisoes'); revalidatePath('/calendario');
     return { success: true };
 }
 
 // --- AÇÕES PARA DOCUMENTOS ---
 export async function addDocumento(parentId: number | null, title: string) {
   if (!title) return { error: 'O título é obrigatório.' };
-
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.'};
-
-  const { data, error } = await supabase
-    .from('documentos')
-    .insert({ title, user_id: user.id, content: null, parent_id: parentId })
-    .select('id')
-    .single();
-
-  if (error) {
-    console.error("Erro ao adicionar documento:", error);
-    return { error: error.message };
-  }
-  
+  const { data, error } = await supabase.from('documentos').insert({ title, user_id: user.id, content: null, parent_id: parentId }).select('id').single();
+  if (error) { console.error("Erro ao adicionar documento:", error); return { error: error.message }; }
   revalidatePath('/documentos');
   return { data };
 }
-
 export async function updateDocumento(formData: FormData) {
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
   const contentJSON = formData.get('content') as string;
-
   if (!id) return { error: "ID do documento é necessário."};
   if (!title) return { error: "O título não pode ser vazio."};
-
   const supabase = createServerActionClient({ cookies });
-  
   try {
     const contentToSave = contentJSON ? JSON.parse(contentJSON) : null;
     const { error } = await supabase.from('documentos').update({ title, content: contentToSave }).eq('id', id);
     if (error) throw error;
-
     revalidatePath('/documentos');
     return { success: true };
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
-    console.error("Erro ao atualizar documento:", errorMessage);
-    return { error: `Falha ao salvar: ${errorMessage}` };
+    console.error("Erro ao atualizar documento:", errorMessage); return { error: `Falha ao salvar: ${errorMessage}` };
   }
 }
-
 export async function deleteDocumento(id: number) {
   if (isNaN(id)) return { error: "ID inválido." };
-  
   const supabase = createServerActionClient({ cookies });
   const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
-
-  if (error) {
-    console.error("Erro ao deletar documento:", error);
-    return { error: error.message };
-  }
-
+  if (error) { console.error("Erro ao deletar documento:", error); return { error: error.message }; }
   revalidatePath('/documentos');
 }
 
@@ -455,13 +453,11 @@ export async function addTarefa(formData: FormData) {
   await supabase.from('tarefas').insert({ title, due_date: dueDate || null, user_id: user.id });
   revalidatePath('/tarefas');
 }
-
 export async function toggleTarefa(id: number, currentState: boolean) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('tarefas').update({ completed: !currentState }).eq('id', id);
   revalidatePath('/tarefas');
 }
-
 export async function deleteTarefa(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('tarefas').delete().eq('id', id);
@@ -472,29 +468,23 @@ export async function deleteTarefa(id: number) {
 export async function addAnotacao(formData: FormData) {
   const content = formData.get('content') as string;
   if (!content || content.trim() === '') return;
-
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
-
   await supabase.from('anotacoes').insert({ content, user_id: user.id });
   revalidatePath('/');
 }
-
 export async function updateAnotacao(formData: FormData) {
   const id = Number(formData.get('id'));
   const content = formData.get('content') as string;
   if (isNaN(id) || !content || content.trim() === '') return;
-
   const supabase = createServerActionClient({ cookies });
   await supabase.from('anotacoes').update({ content }).eq('id', id);
   revalidatePath('/');
 }
-
 export async function deleteAnotacao(formData: FormData) {
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;
-
   const supabase = createServerActionClient({ cookies });
   await supabase.from('anotacoes').delete().eq('id', id);
   revalidatePath('/');

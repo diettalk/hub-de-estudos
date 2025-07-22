@@ -1,11 +1,11 @@
-// src/components/Editor.tsx (VERSÃO FINAL COM TÍTULO EDITÁVEL)
+// src/components/Editor.tsx
 
 'use client';
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Button } from './ui/button';
-import { Input } from './ui/input'; // Importamos o Input
+import { Input } from './ui/input';
 import { Bold, Italic, Strikethrough, List, ListOrdered, Heading2 } from 'lucide-react';
 import { useTransition, useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -13,13 +13,13 @@ import { toast } from 'sonner';
 const Toolbar = ({ editor }: { editor: any }) => {
   if (!editor) return null;
   return (
-    <div className="border border-gray-700 rounded-t-lg p-2 flex gap-1 flex-wrap">
-      <Button onClick={() => editor.chain().focus().toggleBold().run()} variant={editor.isActive('bold') ? 'secondary' : 'ghost'} size="icon"><Bold className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleItalic().run()} variant={editor.isActive('italic') ? 'secondary' : 'ghost'} size="icon"><Italic className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleStrike().run()} variant={editor.isActive('strike') ? 'secondary' : 'ghost'} size="icon"><Strikethrough className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} size="icon"><Heading2 className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleBulletList().run()} variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'} size="icon"><List className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleOrderedList().run()} variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'} size="icon"><ListOrdered className="h-4 w-4" /></Button>
+    <div className="border border-gray-700 rounded-t-lg p-2 flex gap-1 flex-wrap bg-gray-900">
+      <Button onClick={() => editor.chain().focus().toggleBold().run()} variant={editor.isActive('bold') ? 'secondary' : 'ghost'} size="sm"><Bold className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleItalic().run()} variant={editor.isActive('italic') ? 'secondary' : 'ghost'} size="sm"><Italic className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleStrike().run()} variant={editor.isActive('strike') ? 'secondary' : 'ghost'} size="sm"><Strikethrough className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} size="sm"><Heading2 className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleBulletList().run()} variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'} size="sm"><List className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleOrderedList().run()} variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'} size="sm"><ListOrdered className="h-4 w-4" /></Button>
     </div>
   );
 };
@@ -27,38 +27,37 @@ const Toolbar = ({ editor }: { editor: any }) => {
 type EditorProps = {
   pageId: number;
   title: string;
-  content: any;
+  content: any; // O conteúdo pode ser JSON do Tiptap
   onSave: (formData: FormData) => Promise<any>;
 };
 
 export function Editor({ pageId, title, content, onSave }: EditorProps) {
   const [isPending, startTransition] = useTransition();
-  // Criamos estados locais para o título e o conteúdo, para que sejam editáveis.
   const [currentTitle, setCurrentTitle] = useState(title);
-  const [isDirty, setIsDirty] = useState(false); // Para saber se houve alteração
+  const [isDirty, setIsDirty] = useState(false);
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: content,
-    // Monitora qualquer atualização no editor para marcar como "sujo" (alterado)
+    content: content || '',
     onUpdate: () => {
       setIsDirty(true);
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-invert min-h-[50vh] max-w-none p-4 focus:outline-none border border-gray-700 border-t-0 rounded-b-lg',
+        class: 'prose prose-invert min-h-[60vh] max-w-none p-4 focus:outline-none bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg',
       },
     },
   });
 
-  // Efeito para sincronizar o estado interno quando o usuário clica em outro documento
   useEffect(() => {
     setCurrentTitle(title);
-    if (editor) {
-      // Usamos .setContent() para atualizar o editor do Tiptap de forma programática
-      editor.commands.setContent(content, false); // 'false' evita que o cursor pule
+    if (editor && editor.isEditable) {
+        const isSameContent = JSON.stringify(editor.getJSON()) === JSON.stringify(content);
+        if(!isSameContent) {
+            editor.commands.setContent(content || '', false);
+        }
     }
-    setIsDirty(false); // Reseta o estado de alteração
+    setIsDirty(false);
   }, [pageId, title, content, editor]);
 
   const handleSave = () => {
@@ -66,37 +65,36 @@ export function Editor({ pageId, title, content, onSave }: EditorProps) {
 
     const formData = new FormData();
     formData.append('id', String(pageId));
-    formData.append('title', currentTitle); // Enviamos o título editado
-    formData.append('content', JSON.stringify(editor.getJSON())); // E o conteúdo atual do editor
+    formData.append('title', currentTitle);
+    formData.append('content', JSON.stringify(editor.getJSON()));
     
     startTransition(async () => {
       await onSave(formData);
       toast.success("Alterações salvas com sucesso!");
-      setIsDirty(false); // Reseta após salvar
+      setIsDirty(false);
     });
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* CAMPO DE TÍTULO EDITÁVEL */}
-      <Input
-        value={currentTitle}
-        onChange={(e) => {
-          setCurrentTitle(e.target.value);
-          setIsDirty(true);
-        }}
-        placeholder="Título do Documento"
-        className="text-2xl font-bold bg-transparent border-none focus:ring-0 p-0 mb-4"
-      />
-      <div className="flex-grow">
-        <Toolbar editor={editor} />
-        <EditorContent editor={editor} />
-      </div>
-      <div className="mt-4 flex justify-end">
-        {/* O botão só fica ativo se houver alterações não salvas */}
+    <div className="flex flex-col h-full bg-gray-900 text-white p-4 rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <Input
+          value={currentTitle}
+          onChange={(e) => {
+            setCurrentTitle(e.target.value);
+            setIsDirty(true);
+          }}
+          placeholder="Título do Documento"
+          className="text-2xl font-bold bg-transparent border-none focus:ring-0 p-0 h-auto"
+        />
         <Button onClick={handleSave} disabled={isPending || !isDirty}>
           {isPending ? 'Salvando...' : 'Salvar Alterações'}
         </Button>
+      </div>
+
+      <div className="flex-grow">
+        <Toolbar editor={editor} />
+        <EditorContent editor={editor} />
       </div>
     </div>
   );

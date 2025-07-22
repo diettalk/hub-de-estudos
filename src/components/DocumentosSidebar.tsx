@@ -1,10 +1,10 @@
-// src/components/DocumentosSidebar.tsx (FLUXO DE CRIAÇÃO CORRIGIDO)
+// src/components/DocumentosSidebar.tsx
 
 'use client';
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { addDocumento, deleteDocumento } from '@/app/actions';
+import { addDocumento, deleteDocumento } from '@/app/actions'; // Verifique se o caminho está correto
 import { PlusCircle, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,7 +24,11 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
 
   const handleCreate = (parentId: number | null) => {
     const title = prompt('Nome do novo documento/pasta:');
-    if (!title || title.trim() === '') return;
+    // Se o usuário cancelar ou deixar em branco, não faz nada
+    if (!title || title.trim() === '') {
+        toast.info("Criação cancelada.");
+        return;
+    }
     
     const formData = new FormData();
     formData.append('title', title);
@@ -38,16 +42,18 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
         toast.error(result.error);
       } else if (result?.data) {
         toast.success(`'${title}' criado com sucesso.`);
+        // Navega para o novo documento para que ele seja exibido no editor
         router.push(`/documentos?id=${result.data.id}`);
       }
     });
   };
   
   const handleDelete = () => {
-    if (confirm(`Tem certeza que deseja excluir "${doc.title}" e TUDO dentro dele?`)) {
+    if (confirm(`Tem certeza que deseja excluir "${doc.title}" e TUDO dentro dele? Esta ação não pode ser desfeita.`)) {
       startTransition(async () => {
         await deleteDocumento(doc.id);
         toast.info(`'${doc.title}' foi excluído.`);
+        // Se o documento deletado era o que estava aberto, volta para a página principal de documentos
         if (selectedId === doc.id) router.push('/documentos');
       });
     }
@@ -56,7 +62,7 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
   return (
     <div>
       <div 
-        className={`flex items-center justify-between group rounded-md transition-colors ${selectedId === doc.id ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
+        className={`flex items-center justify-between group rounded-md transition-colors ${selectedId === doc.id ? 'bg-gray-700' : 'hover:bg-gray-800'}`}
         style={{ paddingLeft: `${level * 16}px` }}
       >
         <div className="flex items-center gap-2 cursor-pointer flex-grow py-1" onClick={() => router.push(`/documentos?id=${doc.id}`)}>
@@ -82,14 +88,15 @@ const Node = ({ doc, level }: { doc: DocumentoNode; level: number }) => {
 };
 
 export function DocumentosSidebar({ tree }: { tree: DocumentoNode[] }) {
-  // A função handleCreate foi movida para dentro do Node para ter acesso ao parentId
-  // mas a lógica de criar na raiz continua aqui.
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
   const handleCreateRoot = () => {
     const title = prompt('Nome do novo documento/pasta raiz:');
-    if (!title || title.trim() === '') return;
+    if (!title || title.trim() === '') {
+        toast.info("Criação cancelada.");
+        return;
+    }
     
     const formData = new FormData();
     formData.append('title', title);
@@ -106,14 +113,14 @@ export function DocumentosSidebar({ tree }: { tree: DocumentoNode[] }) {
   };
 
   return (
-    <div>
+    <div className="bg-gray-900 text-white p-4 rounded-lg h-full flex flex-col">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">DOCUMENTOS</h2>
+        <h2 className="text-lg font-bold">DOCUMENTOS</h2>
         <button onClick={handleCreateRoot} className="p-1 text-gray-400 hover:text-white" title="Adicionar documento raiz">
           <PlusCircle size={18}/>
         </button>
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1 flex-grow overflow-auto">
         {tree.map(rootDoc => <Node key={rootDoc.id} doc={rootDoc} level={0} />)}
       </div>
     </div>
