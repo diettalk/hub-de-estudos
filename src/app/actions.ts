@@ -657,3 +657,89 @@ export async function generateAnkiCards(sourceText: string, numCards: number) {
     return { error: error instanceof Error ? error.message : "Ocorreu um erro desconhecido." };
   }
 }
+
+// Adicione no final do seu ficheiro src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES PARA DECKS DE ANKI ---
+// ==================================================================
+
+type Flashcard = {
+  question: string;
+  answer: string;
+};
+
+export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  if (!title.trim()) return { error: "O título é obrigatório." };
+  if (cards.length === 0) return { error: "Não há flashcards para guardar." };
+
+  const { data, error } = await supabase
+    .from('anki_decks')
+    .insert({
+      title,
+      cards,
+      user_id: user.id
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error("Erro ao guardar deck:", error);
+    return { error: "Falha ao guardar o deck de flashcards." };
+  }
+
+  revalidatePath('/anki'); // Atualiza a página do gerador
+  return { success: true, newDeckId: data.id };
+}
+
+// Adicione no final do seu ficheiro src/app/actions.ts
+
+// ... (código anterior)
+
+export async function deleteAnkiDeck(deckId: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .delete()
+    .eq('id', deckId)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error("Erro ao apagar deck:", error);
+    return { error: "Falha ao apagar o deck." };
+  }
+
+  revalidatePath('/anki');
+  return { success: true };
+}
+
+// Adicione no final do seu ficheiro src/app/actions.ts
+
+// ... (código anterior)
+
+export async function updateAnkiDeck(deckId: number, cards: Flashcard[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .update({ cards: cards }) // Atualiza apenas a coluna de cartões
+    .eq('id', deckId)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error("Erro ao atualizar deck:", error);
+    return { error: "Falha ao guardar as alterações no deck." };
+  }
+
+  revalidatePath(`/anki/${deckId}`); // Atualiza a página do deck específico
+  return { success: true };
+}
