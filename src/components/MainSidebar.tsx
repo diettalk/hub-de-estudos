@@ -4,7 +4,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { LayoutDashboard, BookOpen, PenSquare, Recycle, ListTodo, Calendar, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
+// ADICIONE O ÍCONE BrainCircuit
+import { LayoutDashboard, BookOpen, PenSquare, Recycle, ListTodo, Calendar, ChevronsLeft, ChevronsRight, FileText, BrainCircuit } from 'lucide-react';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { LogoutButton } from './LogoutButton';
 
@@ -13,6 +14,8 @@ const navItems = [
     { name: 'Guia de Estudos', href: '/guia-estudos', icon: BookOpen },
     { name: 'Disciplinas', href: '/disciplinas', icon: PenSquare },
     { name: 'Ciclo de Estudos', href: '/ciclo', icon: Recycle },
+    // ADICIONE A NOVA LINHA AQUI
+    { name: 'Gerador Anki', href: '/anki', icon: BrainCircuit },
     { name: 'Revisões', href: '/revisoes', icon: ListTodo },
     { name: 'Documentos', href: '/documentos', icon: FileText },
     { name: 'Tarefas', href: '/tarefas', icon: ListTodo },
@@ -20,11 +23,11 @@ const navItems = [
 ];
 
 export function MainSidebar() {
+  // ... (o resto do seu componente MainSidebar continua igual)
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
 
   return (
-    // CORREÇÃO: Usando a variável de cor --sidebar que você definiu no seu CSS
     <aside className={`relative flex flex-col h-screen bg-[oklch(var(--sidebar))] border-r border-border transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}>
       <div className={`flex items-center h-16 px-6 border-b border-border ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         <span className={`font-bold text-lg whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>HUB Hélio</span>

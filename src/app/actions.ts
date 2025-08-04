@@ -581,3 +581,79 @@ export async function deleteAnotacao(formData: FormData) {
   await supabase.from('anotacoes').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/');
 }
+
+// Dentro de src/app/actions.ts
+
+export async function generateAnkiCards(sourceText: string, numCards: number) {
+  const { data: { user } } = await createServerActionClient({ cookies }).auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  // CORREÇÃO: Lendo a chave de API do ficheiro .env.local
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { error: "Chave de API do Gemini não encontrada. Verifique o seu ficheiro .env.local." };
+  }
+
+  const prompt = `
+    Você é um especialista em criar flashcards para o sistema de repetição espaçada Anki.
+    Sua tarefa é analisar o texto fornecido e gerar exatamente ${numCards} pares de pergunta e resposta concisos e de alta qualidade, em português.
+    As perguntas devem ser claras e diretas. As respostas devem ser curtas e objetivas, contendo apenas a informação essencial para responder à pergunta.
+    
+    Formate a sua resposta como um objeto JSON contendo uma única chave "cards", que é um array de objetos. Cada objeto deve ter duas chaves: "question" e "answer".
+
+    Texto para análise:
+    ---
+    ${sourceText}
+    ---
+  `;
+
+  try {
+    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+    const payload = { 
+        contents: chatHistory,
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    "cards": {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "question": { "type": "STRING" },
+                                "answer": { "type": "STRING" }
+                            },
+                            required: ["question", "answer"]
+                        }
+                    }
+                }
+            }
+        }
+    };
+    
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Erro da API do Gemini:", errorBody);
+        throw new Error(`Erro na API: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const text = result.candidates[0].content.parts[0].text;
+    const parsedJson = JSON.parse(text);
+
+    return { data: parsedJson.cards };
+
+  } catch (error) {
+    console.error("Falha ao gerar flashcards:", error);
+    return { error: error instanceof Error ? error.message : "Ocorreu um erro desconhecido." };
+  }
+}
