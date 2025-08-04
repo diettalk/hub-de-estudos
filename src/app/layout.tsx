@@ -1,64 +1,41 @@
 // src/app/layout.tsx
+import './globals.css'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import { ThemeProvider } from 'next-themes'
+import { MainSidebar } from '@/components/MainSidebar'
+import { Toaster } from 'sonner'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
-import { LogoutButton } from "@/components/LogoutButton";
-import { NavItem } from "@/components/NavItem";
-import { Toaster } from "sonner";
-
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "HUB Hélio",
-  description: "Sua Plataforma Centralizada para a Aprovação",
-};
+  title: 'HUB Hélio',
+  description: 'Sua Plataforma Centralizada para a Aprovação',
+}
 
 export default async function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  const supabase = createServerComponentClient({ cookies });
-  // CORREÇÃO: Usando getUser() que é mais seguro e recomendado
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+}: {
+  children: React.ReactNode
+}) {
+  const supabase = createServerComponentClient({ cookies })
+  const { data: { user } } = await supabase.auth.getUser()
 
   return (
-    <html lang="pt-BR">
-      <body className={`${inter.className} bg-gray-900 text-white`}>
-        {/* Usamos a existência do 'user' para controlar a exibição */}
-        {user && (
-          <>
-            <header className="p-4 border-b border-gray-700 flex justify-between items-center">
-              <div>
-                <h1 className="text-xl font-bold">HUB Hélio</h1>
-                <p className="text-sm text-gray-400">Sua Plataforma Centralizada para a Aprovação</p>
-              </div>
-              <LogoutButton />
-            </header>
-            
-            <nav className="p-4 border-b border-gray-700">
-              <ul className="flex space-x-4 overflow-x-auto">
-                <NavItem href="/">Dashboard</NavItem>
-                <NavItem href="/guia-estudos">Guia de Estudos</NavItem>
-                <NavItem href="/disciplinas">Disciplinas</NavItem>
-                <NavItem href="/ciclo">Ciclo de Estudos</NavItem>
-                <NavItem href="/revisoes">Revisões</NavItem>
-                <NavItem href="/documentos">Documentos</NavItem>
-                <NavItem href="/tarefas">Tarefas</NavItem>
-                <NavItem href="/calendario">Calendário</NavItem>
-              </ul>
-            </nav>
-          </>
-        )}
-
-        <main className="p-6">{children}</main>
-        <Toaster richColors position="top-right" />
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          <div className="flex h-screen bg-background text-foreground">
+            {user && <MainSidebar />}
+            <main className="flex-1 flex flex-col overflow-y-auto">
+              {children}
+            </main>
+          </div>
+          <Toaster richColors position="top-right" />
+        </ThemeProvider>
       </body>
     </html>
-  );
+  )
 }

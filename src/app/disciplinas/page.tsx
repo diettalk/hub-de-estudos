@@ -1,84 +1,95 @@
-// src/app/disciplinas/page.tsx (VERSÃO CORRIGIDA)
-
+// src/app/disciplinas/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { SidebarClient } from '@/components/SidebarClient';
-import { Editor } from '@/components/Editor';
-import { updatePagina } from '@/app/actions';
+import TextEditor from '@/components/TextEditor'; // Seu componente de editor
+import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
+import { updatePaginaContent } from '@/app/actions';
 
-export type Pagina = {
+export const dynamic = 'force-dynamic';
+
+type PaginaFromDB = {
   id: number;
   parent_id: number | null;
   title: string;
   emoji: string;
-  content: any;
-  children?: Pagina[];
+  content: any; 
 };
 
-const buildTree = (pages: Pagina[]): Pagina[] => {
-  const pageMap: { [key: number]: Pagina } = {};
-  pages.forEach(page => {
-    pageMap[page.id] = { ...page, children: [] };
-  });
+const buildTree = (paginas: PaginaFromDB[]): Node[] => {
+    const map = new Map<number, Node>();
+    const roots: Node[] = [];
+    
+    paginas.forEach(p => {
+        map.set(p.id, { ...p, children: [] });
+    });
 
-  const tree: Pagina[] = [];
-  pages.forEach(page => {
-    if (page.parent_id && pageMap[page.parent_id]) {
-      pageMap[page.parent_id].children?.push(pageMap[page.id]);
-    } else {
-      tree.push(pageMap[page.id]);
-    }
-  });
-
-  return tree;
+    paginas.forEach(p => {
+        const node = map.get(p.id);
+        if (node) {
+            if (p.parent_id && map.has(p.parent_id)) {
+                const parent = map.get(p.parent_id)!;
+                parent.children.push(node);
+            } else {
+                roots.push(node);
+            }
+        }
+    });
+    return roots;
 };
 
-export default async function DisciplinasPage({
-  searchParams,
-}: {
-  searchParams: { page: string };
-}) {
+export default async function DisciplinasPage({ searchParams }: { searchParams: { page?: string } }) {
   const supabase = createServerComponentClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser(); // Usando getUser() como boa prática
-  if (!user) redirect('/login');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    redirect('/login');
+  }
 
-  const { data: paginas } = await supabase
+  const { data: allPaginas } = await supabase
     .from('paginas')
-    .select('*')
-    .order('title', { ascending: true });
+    .select('id, parent_id, title, emoji')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
 
-  const tree = buildTree(paginas || []);
+  const paginaTree = buildTree(allPaginas || []);
   
-  const selectedPageId = Number(searchParams.page) || (paginas && paginas[0] ? paginas[0].id : null);
-  const selectedPage = paginas?.find(p => p.id === selectedPageId) || null;
+  const selectedId = searchParams.page ? Number(searchParams.page) : null;
+  let selectedPage: PaginaFromDB | null = null;
 
+  if (selectedId) {
+    const { data: pageData } = await supabase
+      .from('paginas')
+      .select('id, title, content, emoji')
+      .eq('id', selectedId)
+      .eq('user_id', user.id)
+      .single();
+    selectedPage = pageData;
+  }
+  
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[80vh]">
-      <div className="md:col-span-1 bg-gray-800 p-4 rounded-lg overflow-y-auto">
-        <SidebarClient tree={tree} allPages={paginas || []} />
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
+      <div className="md:col-span-1 h-full">
+        {/* CORREÇÃO: Removida a prop 'actions' e 'itemType', e adicionada a prop 'table' */}
+        <HierarchicalSidebar 
+            tree={paginaTree} 
+            table="paginas"
+            title="DISCIPLINAS"
+        />
       </div>
-      <div className="md:col-span-3 bg-gray-800 p-6 rounded-lg flex flex-col">
+      <div className="md:col-span-3 h-full">
         {selectedPage ? (
-          <>
-            <h1 className="text-3xl font-bold mb-4 flex items-center gap-2">
-              <span className="text-2xl">{selectedPage.emoji}</span>
-              {selectedPage.title}
-            </h1>
-            {/* ***** A CORREÇÃO ESTÁ AQUI ***** */}
-            <Editor 
-              key={selectedPage.id} // Adicionamos a KEY para forçar a recriação do componente
-              pageId={selectedPage.id}
-              title={selectedPage.title}
-              emoji={selectedPage.emoji}
-              content={selectedPage.content}
-              onSave={updatePagina}
+            <TextEditor
+                key={selectedPage.id}
+                initialContent={selectedPage.content}
+                onSave={async (newContent: any) => {
+                  'use server';
+                  await updatePaginaContent(selectedPage!.id, newContent);
+                }}
             />
-          </>
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Selecione uma página ou crie uma nova.</p>
-          </div>
+            <div className="flex items-center justify-center h-full bg-gray-900 rounded-lg">
+                <p className="text-gray-400">Selecione ou crie uma disciplina para começar.</p>
+            </div>
         )}
       </div>
     </div>

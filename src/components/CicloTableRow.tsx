@@ -1,130 +1,92 @@
-// src/components/CicloTableRow.tsx (VERSÃO FINAL E CORRIGIDA)
+// src/components/CicloTableRow.tsx
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
-import { type SessaoEstudo, type Disciplina } from '@/lib/types';
-// CORREÇÃO: Importamos a nova ação para o checkbox "Finalizada"
-import { updateSessaoEstudo, deleteSessaoCiclo, toggleConclusaoSessao, updateDatasSessaoEstudo, toggleFinalizarSessao } from '@/app/actions';
-import { Checkbox } from './ui/checkbox';
-import { Input } from './ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Textarea } from './ui/textarea';
-import { Button } from './ui/button';
-import { Trash2 } from 'lucide-react';
+import { useState, useTransition, useEffect } from 'react';
 import { toast } from 'sonner';
+import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo } from '@/app/actions';
+import { type SessaoEstudo } from '@/lib/types';
+import { useDebounce } from '@/lib/hooks';
 
-export function CicloTableRow({ sessao, disciplinas }: { sessao: SessaoEstudo; disciplinas: Disciplina[] }) {
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
+
+export function CicloTableRow({ sessao }: { sessao: SessaoEstudo }) {
   const [isPending, startTransition] = useTransition();
-  const [rowData, setRowData] = useState(sessao);
+
+  const [materiaNome, setMateriaNome] = useState(sessao.materia_nome || '');
+  const [focoSugerido, setFocoSugerido] = useState(sessao.foco_sugerido || '');
+  
+  const debouncedMateria = useDebounce(materiaNome, 1000);
+  const debouncedFoco = useDebounce(focoSugerido, 1000);
 
   useEffect(() => {
-    setRowData(sessao);
-  }, [sessao]);
+    if (debouncedMateria !== sessao.materia_nome) {
+      updateSessaoEstudo({ id: sessao.id, materia_nome: debouncedMateria });
+    }
+  }, [debouncedMateria, sessao.id, sessao.materia_nome]);
 
-  const handleInputChange = (field: keyof SessaoEstudo, value: any) => {
-    setRowData(prev => ({ ...prev, [field]: value }));
+  useEffect(() => {
+    if (debouncedFoco !== sessao.foco_sugerido) {
+      updateSessaoEstudo({ id: sessao.id, foco_sugerido: debouncedFoco });
+    }
+  }, [debouncedFoco, sessao.id, sessao.foco_sugerido]);
+
+  const handleToggleConclusao = (isCompleting: boolean) => {
+    startTransition(async () => {
+      const result = await toggleConclusaoSessao(sessao.id, isCompleting);
+      if (result?.error) toast.error(result.error);
+      else toast.success(isCompleting ? 'Estudo concluído! Revisões agendadas.' : 'Estudo revertido.');
+    });
+  };
+
+  const handleDateChange = (
+      campo: 'data_estudo' | 'data_revisao_1' | 'data_revisao_2' | 'data_revisao_3', 
+      novaData: string
+    ) => {
+    startTransition(async () => {
+        const result = await updateDatasSessaoEstudo(sessao.id, campo, novaData);
+        if (result?.error) toast.error(result.error);
+        else toast.success("Data atualizada com sucesso!");
+    });
   };
   
-  const handleDisciplinaChange = (disciplinaId: string) => {
-    const idAsNumber = Number(disciplinaId);
-    const disciplinaSelecionada = disciplinas.find(d => d.id === idAsNumber);
-    setRowData(prev => ({ ...prev, disciplina_id: idAsNumber, materia_nome: disciplinaSelecionada?.nome || null }));
-  };
+  const handleDelete = () => {
+    if(window.confirm(`Tem certeza que deseja deletar a sessão ${sessao.ordem}?`)) {
+        startTransition(async () => {
+            await deleteSessaoCiclo(sessao.id);
+            toast.success("Sessão deletada.");
+        });
+    }
+  }
 
-  useEffect(() => {
-    // O auto-save agora ignora o campo 'materia_finalizada' para não conflitar com a ação direta
-    const { materia_finalizada, ...restOfRowData } = rowData;
-    const { materia_finalizada: _, ...restOfSessao } = sessao;
-
-    if (JSON.stringify(restOfRowData) === JSON.stringify(restOfSessao)) return;
-    
-    const handler = setTimeout(() => {
-      startTransition(() => updateSessaoEstudo(rowData));
-    }, 1500);
-    return () => clearTimeout(handler);
-  }, [rowData, sessao]);
-
-  const handleToggleConclusao = (checked: boolean) => {
-    startTransition(async () => {
-      const result = await toggleConclusaoSessao(rowData.id, checked);
-      if (result?.error) toast.error(result.error);
-      else toast.success(checked ? 'Estudo concluído! Revisões agendadas.' : 'Conclusão revertida.');
-    });
-  };
-
-  const handleDateChange = (campo: 'data_estudo' | 'data_revisao_1' | 'data_revisao_2' | 'data_revisao_3', valor: string) => {
-    if (!valor) return;
-    startTransition(async () => {
-      const result = await updateDatasSessaoEstudo(rowData.id, campo, valor);
-      if (result?.error) toast.error(`Erro ao salvar data: ${result.error}`);
-      else toast.success("Datas atualizadas com sucesso!");
-    });
-  };
-
-  // NOVA FUNÇÃO: Lida com o clique no checkbox "Finalizada"
-  const handleToggleFinalizada = (checked: boolean) => {
-    startTransition(async () => {
-      const result = await toggleFinalizarSessao(rowData.id, checked);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success(checked ? "Matéria finalizada e revisões canceladas." : "Matéria reativada.");
-      }
-    });
-  };
-
-  const percAcerto = rowData.questoes_total && rowData.questoes_acertos ? Math.round((rowData.questoes_acertos / rowData.questoes_total) * 100) : 0;
-
-  const displayDate = (dateString: string | null) => {
+  const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return '';
-    return dateString.split('T')[0];
+    try {
+      return new Date(dateString).toISOString().split('T')[0];
+    } catch {
+      return '';
+    }
   };
 
   return (
-    <tr className={`border-b border-gray-700 ${rowData.materia_finalizada ? 'bg-black/20 text-gray-500 line-through' : ''} ${isPending ? 'opacity-50' : ''}`}>
-      <td className="p-2 text-center align-middle">
-        <Checkbox checked={rowData.concluida} disabled={isPending || rowData.materia_finalizada} onCheckedChange={handleToggleConclusao} />
-      </td>
-      <td className="p-2 text-center align-middle">{rowData.ordem}</td>
-      <td className="p-2 align-middle">
-        <Select value={String(rowData.disciplina_id || '')} onValueChange={handleDisciplinaChange}>
-          <SelectTrigger className="bg-gray-700 w-[180px]">
-            <SelectValue placeholder="Vincular Matéria">{rowData.materia_nome || "Vincular Matéria"}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>{disciplinas.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.emoji} {d.nome}</SelectItem>)}</SelectContent>
-        </Select>
-      </td>
-      <td className="p-2 align-middle"><Input value={rowData.foco_sugerido || ''} onChange={(e) => handleInputChange('foco_sugerido', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Textarea value={rowData.diario_de_bordo || ''} onChange={(e) => handleInputChange('diario_de_bordo', e.target.value)} rows={1} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle text-center">
-        <div className="flex items-center gap-1 justify-center">
-          <Input type="number" value={rowData.questoes_acertos || ''} onChange={(e) => handleInputChange('questoes_acertos', e.target.valueAsNumber)} className="bg-gray-700 w-16" placeholder="C" />
-          <span className="text-gray-400">/</span>
-          <Input type="number" value={rowData.questoes_total || ''} onChange={(e) => handleInputChange('questoes_total', e.target.valueAsNumber)} className="bg-gray-700 w-16" placeholder="T" />
-        </div>
-        {rowData.questoes_total ? <span className="text-xs mt-1 block">{percAcerto}%</span> : null}
-      </td>
+    <tr className="border-b border-border hover:bg-secondary/50">
+      <td className="p-3 text-center"><Checkbox checked={sessao.concluida} onCheckedChange={handleToggleConclusao} disabled={isPending} /></td>
+      <td className="p-3 font-mono">{sessao.ordem.toString().padStart(2, '0')}</td>
+      <td className="p-3"><Input value={materiaNome} onChange={(e) => setMateriaNome(e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-3"><Input value={focoSugerido} onChange={(e) => setFocoSugerido(e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-3"><Input placeholder="Suas anotações..." className="bg-input h-8" /></td>
+      <td className="p-3"><Input placeholder="0/0" className="bg-input h-8 w-24" /></td>
+      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_estudo)} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-input h-8" /></td>
       
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_estudo)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_1)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_2)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-gray-700" /></td>
-      <td className="p-2 align-middle"><Input type="date" value={displayDate(rowData.data_revisao_3)} disabled={!rowData.concluida || isPending} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-gray-700" /></td>
-      
-      <td className="p-2 text-center align-middle">
-        {/* CORREÇÃO: Este checkbox agora chama a nova função dedicada */}
-        <Checkbox checked={rowData.materia_finalizada} onCheckedChange={(checked) => handleToggleFinalizada(!!checked)} />
-      </td>
-      <td className="p-2 text-center align-middle">
-        <form action={async (formData) => {
-            startTransition(async () => {
-                const id = Number(formData.get('id'));
-                if (!isNaN(id)) await deleteSessaoCiclo(id);
-            });
-        }}>
-          <input type="hidden" name="id" value={rowData.id} />
-          <Button type="submit" variant="ghost" size="icon" title="Excluir Linha" disabled={isPending}><Trash2 className="h-4 w-4 text-red-500" /></Button>
-        </form>
-      </td>
+      {/* CORREÇÃO: Datas de revisão agora são inputs editáveis */}
+      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_1)} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
+
+      <td className="p-3 text-center"><Checkbox checked={sessao.materia_finalizada} /></td>
+      <td className="p-3 text-center"><Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
     </tr>
   );
 }

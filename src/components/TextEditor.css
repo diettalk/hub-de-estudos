@@ -1,14 +1,57 @@
-/* src/components/TextEditor.css */
-
-.tiptap {
-  height: 100%;
+/* Estilos para as tabelas no editor Tiptap */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  table-layout: fixed;
+  overflow: hidden;
 }
 
-.tiptap > .ProseMirror {
-  height: 100%;
-  padding: 0.5rem;
+.prose th,
+.prose td {
+  border: 1px solid #4b5563; /* Cor da borda cinza escuro */
+  padding: 0.75rem;
+  vertical-align: top;
+  position: relative;
 }
 
-.tiptap > .ProseMirror:focus {
-  outline: none;
+.prose th {
+  font-weight: bold;
+  text-align: left;
+  background-color: #374151; /* Cor de fundo para o cabeçalho */
+}
+
+/* Estilo para redimensionamento de colunas */
+.column-resizing {
+  background-color: #4f46e5; /* Cor primária */
+  opacity: 0.5;
+}
+
+.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Célula selecionada */
+.prose .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(79, 70, 229, 0.15);
+  pointer-events: none;
+}
+
+/* Estilo para links dentro do editor */
+.tiptap a {
+  color: #818cf8; /* Cor roxa/azul para links */
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Estilo para os vídeos do YouTube ficarem responsivos */
+.tiptap iframe {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9; /* Proporção de vídeo widescreen */
+  border-radius: 8px;
 }
