@@ -66,28 +66,30 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
-      <div className="md:col-span-1 h-full">
-        {/* CORREÇÃO: Removida a prop 'actions' e adicionada a prop 'table' */}
+    // CORREÇÃO: Removido o espaçamento para um layout mais integrado
+    <div className="grid grid-cols-1 md:grid-cols-4 h-full">
+      <div className="md:col-span-1 h-full p-4">
         <HierarchicalSidebar 
             tree={documentTree} 
             table="documentos"
             title="DOCUMENTOS"
         />
       </div>
-      <div className="md:col-span-3 h-full">
+      <div className="md:col-span-3 h-full flex flex-col p-4">
         {selectedDocument ? (
-            <TextEditor
-                key={selectedDocument.id}
-                initialContent={selectedDocument.content}
-                onSave={async (newContent: any) => {
-                  'use server';
-                  await updateDocumentoContent(selectedDocument!.id, newContent);
-                }}
-            />
+            <div className="bg-card border rounded-lg h-full flex flex-col">
+                <TextEditor
+                    key={selectedDocument.id}
+                    initialContent={selectedDocument.content}
+                    onSave={async (newContent: any) => {
+                      'use server';
+                      await updateDocumentoContent(selectedDocument!.id, newContent);
+                    }}
+                />
+            </div>
         ) : (
-            <div className="flex items-center justify-center h-full bg-gray-900 rounded-lg">
-                <p className="text-gray-400">Selecione ou crie um documento para começar.</p>
+            <div className="flex items-center justify-center h-full bg-card border rounded-lg">
+                <p className="text-muted-foreground">Selecione ou crie um documento para começar.</p>
             </div>
         )}
       </div>

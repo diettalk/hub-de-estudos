@@ -39,7 +39,6 @@ function findNodeParent(nodes: Node[], nodeId: number): Node | null {
   return null;
 }
 
-// CORREÇÃO: A função agora lida com o caso de 'nodes' ser undefined.
 function flattenTree(nodes: Node[] | undefined): Node[] {
     if (!nodes) {
         return [];
@@ -53,8 +52,8 @@ function flattenTree(nodes: Node[] | undefined): Node[] {
 
 function ItemOverlay({ node, table }: { node: Node; table: 'documentos' | 'paginas' }) {
     return (
-        <div className="flex items-center group my-1 rounded-md pr-1 bg-gray-700 opacity-90 shadow-lg p-2">
-            <GripVertical className="w-4 h-4 text-gray-400 mr-2"/>
+        <div className="flex items-center group my-1 rounded-md pr-1 bg-secondary opacity-90 shadow-lg p-2">
+            <GripVertical className="w-4 h-4 text-muted-foreground mr-2"/>
             {table === 'paginas' && <span className="mr-2">{node.emoji || '📄'}</span>}
             {table === 'documentos' && <FileText className="w-4 h-4 mr-2"/>}
             <span className="truncate">{node.title}</span>
@@ -118,28 +117,28 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex items-center group my-1 rounded-md hover:bg-gray-700/50 pr-1">
-        <button {...listeners} {...attributes} onClick={handleClicks} className="p-1 cursor-grab active:cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
-          <GripVertical className="w-4 h-4 text-gray-500"/>
+      <div className="flex items-center group my-1 rounded-md hover:bg-secondary pr-2">
+        <button {...listeners} {...attributes} onClick={handleClicks} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
+          <GripVertical className="w-4 h-4"/>
         </button>
         
         {node.children?.length > 0 ? (
-          <ChevronDown onClick={() => setIsOpen(!isOpen)} className={`w-4 h-4 cursor-pointer transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`}/>
-        ) : <div className="w-4 h-4"/>}
+          <ChevronDown onClick={() => setIsOpen(!isOpen)} className={`w-4 h-4 cursor-pointer transition-transform flex-shrink-0 ${isOpen ? 'rotate-0' : '-rotate-90'}`}/>
+        ) : <div className="w-4 h-4 flex-shrink-0"/>}
 
         {table === 'paginas' && <span className="mx-2">{node.emoji || '📄'}</span>}
-        {table === 'documentos' && <FileText className="w-4 h-4 mx-2"/>}
+        {table === 'documentos' && <FileText className="w-4 h-4 mx-2 text-muted-foreground"/>}
 
         {isEditing ? (
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleSaveTitle} onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()} className="bg-gray-600 text-white rounded px-1 flex-grow" autoFocus />
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={handleSaveTitle} onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()} className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8" autoFocus />
         ) : (
-          <Link href={href} className="flex-grow truncate py-1">{node.title}</Link>
+          <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.title}</Link>
         )}
 
         <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => setIsEditing(true)} title="Renomear" className="p-1 hover:bg-gray-600 rounded"><Edit2 className="w-3 h-3"/></button>
-          <button onClick={handleCreateChild} title="Criar Sub-item" className="p-1 hover:bg-gray-600 rounded"><Plus className="w-3 h-3"/></button>
-          <button onClick={handleDelete} title="Excluir" className="p-1 hover:bg-gray-600 rounded"><Trash2 className="w-3 h-3 text-red-500"/></button>
+          <button onClick={() => setIsEditing(true)} title="Renomear" className="p-2 text-muted-foreground hover:text-foreground rounded"><Edit2 className="w-4 h-4"/></button>
+          <button onClick={handleCreateChild} title="Criar Sub-item" className="p-2 text-muted-foreground hover:text-foreground rounded"><Plus className="w-4 h-4"/></button>
+          <button onClick={handleDelete} title="Excluir" className="p-2 text-muted-foreground hover:text-destructive rounded"><Trash2 className="w-4 h-4"/></button>
         </div>
       </div>
       {isOpen && node.children?.map(child => <SortableItem key={child.id} node={child} depth={depth + 1} table={table} />)}
@@ -184,14 +183,14 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
     return (
         <SidebarContext.Provider value={{ tree }}>
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveItem(null)}>
-                <div className="bg-gray-800 p-4 rounded-lg h-full flex flex-col">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-bold uppercase">{title}</h2>
-                        <button onClick={handleCreateRoot} className="p-1 hover:bg-gray-700 rounded" title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}>
+                <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b">
+                        <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
+                        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}>
                             <Plus className="w-5 h-5"/>
                         </button>
                     </div>
-                    <div className="flex-grow overflow-y-auto">
+                    <div className="flex-grow overflow-y-auto -mr-2 pr-2">
                         <SortableContext items={flattenedIds} strategy={verticalListSortingStrategy}>
                             {tree.map(node => <SortableItem key={node.id} node={node} table={table} />)}
                         </SortableContext>

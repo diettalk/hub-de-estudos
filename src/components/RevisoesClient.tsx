@@ -1,80 +1,83 @@
-// src/components/RevisoesClient.tsx (VERSÃO DE DEBUG)
-
+// src/components/RevisoesClient.tsx
 'use client';
 
-import { useTransition } from 'react';
-import { toast } from 'sonner';
-import { updateRevisaoStatus } from '@/app/actions';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { type EventoRevisao } from '@/lib/types';
+import { useState } from 'react';
+import { type Revisao } from '@/lib/types';
+import { RevisaoCard } from './RevisaoCard';
+import { Button } from './ui/button';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-// Adicionamos a nova propriedade opcional 'todasAsRevisoes'
-type RevisoesClientProps = {
-  atrasadas: EventoRevisao[];
-  hoje: EventoRevisao[];
-  proximos7Dias: EventoRevisao[];
-  todasAsRevisoes?: EventoRevisao[]; // O '?' torna a propriedade opcional
-};
+interface RevisoesClientProps {
+  atrasadas: Revisao[];
+  paraHoje: Revisao[];
+  proximos7Dias: Revisao[];
+  concluidas: Revisao[];
+  debug: Revisao[];
+}
 
-const RevisaoCard = ({ revisao }: { revisao: EventoRevisao }) => {
-  const [isPending, startTransition] = useTransition();
-  const dataFormatada = new Date(revisao.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+type Tab = 'atrasadas' | 'hoje' | 'proximos';
 
-  const handleToggle = (isChecked: boolean) => {
-    startTransition(async () => {
-      const result = await updateRevisaoStatus(revisao.id, isChecked);
-      if (result?.error) {
-        toast.error(result.error);
-      }
-    });
+export function RevisoesClient({ atrasadas, paraHoje, proximos7Dias, concluidas, debug }: RevisoesClientProps) {
+  const [activeTab, setActiveTab] = useState<Tab>('hoje');
+
+  const tabs: { id: Tab; label: string; data: Revisao[]; count: number }[] = [
+    { id: 'atrasadas', label: 'Atrasadas', data: atrasadas, count: atrasadas.length },
+    { id: 'hoje', label: 'Para Hoje', data: paraHoje, count: paraHoje.length },
+    { id: 'proximos', label: 'Próximos 7 Dias', data: proximos7Dias, count: proximos7Dias.length },
+  ];
+
+  const renderContent = () => {
+    const activeTabData = tabs.find(tab => tab.id === activeTab)?.data;
+    if (!activeTabData || activeTabData.length === 0) {
+      return <p className="text-muted-foreground text-center mt-8">Nenhuma revisão nesta categoria.</p>;
+    }
+    return (
+      <div className="space-y-3">
+        {activeTabData.map(revisao => <RevisaoCard key={revisao.id} revisao={revisao} />)}
+      </div>
+    );
   };
 
   return (
-    <div className={`flex items-center gap-4 p-3 rounded-lg border-l-4 transition-opacity ${revisao.completed ? 'opacity-40' : 'bg-gray-800'}`} style={{ borderColor: revisao.color }}>
-      <Checkbox
-        id={`revisao-${revisao.id}`}
-        checked={revisao.completed}
-        onCheckedChange={handleToggle}
-        disabled={isPending}
-        className="h-5 w-5"
-      />
-      <div className="flex-grow">
-        <label htmlFor={`revisao-${revisao.id}`} className={`font-medium cursor-pointer ${revisao.completed ? 'line-through text-gray-500' : ''}`}>
-          {revisao.title}
-        </label>
-        <p className="text-xs text-gray-400">{dataFormatada}</p>
+    <div>
+      <div className="border-b border-border mb-4">
+        <div className="flex space-x-4">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`py-2 px-1 text-sm font-semibold transition-colors ${activeTab === tab.id ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {tab.label} <span className="bg-secondary text-secondary-foreground text-xs font-bold rounded-full px-2 py-0.5 ml-1">{tab.count}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <Badge style={{ backgroundColor: revisao.color, color: 'white' }}>{revisao.type}</Badge>
-    </div>
-  );
-};
 
-export function RevisoesClient({ atrasadas, hoje, proximos7Dias, todasAsRevisoes }: RevisoesClientProps) {
-  const renderColuna = (titulo: string, revisoes: EventoRevisao[], corTitulo: string = 'text-white') => (
-    <div className="bg-gray-900/50 p-4 rounded-lg flex-1 min-w-[300px]">
-      <h2 className={`text-xl font-bold mb-4 pb-2 border-b border-gray-700 ${corTitulo}`}>
-        {titulo} <span className="text-sm font-normal text-gray-400">({revisoes.length})</span>
-      </h2>
-      <div className="space-y-3 overflow-y-auto max-h-[60vh] pr-2">
-        {revisoes.length > 0 ? (
-          revisoes.map(revisao => <RevisaoCard key={revisao.id} revisao={revisao} />)
-        ) : (
-          <p className="text-gray-500 text-center pt-8">Nenhuma revisão nesta categoria.</p>
-        )}
-      </div>
-    </div>
-  );
+      <div>{renderContent()}</div>
 
-  return (
-    <div className="flex flex-col md:flex-row gap-6">
-      {renderColuna('Atrasadas', atrasadas, 'text-red-400')}
-      {renderColuna('Para Hoje', hoje, 'text-blue-400')}
-      {renderColuna('Próximos 7 Dias', proximos7Dias, 'text-yellow-400')}
-      
-      {/* A COLUNA DO "SUPER-ESPIÃO" */}
-      {/* Ela só aparece se a lista 'todasAsRevisoes' for passada como propriedade */}
-      {todasAsRevisoes && renderColuna('DEBUG: Todas as Revisões', todasAsRevisoes, 'text-purple-400')}
+      <Accordion type="single" collapsible className="w-full mt-8">
+        <AccordionItem value="concluidas">
+          <AccordionTrigger>Revisões Concluídas ({concluidas.length})</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3 mt-4">
+              {concluidas.length > 0 ? (
+                concluidas.map(revisao => <RevisaoCard key={revisao.id} revisao={revisao} />)
+              ) : (
+                <p className="text-muted-foreground text-center">Nenhuma revisão concluída ainda.</p>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="debug">
+          <AccordionTrigger>DEBUG: Todas as Revisões ({debug.length})</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-3 mt-4">
+              {debug.map(revisao => <RevisaoCard key={revisao.id} revisao={revisao} />)}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }

@@ -129,3 +129,53 @@ html, body {
 .card {
     @apply bg-gray-800/50 p-6 rounded-lg border border-gray-700;
 }
+
+/* Adicione estas classes ao seu src/app/globals.css */
+
+/* Estilo para o dia com evento */
+.day-with-event {
+  font-weight: 700 !important;
+  color: hsl(var(--destructive)) !important; /* Alterado para a cor destrutiva (vermelho) */
+}
+
+/* Adicione estas classes ao seu src/app/globals.css */
+
+/* NOVO ESTILO: Adiciona um ponto vermelho abaixo dos dias com eventos */
+.day-with-event {
+  position: relative;
+}
+
+.day-with-event::after {
+  content: '';
+  position: absolute;
+  bottom: 6px; /* Ajuste a posição vertical do ponto */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: hsl(var(--destructive)); /* Usa a cor vermelha do tema */
+}
+
+/* Estilo para o componente DayPicker se adaptar ao seu tema */
+.rdp {
+    --rdp-cell-size: 40px;
+    --rdp-caption-font-size: 1rem;
+    --rdp-background-color: hsl(var(--card));
+    --rdp-color: hsl(var(--foreground));
+    --rdp-accent-color: hsl(var(--primary));
+    --rdp-accent-color-dark: hsl(var(--primary));
+    --rdp-outline: 2px solid hsl(var(--primary));
+    --rdp-outline-selected: 3px solid hsl(var(--primary));
+}
+
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Garante que o ponto fique visível (branco) quando o dia está selecionado */
+.rdp-day_selected.day-with-event::after {
+    background-color: hsl(var(--primary-foreground));
+}
+

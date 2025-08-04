@@ -487,26 +487,29 @@ export async function updateLembrete(formData: FormData) {
   revalidatePath('/calendario');
 }
 
+// Dentro de src/app/actions.ts
+
 export async function deleteLembrete(id: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: 'Utilizador não autenticado.' };
 
-  if (isNaN(id)) return;
-  await supabase.from('lembretes').delete().eq('id', id).eq('user_id', user.id);
+  if (isNaN(id)) return { error: 'ID inválido.' };
+
+  const { error } = await supabase
+    .from('lembretes')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error("Erro ao apagar lembrete:", error);
+    return { error: 'Falha ao apagar o lembrete.' };
+  }
+
   revalidatePath('/calendario');
-}
-
-export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
-    const supabase = createServerActionClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Usuário não autenticado' };
-
-    const { error } = await supabase.from('revisoes').update({ concluida: status }).eq('id', revisaoId).eq('user_id', user.id);
-    if (error) return { error: error.message };
-    revalidatePath('/revisoes');
-    revalidatePath('/calendario');
-    return { success: true };
+  revalidatePath('/');
+  return { success: true };
 }
 
 // ==================================================================
