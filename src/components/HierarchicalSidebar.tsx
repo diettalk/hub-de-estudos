@@ -183,6 +183,7 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
     return (
         <SidebarContext.Provider value={{ tree }}>
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveItem(null)}>
+                {/* CORREÇÃO: Usando a cor de 'card' do seu tema */}
                 <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
                     <div className="flex justify-between items-center mb-4 pb-4 border-b">
                         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>

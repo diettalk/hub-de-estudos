@@ -1,37 +1,48 @@
 // src/components/CicloTableRow.tsx
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo } from '@/app/actions';
-import { type SessaoEstudo } from '@/lib/types';
+import { type SessaoEstudo, type Disciplina } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
+// 1. IMPORTAR O ÍCONE E O COMPONENTE LINK
+import { Trash2, ArrowUpRight } from 'lucide-react';
+import Link from 'next/link';
+import { DisciplinaCombobox } from './DisciplinaCombobox';
 
-export function CicloTableRow({ sessao }: { sessao: SessaoEstudo }) {
+interface CicloTableRowProps {
+  sessao: SessaoEstudo;
+  disciplinas: Disciplina[];
+}
+
+export function CicloTableRow({ sessao, disciplinas }: CicloTableRowProps) {
   const [isPending, startTransition] = useTransition();
 
-  const [materiaNome, setMateriaNome] = useState(sessao.materia_nome || '');
   const [focoSugerido, setFocoSugerido] = useState(sessao.foco_sugerido || '');
-  
-  const debouncedMateria = useDebounce(materiaNome, 1000);
   const debouncedFoco = useDebounce(focoSugerido, 1000);
 
-  useEffect(() => {
-    if (debouncedMateria !== sessao.materia_nome) {
-      updateSessaoEstudo({ id: sessao.id, materia_nome: debouncedMateria });
-    }
-  }, [debouncedMateria, sessao.id, sessao.materia_nome]);
-
-  useEffect(() => {
-    if (debouncedFoco !== sessao.foco_sugerido) {
+  useState(() => {
+    if (debouncedFoco !== (sessao.foco_sugerido || '')) {
       updateSessaoEstudo({ id: sessao.id, foco_sugerido: debouncedFoco });
     }
   }, [debouncedFoco, sessao.id, sessao.foco_sugerido]);
+  
+  const handleSelectDisciplina = (disciplina: Disciplina | null) => {
+    startTransition(async () => {
+      const result = await updateSessaoEstudo({
+        id: sessao.id,
+        disciplina_id: disciplina ? disciplina.id : null,
+        materia_nome: disciplina ? disciplina.title : ''
+      });
+      if (result?.error) toast.error(`Falha ao salvar: ${result.error}`);
+      else toast.success(`Matéria atualizada para "${disciplina ? disciplina.title : 'Nenhuma'}"!`);
+    });
+  };
 
   const handleToggleConclusao = (isCompleting: boolean) => {
     startTransition(async () => {
@@ -53,7 +64,8 @@ export function CicloTableRow({ sessao }: { sessao: SessaoEstudo }) {
   };
   
   const handleDelete = () => {
-    if(window.confirm(`Tem certeza que deseja deletar a sessão ${sessao.ordem}?`)) {
+    // Usando um modal customizado ou o confirm do navegador
+    if(confirm(`Tem certeza que deseja deletar a sessão ${sessao.ordem}?`)) {
         startTransition(async () => {
             await deleteSessaoCiclo(sessao.id);
             toast.success("Sessão deletada.");
@@ -64,7 +76,7 @@ export function CicloTableRow({ sessao }: { sessao: SessaoEstudo }) {
   const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return '';
     try {
-      return new Date(dateString).toISOString().split('T')[0];
+      return new Date(dateString + 'T00:00:00-03:00').toISOString().split('T')[0];
     } catch {
       return '';
     }
@@ -73,17 +85,41 @@ export function CicloTableRow({ sessao }: { sessao: SessaoEstudo }) {
   return (
     <tr className="border-b border-border hover:bg-secondary/50">
       <td className="p-3 text-center"><Checkbox checked={sessao.concluida} onCheckedChange={handleToggleConclusao} disabled={isPending} /></td>
-      <td className="p-3 font-mono">{sessao.ordem.toString().padStart(2, '0')}</td>
-      <td className="p-3"><Input value={materiaNome} onChange={(e) => setMateriaNome(e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-3"><Input value={focoSugerido} onChange={(e) => setFocoSugerido(e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-3"><Input placeholder="Suas anotações..." className="bg-input h-8" /></td>
-      <td className="p-3"><Input placeholder="0/0" className="bg-input h-8 w-24" /></td>
-      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_estudo)} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-3 font-mono text-center">{sessao.ordem.toString().padStart(2, '0')}</td>
       
-      {/* CORREÇÃO: Datas de revisão agora são inputs editáveis */}
-      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_1)} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-3"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
+      {/* 2. ALTERAÇÃO PRINCIPAL AQUI */}
+      <td className="p-2 w-[300px]">
+        <div className="flex items-center gap-1">
+          <div className="flex-grow">
+            <DisciplinaCombobox
+                disciplinas={disciplinas}
+                value={sessao.disciplina_id}
+                onSelect={handleSelectDisciplina}
+                disabled={isPending}
+                className="bg-input"
+            />
+          </div>
+          {/* O link só aparece se uma disciplina estiver selecionada */}
+          {sessao.disciplina_id && (
+            <Link href={`/disciplinas?id=${sessao.disciplina_id}`} passHref legacyBehavior>
+              <a target="_blank" rel="noopener noreferrer" title="Abrir disciplina em nova aba">
+                <Button variant="ghost" size="icon" disabled={isPending} className="flex-shrink-0">
+                  <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </a>
+            </Link>
+          )}
+        </div>
+      </td>
+
+      <td className="p-2"><Input value={focoSugerido} onChange={(e) => setFocoSugerido(e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input placeholder="Suas anotações..." className="bg-input h-8" /></td>
+      <td className="p-2"><Input placeholder="0/0" className="bg-input h-8 w-24" /></td>
+      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_estudo)} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-input h-8" /></td>
+      
+      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_1)} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
 
       <td className="p-3 text-center"><Checkbox checked={sessao.materia_finalizada} /></td>
       <td className="p-3 text-center"><Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>

@@ -24,8 +24,7 @@ export default async function CicloPage() {
     sessoes = novasSessoes;
   }
   
-  const { data: disciplinas } = await supabase.from('paginas').select('id, nome:title, emoji').order('title');
-
+  const { data: disciplinas } = await supabase.from('paginas').select('id, title, emoji').order('title');
   const legendaDefault = `LP: Língua Portuguesa\nRLM: Raciocínio Lógico\nG.GOV: Gestão Governamental\nP.PUB: Políticas Públicas`;
 
   return (

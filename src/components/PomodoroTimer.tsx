@@ -1,5 +1,4 @@
 // src/components/PomodoroTimer.tsx
-
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -15,7 +14,8 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Settings } from 'lucide-react';
+// 1. IMPORTAR O ÍCONE DO RELÓGIO PARA O TÍTULO
+import { Settings, Timer } from 'lucide-react';
 
 export function PomodoroTimer() {
   const [workDuration, setWorkDuration] = useState(25);
@@ -29,7 +29,6 @@ export function PomodoroTimer() {
   const alarmRef = useRef<HTMLAudioElement>(null);
   const endTimeRef = useRef<number | null>(null);
   
-  // Funções de controle do timer
   const stopAlarm = useCallback(() => {
     if (alarmRef.current) {
       alarmRef.current.pause();
@@ -53,7 +52,6 @@ export function PomodoroTimer() {
     setTimeLeft(newTime);
   }, [workDuration, breakDuration, stopAlarm]);
 
-  // Efeito principal do timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isActive) {
@@ -92,60 +90,72 @@ export function PomodoroTimer() {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
+  // 2. REMOVIDO: classes de cor do container. Ele agora é transparente,
+  //    herdando a cor do DashboardCard que o envolve.
   return (
-    <div className="card bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center h-full text-center relative">
+    <>
       <audio ref={alarmRef} src="/alert.mp3" preload="auto" />
       
-      {/* CÓDIGO DO DIALOG DE CONFIGURAÇÃO REINSERIDO AQUI */}
-      <Dialog onOpenChange={(open) => !open && resetTimer()}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="absolute top-4 right-4">
-            <Settings className="h-4 w-4" />
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px] bg-gray-800 border-gray-700">
-          <DialogHeader>
-            <DialogTitle>Configurar Timer</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="work" className="text-right">Pomodoro (min)</Label>
-              <Input id="work" type="number" value={workDuration} onChange={(e) => setWorkDuration(Math.max(1, Number(e.target.value)))} className="col-span-3 bg-gray-900"/>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="break" className="text-right">Pausa (min)</Label>
-              <Input id="break" type="number" value={breakDuration} onChange={(e) => setBreakDuration(Math.max(1, Number(e.target.value)))} className="col-span-3 bg-gray-900"/>
-            </div>
+      {/* Adicionado o título e ícone para consistência */}
+      <div className="flex items-center gap-3 mb-4 w-full justify-between">
+          <div className="flex items-center gap-3">
+              <Timer className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">Pomodoro</h2>
           </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button">Salvar e Resetar</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      <div className="space-x-2 mb-4">
-        <Button onClick={() => switchMode('work')} variant={mode === 'work' ? 'secondary' : 'ghost'}>Foco</Button>
-        <Button onClick={() => switchMode('break')} variant={mode === 'break' ? 'secondary' : 'ghost'}>Pausa</Button>
+          <Dialog onOpenChange={(open) => !open && resetTimer()}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            {/* 3. REMOVIDO: bg-gray-800 e border-gray-700. Os componentes do shadcn já são temáticos. */}
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Configurar Timer</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="work" className="text-right">Pomodoro (min)</Label>
+                  {/* 4. REMOVIDO: bg-gray-900. O Input do shadcn também é temático. */}
+                  <Input id="work" type="number" value={workDuration} onChange={(e) => setWorkDuration(Math.max(1, Number(e.target.value)))} className="col-span-3"/>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="break" className="text-right">Pausa (min)</Label>
+                  <Input id="break" type="number" value={breakDuration} onChange={(e) => setBreakDuration(Math.max(1, Number(e.target.value)))} className="col-span-3"/>
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button">Salvar e Resetar</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
       </div>
 
-      <div className="text-7xl font-bold my-4" style={{fontVariantNumeric: 'tabular-nums'}}>
-        <span>{String(minutes).padStart(2, '0')}</span>:<span>{String(seconds).padStart(2, '0')}</span>
+      <div className="flex flex-col items-center justify-center flex-grow">
+          <div className="space-x-2 mb-4">
+            <Button onClick={() => switchMode('work')} variant={mode === 'work' ? 'secondary' : 'ghost'}>Foco</Button>
+            <Button onClick={() => switchMode('break')} variant={mode === 'break' ? 'secondary' : 'ghost'}>Pausa</Button>
+          </div>
+
+          <div className="text-7xl font-bold my-4" style={{fontVariantNumeric: 'tabular-nums'}}>
+            <span>{String(minutes).padStart(2, '0')}</span>:<span>{String(seconds).padStart(2, '0')}</span>
+          </div>
+          
+          <div className="space-x-4">
+            {isAlarmPlaying ? (
+              <Button onClick={handleAcknowledgeAlarm} className="w-48 bg-green-600 hover:bg-green-700">
+                {mode === 'work' ? 'Iniciar Pausa' : 'Iniciar Foco'}
+              </Button>
+            ) : (
+              <>
+                <Button onClick={toggleTimer} className="w-28">{isActive ? 'Pausar' : 'Iniciar'}</Button>
+                <Button onClick={resetTimer} variant="outline">Resetar</Button>
+              </>
+            )}
+          </div>
       </div>
-      
-      <div className="space-x-4">
-        {isAlarmPlaying ? (
-          <Button onClick={handleAcknowledgeAlarm} className="w-48 bg-green-600 hover:bg-green-700">
-            {mode === 'work' ? 'Iniciar Pausa' : 'Iniciar Foco'}
-          </Button>
-        ) : (
-          <>
-            <Button onClick={toggleTimer} className="w-28">{isActive ? 'Pausar' : 'Iniciar'}</Button>
-            <Button onClick={resetTimer} variant="outline">Resetar</Button>
-          </>
-        )}
-      </div>
-    </div>
+    </>
   );
 }
