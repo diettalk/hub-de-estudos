@@ -576,3 +576,116 @@ export async function updateConcursosOrdem(orderedIds: number[]) {
     return { error: `Falha ao salvar a ordem: ${message}` };
   }
 }
+
+// Adicione este bloco de código ao seu arquivo src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS E DISCIPLINAS) ---
+// ==================================================================
+
+type NewItemData = {
+  title: string;
+  user_id: string;
+  parent_id: number | null;
+  content: JSONContent;
+  emoji?: string;
+};
+
+export async function createItem(table: 'documentos' | 'paginas', parentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const newItemData: NewItemData = {
+    title: 'Novo Item',
+    user_id: user.id,
+    parent_id: parentId,
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+  };
+
+  if (table === 'paginas') {
+    newItemData.emoji = '📄';
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .insert(newItemData)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true, newItem: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao criar: ${message}` };
+  }
+}
+
+export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ title: newTitle })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao salvar título: ${message}` };
+  }
+}
+
+export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao deletar: ${message}` };
+  }
+}
+
+export async function updateItemParent(table: 'documentos' | 'paginas', itemId: number, newParentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ parent_id: newParentId })
+      .eq('id', itemId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao mover: ${message}` };
+  }
+}
