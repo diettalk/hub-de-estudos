@@ -1,10 +1,9 @@
-// src/app/guia-estudos/page.tsx
-
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { ConcursosClient } from '@/components/ConcursosClient';
-import { Pagina } from '@/app/disciplinas/page'; // Reutilizamos o tipo da página de disciplinas
+// 1. Importar os tipos corretos do nosso arquivo central
+import { type Concurso, type Disciplina } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,39 +12,39 @@ export default async function GuiaDeEstudosPage() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login');
 
-  // Query atualizada para buscar os concursos e suas páginas vinculadas
+  // Busca os concursos e faz o JOIN para buscar as disciplinas vinculadas a cada um
   const { data: concursos, error } = await supabase
     .from('concursos')
-    .select('*, concurso_paginas(paginas(*))') // A mágica do Supabase para fazer o JOIN
+    .select('*, concurso_paginas(paginas(*))') // 'paginas' é o nome da tabela de disciplinas
     .eq('user_id', session.user.id)
     .order('data_prova', { ascending: true });
     
-  // Busca todas as páginas raiz para oferecer no modal de vínculo
-  const { data: paginasRaiz } = await supabase
+  // Busca todas as disciplinas disponíveis para oferecer no modal de vínculo
+  const { data: paginasDisponiveis } = await supabase
     .from('paginas')
     .select('*')
-    .is('parent_id', null)
     .eq('user_id', session.user.id);
 
   if (error) {
-    console.error("Erro ao buscar concursos:", error);
+    console.error("Erro ao buscar concursos:", error.message);
   }
   
+  // A lógica de filtragem continua a mesma
   const ativos = concursos?.filter(c => c.status === 'ativo') || [];
   const previstos = concursos?.filter(c => c.status === 'previsto') || [];
   const arquivados = concursos?.filter(c => c.status === 'arquivado') || [];
   
   return (
-    <div>
+    <div className="p-4 sm:p-6 lg:p-8">
       <header className="text-left mb-8">
         <h1 className="text-3xl font-bold">Central de Concursos</h1>
-        <p className="text-gray-400">Gerencie todos os seus concursos, ativos e futuros.</p>
+        <p className="text-muted-foreground">Gerencie todos os seus concursos, ativos e futuros.</p>
       </header>
       <ConcursosClient
-        ativos={ativos}
-        previstos={previstos}
-        arquivados={arquivados}
-        paginasDisponiveis={paginasRaiz as Pagina[] || []}
+        ativos={ativos as Concurso[]}
+        previstos={previstos as Concurso[]}
+        arquivados={arquivados as Concurso[]}
+        paginasDisponiveis={paginasDisponiveis as Disciplina[] || []}
       />
     </div>
   );
