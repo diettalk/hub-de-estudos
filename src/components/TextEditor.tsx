@@ -88,7 +88,17 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             Highlight.configure({ multicolor: true }),
             TextStyle,
             Color,
-            TiptapLink.configure({ openOnClick: true, autolink: true }),
+            TiptapLink.configure({ 
+                openOnClick: true, 
+                autolink: true,
+                // Garante que o link cole como texto simples com Ctrl+Shift+V
+                pasteOnPaste: (view, event) => {
+                    if (event.clipboardData && event.clipboardData.getData('text/plain')) {
+                        return false; // Deixa o Tiptap lidar com o paste
+                    }
+                    return true;
+                }
+            }),
             YoutubeExtension.configure({ nocookie: true }),
             Table.configure({ resizable: true }),
             TableRow,

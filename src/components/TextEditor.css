@@ -8,13 +8,11 @@
   margin: 0;
 }
 
-.ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-
-.ProseMirror ul, .ProseMirror ol {
-  padding-left: 1.5rem;
+/* Estilo para links dentro do editor */
+.ProseMirror a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* Estilos para a funcionalidade de Tabela */
@@ -25,7 +23,7 @@
 }
 
 .ProseMirror th, .ProseMirror td {
-  border: 1px solid hsl(var(--border));
+  border: 1px solid hsl(var(--border)); /* Usa a cor da borda do seu tema */
   padding: 0.5rem;
   vertical-align: top;
   position: relative;
@@ -33,7 +31,7 @@
 
 .ProseMirror th {
   font-weight: bold;
-  background-color: hsl(var(--secondary));
+  background-color: hsl(var(--secondary)); /* Usa a cor secundária do seu tema */
 }
 
 /* Estilos para o redimensionamento de colunas */
