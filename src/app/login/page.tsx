@@ -1,19 +1,17 @@
 // src/app/login/page.tsx
-
 'use client';
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Github, Mail } from 'lucide-react'; // Usaremos Mail para o Google como exemplo
 
 export default function LoginPage() {
   const supabase = createClientComponentClient();
 
-  const handleLogin = async () => {
-    // CORREÇÃO AQUI: Adicionamos a opção 'redirectTo' para garantir
-    // que o Supabase saiba exatamente para onde enviar o usuário
-    // após a autorização do GitHub. Isso torna o processo mais robusto.
+  const handleSignIn = async (provider: 'github' | 'google') => {
     await supabase.auth.signInWithOAuth({
-      provider: 'github',
+      provider,
       options: {
         redirectTo: `${location.origin}/auth/callback`,
       },
@@ -21,14 +19,25 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh]">
-      <div className="bg-gray-800 p-8 rounded-lg text-center shadow-lg">
-        <h1 className="text-2xl font-bold mb-2">HUB Hélio</h1>
-        <p className="text-gray-400 mb-6">Faça o login para começar</p>
-        <Button onClick={handleLogin}>
-          Entrar com GitHub
-        </Button>
-      </div>
+    <div className="flex items-center justify-center h-screen bg-background">
+      <Card className="w-[350px]">
+        <CardHeader className="text-center">
+          <CardTitle>HUB de Estudos</CardTitle>
+          <CardDescription>Faça o login para começar</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col space-y-2">
+            <Button variant="outline" onClick={() => handleSignIn('github')}>
+              <Github className="mr-2 h-4 w-4" />
+              Entrar com GitHub
+            </Button>
+            <Button variant="outline" onClick={() => handleSignIn('google')}>
+              <Mail className="mr-2 h-4 w-4" />
+              Entrar com Google
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
