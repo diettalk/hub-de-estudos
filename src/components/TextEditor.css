@@ -1,14 +1,66 @@
-/* src/components/TextEditor.css */
-
-.tiptap {
-  height: 100%;
-}
-
-.tiptap > .ProseMirror {
-  height: 100%;
-  padding: 0.5rem;
-}
-
-.tiptap > .ProseMirror:focus {
+/* Estilos base para o conteúdo do editor Tiptap */
+.ProseMirror {
   outline: none;
+  height: 100%;
+}
+
+.ProseMirror p {
+  margin: 0;
+}
+
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.ProseMirror ul, .ProseMirror ol {
+  padding-left: 1.5rem;
+}
+
+/* Estilos para a funcionalidade de Tabela */
+.ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.ProseMirror th, .ProseMirror td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5rem;
+  vertical-align: top;
+  position: relative;
+}
+
+.ProseMirror th {
+  font-weight: bold;
+  background-color: hsl(var(--secondary));
+}
+
+/* Estilos para o redimensionamento de colunas */
+.column-resizing {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  cursor: col-resize;
+  background-color: hsl(var(--primary));
+}
+
+/* Estilos para vídeos do YouTube */
+.youtube-wrapper {
+  position: relative;
+  padding-bottom: 56.25%; /* Proporção 16:9 */
+  height: 0;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.youtube-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
