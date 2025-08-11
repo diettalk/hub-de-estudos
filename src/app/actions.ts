@@ -547,3 +547,32 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
   revalidatePath('/'); // Atualiza a sidebar em todas as páginas
   return { success: true };
 }
+
+// ==================================================================
+// --- AÇÃO PARA REORDENAR CONCURSOS ---
+// ==================================================================
+export async function updateConcursosOrdem(orderedIds: number[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    // O 'map' cria uma série de promessas de atualização
+    const updatePromises = orderedIds.map((id, index) =>
+      supabase
+        .from('concursos')
+        .update({ ordem: index }) // Atualiza a coluna 'ordem' com a nova posição
+        .eq('id', id)
+        .eq('user_id', user.id)
+    );
+
+    // Executa todas as promessas de atualização em paralelo
+    await Promise.all(updatePromises);
+
+    revalidatePath('/guia-estudos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao salvar a ordem: ${message}` };
+  }
+}
