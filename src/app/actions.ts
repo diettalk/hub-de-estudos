@@ -519,3 +519,31 @@ export async function deleteAnotacao(formData: FormData) {
   await supabase.from('anotacoes').delete().eq('id', id);
   revalidatePath('/');
 }
+
+// Adicione esta função no final de src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES DE PERFIL ---
+// ==================================================================
+export async function updateProfile({ id, fullName, avatarUrl }: { id: string, fullName: string, avatarUrl: string | null }) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user || user.id !== id) {
+    return { error: 'Operação não autorizada.' };
+  }
+  
+  const { error } = await supabase.from('profiles').update({
+    full_name: fullName,
+    avatar_url: avatarUrl,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id);
+
+  if (error) {
+    return { error: error.message };
+  }
+  
+  revalidatePath('/perfil'); // Atualiza os dados na página de perfil
+  revalidatePath('/'); // Atualiza a sidebar em todas as páginas
+  return { success: true };
+}

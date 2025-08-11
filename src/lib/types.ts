@@ -36,3 +36,12 @@ export type EventoRevisao = {
   color: string;
   data: string; // Data no formato ISO (ex: "2025-07-01T...")
 };
+
+// Adicione este tipo ao seu arquivo src/lib/types.ts
+
+export type Profile = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  updated_at: string | null;
+};
