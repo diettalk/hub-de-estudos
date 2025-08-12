@@ -1,4 +1,3 @@
-// src/app/ciclo/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -26,6 +25,12 @@ export default async function CicloPage() {
   
   const { data: disciplinas } = await supabase.from('paginas').select('id, title, emoji').order('title');
   const legendaDefault = `LP: Língua Portuguesa\nRLM: Raciocínio Lógico\nG.GOV: Gestão Governamental\nP.PUB: Políticas Públicas`;
+
+  // --- CORREÇÃO ADICIONADA AQUI ---
+  // Cria uma lista de disciplinas únicas, removendo duplicados com base no 'title'
+  const disciplinasUnicas = disciplinas
+    ? Array.from(new Map(disciplinas.map(item => [item.title, item])).values())
+    : [];
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8">
@@ -55,7 +60,8 @@ export default async function CicloPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinas={disciplinas as Disciplina[] || []} />)}
+                {/* Passa a lista de disciplinas únicas para a tabela */}
+                {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinas={disciplinasUnicas as Disciplina[] || []} />)}
               </tbody>
             </table>
           </div>

@@ -8,17 +8,15 @@ import { type JSONContent } from '@tiptap/react';
 
 export const dynamic = 'force-dynamic';
 
-// Função para construir a árvore a partir de uma lista plana de páginas
+// A função buildTree continua a mesma
 const buildTree = (paginas: Node[]): Node[] => {
     const map = new Map<number, Node>();
     const roots: Node[] = [];
     
-    // Primeiro, cria um mapa de todos os nós para acesso rápido
     paginas.forEach(p => {
         map.set(p.id, { ...p, children: [] });
     });
 
-    // Agora, atribui cada nó ao seu pai correto
     paginas.forEach(p => {
         const node = map.get(p.id);
         if (node) {
@@ -40,28 +38,20 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     redirect('/login');
   }
 
-  // CORREÇÃO: Alterado 'order' de 'created_at' para 'title' para consistência
+  // CORREÇÃO: Vamos buscar TODOS os dados das 'paginas' para garantir que nada fica de fora,
+  // e ordenar por 'title' para consistência.
   const { data: allPaginas } = await supabase
     .from('paginas')
-    .select('id, parent_id, title, emoji')
+    .select('*') // Buscamos tudo para garantir que temos todos os dados para a árvore e para o editor
     .eq('user_id', user.id)
-    .order('title', { ascending: true }); // Ordenar por título
+    .order('title', { ascending: true });
 
   const paginaTree = buildTree((allPaginas as Node[]) || []);
   
   const selectedId = searchParams.page ? Number(searchParams.page) : null;
-  let selectedPage: Node | null = null;
-
-  // Se um ID estiver selecionado na URL, busca o conteúdo completo desse item
-  if (selectedId) {
-    const { data: pageData } = await supabase
-      .from('paginas')
-      .select('*')
-      .eq('id', selectedId)
-      .eq('user_id', user.id)
-      .single();
-    selectedPage = pageData as Node | null;
-  }
+  
+  // Agora, em vez de fazer uma segunda busca, simplesmente encontramos a página selecionada na lista que já temos.
+  const selectedPage = allPaginas?.find(p => p.id === selectedId) || null;
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
