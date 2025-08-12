@@ -39,10 +39,9 @@
   background-color: hsl(var(--accent)); 
 }
 
-/* CORREÇÃO: Dando um fundo diferente para as células normais */
-/* para que se destaquem do fundo principal do editor */
+/* CORREÇÃO: Removida a cor de fundo das células para que as bordas fiquem visíveis contra o fundo do editor */
 .ProseMirror td {
-    background-color: hsl(var(--secondary));
+    background-color: transparent;
 }
 
 /* Estilos para o redimensionamento de colunas */
