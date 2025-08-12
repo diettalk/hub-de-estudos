@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useEditor, EditorContent, Editor, JSONContent, BubbleMenu } from '@tiptap/react'; // 1. Importamos o BubbleMenu
+import { useEditor, EditorContent, Editor, JSONContent, BubbleMenu } from '@tiptap/react';
 import { 
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, Underline, Palette
 } from 'lucide-react';
@@ -11,14 +11,14 @@ import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import TiptapLink from '@tiptap/extension-link';
+// import TiptapLink from '@tiptap/extension-link'; // 1. REMOVIDO
 import YoutubeExtension from '@tiptap/extension-youtube';
 import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-import TiptapUnderline from '@tiptap/extension-underline';
-import BubbleMenuExtension from '@tiptap/extension-bubble-menu'; // 2. Importamos a extensão
+// import TiptapUnderline from '@tiptap/extension-underline'; // 2. REMOVIDO
+import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
 
 import './TextEditor.css';
 
@@ -89,7 +89,6 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} className="bg-secondary p-2 rounded" title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
-            {/* 3. A barra de ferramentas da tabela foi REMOVIDA daqui */}
         </div>
     );
 };
@@ -102,26 +101,29 @@ interface TextEditorProps {
 function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            // 3. Configuração do StarterKit para incluir Underline e Link customizado
+            StarterKit.configure({
+                link: {
+                    openOnClick: true,
+                    autolink: true,
+                    HTMLAttributes: {
+                        class: 'cursor-pointer',
+                    },
+                },
+                // O Underline já vem por padrão, não precisa configurar
+            }),
             Highlight.configure({ multicolor: true }),
             TextStyle,
             Color,
-            TiptapLink.configure({ 
-                openOnClick: true, 
-                autolink: true,
-                HTMLAttributes: {
-                    class: 'cursor-pointer',
-                },
-            }),
             YoutubeExtension.configure({ nocookie: true }),
             Table.configure({ resizable: true }),
             TableRow,
             TableHeader,
             CustomTableCell,
-            TiptapUnderline,
-            BubbleMenuExtension.configure({ // 4. Configuração da extensão
-                pluginKey: 'tableMenu', // Chave única para este menu
+            BubbleMenuExtension.configure({
+                pluginKey: 'tableMenu',
             }),
+            // 4. As extensões duplicadas foram removidas daqui
         ],
         content: initialContent || '',
         editorProps: {
@@ -147,13 +149,11 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         <div className="h-full flex flex-col border rounded-lg">
             <MenuBar editor={editor} />
 
-            {/* 5. O Menu Flutuante para a Tabela */}
             {editor && (
                 <BubbleMenu 
                     editor={editor} 
                     pluginKey="tableMenu"
                     tippyOptions={{ duration: 100 }}
-                    // A "mágica" que faz o menu aparecer apenas para tabelas
                     shouldShow={({ editor }) => editor.isActive('table')}
                     className="flex flex-wrap gap-2 items-center p-2 bg-card border rounded-lg shadow-xl"
                 >
