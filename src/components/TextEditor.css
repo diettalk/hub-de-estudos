@@ -8,14 +8,17 @@
   margin: 0;
 }
 
-/* Estilo para links para evitar sublinhado contínuo */
-.ProseMirror p a {
+.ProseMirror a {
   text-decoration: underline;
   color: hsl(var(--primary));
   cursor: pointer;
 }
 
-/* Estilos para a Tabela */
+/* ================================================= */
+/* --- CORREÇÃO DEFINITIVA PARA ESTILOS DA TABELA --- */
+/* ================================================= */
+
+/* Usamos '.ProseMirror table' para tornar a regra mais específica e forte */
 .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
@@ -25,8 +28,9 @@
 
 .ProseMirror th,
 .ProseMirror td {
-  /* CORREÇÃO: Usar uma cor com mais contraste para a borda */
-  border: 1px solid hsl(var(--foreground) / 0.2); /* Borda semi-transparente baseada na cor do texto */
+  /* Usamos uma cor de borda semi-transparente baseada na cor do texto.
+     Isto garante que será sempre visível, seja no tema claro ou escuro. */
+  border: 1px solid hsl(var(--foreground) / 0.2); 
   padding: 0.75rem;
   vertical-align: top;
   position: relative;
@@ -34,6 +38,7 @@
 
 .ProseMirror th {
   font-weight: bold;
+  /* Usamos a cor 'accent' para um cabeçalho destacado */
   background-color: hsl(var(--accent)); 
 }
 
