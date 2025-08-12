@@ -1,23 +1,29 @@
+// src/app/documentos/page.tsx
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import TextEditor from '@/components/TextEditor';
 import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
 import { updateDocumentoContent } from '@/app/actions';
-import { type JSONContent } from '@tiptap/react';
 
 export const dynamic = 'force-dynamic';
 
-// A mesma função que usamos na página de Disciplinas para construir a árvore
-const buildTree = (documentos: Node[]): Node[] => {
+type DocumentoFromDB = {
+  id: number;
+  parent_id: number | null;
+  title: string;
+  content: any; 
+};
+
+const buildTree = (docs: DocumentoFromDB[]): Node[] => {
     const map = new Map<number, Node>();
     const roots: Node[] = [];
     
-    documentos.forEach(doc => {
+    docs.forEach(doc => {
         map.set(doc.id, { ...doc, children: [] });
     });
 
-    documentos.forEach(doc => {
+    docs.forEach(doc => {
         const node = map.get(doc.id);
         if (node) {
             if (doc.parent_id && map.has(doc.parent_id)) {
@@ -38,52 +44,50 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     redirect('/login');
   }
 
-  // Busca todos os itens da tabela 'documentos' para construir a árvore
-  const { data: allDocumentos } = await supabase
+  const { data: allDocuments } = await supabase
     .from('documentos')
-    .select('id, parent_id, title, emoji') // 'emoji' pode não existir, mas não causa erro
+    .select('id, parent_id, title')
     .eq('user_id', user.id)
     .order('created_at', { ascending: true });
 
-  const documentTree = buildTree((allDocumentos as Node[]) || []);
-  
-  const selectedId = searchParams.id ? Number(searchParams.id) : null;
-  let selectedDocument: Node | null = null;
+  const documentTree = buildTree(allDocuments || []);
 
-  // Se um ID estiver selecionado na URL, busca o conteúdo completo desse item
+  const selectedId = searchParams.id ? Number(searchParams.id) : null;
+  let selectedDocument: DocumentoFromDB | null = null;
+  
   if (selectedId) {
     const { data: docData } = await supabase
       .from('documentos')
-      .select('*')
+      .select('id, title, content')
       .eq('id', selectedId)
       .eq('user_id', user.id)
       .single();
-    selectedDocument = docData as Node | null;
+    selectedDocument = docData;
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
-      <div className="md:col-span-1 h-full">
-        {/* Renderiza a sidebar hierárquica, dizendo que a tabela é 'documentos' */}
+    // CORREÇÃO: Removido o espaçamento para um layout mais integrado
+    <div className="grid grid-cols-1 md:grid-cols-4 h-full">
+      <div className="md:col-span-1 h-full p-4">
         <HierarchicalSidebar 
             tree={documentTree} 
             table="documentos"
             title="DOCUMENTOS"
         />
       </div>
-      <div className="md:col-span-3 h-full">
+      <div className="md:col-span-3 h-full flex flex-col p-4">
         {selectedDocument ? (
-            // Se um documento estiver selecionado, mostra o nosso novo editor avançado
-            <TextEditor
-                key={selectedDocument.id}
-                initialContent={selectedDocument.content}
-                onSave={async (newContent: JSONContent) => {
-                    'use server';
-                    await updateDocumentoContent(selectedDocument!.id, newContent);
-                }}
-            />
+            <div className="bg-card border rounded-lg h-full flex flex-col">
+                <TextEditor
+                    key={selectedDocument.id}
+                    initialContent={selectedDocument.content}
+                    onSave={async (newContent: any) => {
+                      'use server';
+                      await updateDocumentoContent(selectedDocument!.id, newContent);
+                    }}
+                />
+            </div>
         ) : (
-            // Mensagem padrão se nada estiver selecionado
             <div className="flex items-center justify-center h-full bg-card border rounded-lg">
                 <p className="text-muted-foreground">Selecione ou crie um documento para começar.</p>
             </div>
