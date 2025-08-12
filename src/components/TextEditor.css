@@ -15,26 +15,25 @@
   cursor: pointer;
 }
 
-/* CORREÇÃO: Estilos para a Tabela */
+/* Estilos para a Tabela */
 .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
-  /* Garante que a tabela não tenha fundo próprio que esconda as bordas */
   background-color: transparent;
 }
 
 .ProseMirror th,
 .ProseMirror td {
-  border: 1px solid hsl(var(--border)); /* Usa a cor da borda do seu tema */
-  padding: 0.75rem; /* Aumenta o espaçamento interno para melhor leitura */
+  /* CORREÇÃO: Usar uma cor com mais contraste para a borda */
+  border: 1px solid hsl(var(--foreground) / 0.2); /* Borda semi-transparente baseada na cor do texto */
+  padding: 0.75rem;
   vertical-align: top;
   position: relative;
 }
 
 .ProseMirror th {
   font-weight: bold;
-  /* Usa a cor de 'accent' para um cabeçalho mais destacado */
   background-color: hsl(var(--accent)); 
 }
 
