@@ -117,19 +117,19 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP (AGORA DINÂMICA) --- */
   /*
-    Este bloco força o texto e as bordas da tabela a serem
-    claros no modo escuro, resolvendo o problema de visibilidade.
+    Este bloco define os estilos da tabela para que funcionem
+    tanto no modo claro quanto no escuro, usando as variáveis do tema.
   */
-  .dark .ProseMirror table th,
-  .dark .ProseMirror table td {
-    color: theme('colors.slate.200'); /* Força o texto para um cinza claro */
-    border-color: theme('colors.slate.600'); /* Deixa as bordas visíveis */
+  .ProseMirror table th,
+  .ProseMirror table td {
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
   }
 
-  .dark .ProseMirror table th {
-      background-color: theme('colors.slate.800'); /* Fundo para o cabeçalho da tabela */
+  .ProseMirror table th {
+      background-color: hsl(var(--secondary));
   }
 }
 
