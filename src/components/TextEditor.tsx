@@ -17,6 +17,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
+import TiptapUnderline from '@tiptap/extension-underline'; // 1. CORREÇÃO: Importamos a extensão de sublinhado
 
 import './TextEditor.css';
 
@@ -117,7 +118,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             TableRow,
             TableHeader,
             CustomTableCell,
-            BubbleMenuExtension.configure({ // Configuração da extensão
+            TiptapUnderline, // 2. CORREÇÃO: Adicionamos a extensão de volta
+            BubbleMenuExtension.configure({
                 pluginKey: 'tableMenu',
             }),
         ],
