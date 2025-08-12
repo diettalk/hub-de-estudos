@@ -8,31 +8,34 @@
   margin: 0;
 }
 
-/* CORREÇÃO: Estilo específico para links para evitar o sublinhado infinito */
-.ProseMirror a {
+/* Estilo para links para evitar sublinhado contínuo */
+.ProseMirror p a {
   text-decoration: underline;
   color: hsl(var(--primary));
   cursor: pointer;
 }
 
-/* CORREÇÃO: Estilo explícito para as bordas da tabela */
+/* CORREÇÃO: Estilos para a Tabela */
 .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
+  /* Garante que a tabela não tenha fundo próprio que esconda as bordas */
+  background-color: transparent;
 }
 
 .ProseMirror th,
 .ProseMirror td {
   border: 1px solid hsl(var(--border)); /* Usa a cor da borda do seu tema */
-  padding: 0.5rem;
+  padding: 0.75rem; /* Aumenta o espaçamento interno para melhor leitura */
   vertical-align: top;
   position: relative;
 }
 
 .ProseMirror th {
   font-weight: bold;
-  background-color: hsl(var(--secondary)); /* Usa a cor secundária do seu tema */
+  /* Usa a cor de 'accent' para um cabeçalho mais destacado */
+  background-color: hsl(var(--accent)); 
 }
 
 /* Estilos para o redimensionamento de colunas */

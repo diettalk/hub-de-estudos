@@ -19,7 +19,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import TiptapUnderline from '@tiptap/extension-underline';
 
-// Importa o nosso novo CSS
+// Importa o nosso CSS corrigido
 import './TextEditor.css';
 
 const MenuBar = ({ editor }: { editor: Editor | null }) => {
@@ -67,6 +67,7 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
             
+            {/* CORREÇÃO: A barra de ferramentas da tabela agora aparece e desaparece corretamente */}
             {editor.isActive('table') && (
                 <div className="flex flex-wrap gap-2 items-center border-t pt-2 mt-2">
                     <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Antes</button>
@@ -94,7 +95,14 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             Highlight.configure({ multicolor: true }),
             TextStyle,
             Color,
-            TiptapLink.configure({ openOnClick: false, autolink: true }),
+            TiptapLink.configure({ 
+                openOnClick: true, 
+                autolink: true,
+                // CORREÇÃO: Desativa o sublinhado automático para links
+                HTMLAttributes: {
+                    class: 'cursor-pointer',
+                },
+            }),
             YoutubeExtension.configure({ nocookie: true }),
             Table.configure({ resizable: true }),
             TableRow,
