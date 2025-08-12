@@ -40,12 +40,12 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     redirect('/login');
   }
 
-  // Busca todos os itens da tabela 'paginas' para construir a árvore
+  // CORREÇÃO: Alterado 'order' de 'created_at' para 'title' para consistência
   const { data: allPaginas } = await supabase
     .from('paginas')
-    .select('id, parent_id, title, emoji') // Não buscamos o 'content' de todos para otimizar
+    .select('id, parent_id, title, emoji')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: true });
+    .order('title', { ascending: true }); // Ordenar por título
 
   const paginaTree = buildTree((allPaginas as Node[]) || []);
   
@@ -66,7 +66,6 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
       <div className="md:col-span-1 h-full">
-        {/* Renderiza a nova sidebar hierárquica */}
         <HierarchicalSidebar 
             tree={paginaTree} 
             table="paginas"
@@ -75,9 +74,8 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
       </div>
       <div className="md:col-span-3 h-full">
         {selectedPage ? (
-            // Se uma página estiver selecionada, mostra o editor
             <TextEditor
-                key={selectedPage.id} // A chave força o editor a recarregar quando a página muda
+                key={selectedPage.id}
                 initialContent={selectedPage.content}
                 onSave={async (newContent: JSONContent) => {
                     'use server';
@@ -85,7 +83,6 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
                 }}
             />
         ) : (
-            // Se nenhuma página estiver selecionada, mostra uma mensagem
             <div className="flex items-center justify-center h-full bg-card border rounded-lg">
                 <p className="text-muted-foreground">Selecione ou crie uma disciplina para começar.</p>
             </div>
