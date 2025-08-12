@@ -689,3 +689,80 @@ export async function updateItemParent(table: 'documentos' | 'paginas', itemId: 
     return { error: `Falha ao mover: ${message}` };
   }
 }
+
+// ==================================================================
+// --- AÇÕES PARA GERADOR DE ANKI ---
+// ==================================================================
+export async function generateAnkiCards(formData: FormData) {
+  const sourceText = formData.get('sourceText') as string;
+  const numCards = Number(formData.get('numCards'));
+
+  const { data: { user } } = await createServerActionClient({ cookies }).auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return { error: "Chave de API do Gemini não encontrada." };
+
+  const prompt = `Baseado no seguinte texto de estudo, gere exatamente ${numCards} flashcards no formato JSON para o Anki. O texto é: "${sourceText}". Você é um especialista em criar flashcards para o sistema de repetição espaçada Anki. O JSON deve ter uma chave "cards" que contém um array de objetos, cada um com "question" e "answer".`;
+
+  try {
+    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+    const payload = { 
+        contents: chatHistory,
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    "cards": {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "question": { "type": "STRING" },
+                                "answer": { "type": "STRING" }
+                            },
+                            required: ["question", "answer"]
+                        }
+                    }
+                }
+            }
+        }
+    };
+    
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Erro na API: ${response.statusText} - ${errorBody}`);
+    }
+
+    const result = await response.json();
+    const text = result.candidates[0].content.parts[0].text;
+    const parsedJson = JSON.parse(text);
+
+    return { data: parsedJson.cards };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
+    return { error: `Falha ao gerar flashcards: ${message}` };
+  }
+}
+
+export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+  if (!title.trim()) return { error: "O título é obrigatório." };
+  if (cards.length === 0) return { error: "Não há flashcards para guardar." };
+
+  const { data, error } = await supabase.from('anki_decks').insert({ title, cards, user_id: user.id }).select('id').single();
+  if (error) return { error: "Falha ao guardar o deck de flashcards." };
+  
+  revalidatePath('/anki');
+  return { success: true, newDeckId: data.id };
+}

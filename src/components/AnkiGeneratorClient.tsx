@@ -1,4 +1,3 @@
-// src/components/AnkiGeneratorClient.tsx
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -28,7 +27,14 @@ export function AnkiGeneratorClient() {
     }
     startTransition(async () => {
       setCards([]);
-      const result = await generateAnkiCards(sourceText, numCards);
+
+      // CORREÇÃO: Criar um FormData para enviar os dados para a Server Action
+      const formData = new FormData();
+      formData.append('sourceText', sourceText);
+      formData.append('numCards', String(numCards));
+
+      const result = await generateAnkiCards(formData);
+      
       if (result.error) {
         toast.error(`Erro da IA: ${result.error}`);
       } else if (result.data) {
@@ -61,18 +67,22 @@ export function AnkiGeneratorClient() {
             toast.error(result.error);
         } else {
             toast.success(`Deck "${title}" guardado com sucesso!`);
-            // Opcional: redirecionar para a página de gestão de decks
-            // router.push(`/anki/decks/${result.newDeckId}`);
         }
     });
   };
 
-  const copyToClipboard = () => { /* ... (código sem alteração) ... */ };
+  const copyToClipboard = () => {
+    const textToCopy = cards.map(card => `${card.question}\t${card.answer}`).join('\n');
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        toast.success("Deck copiado para a área de transferência!");
+    }, () => {
+        toast.error("Falha ao copiar.");
+    });
+  };
   const clearAll = () => { setSourceText(''); setCards([]); }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* Coluna de Entrada */}
       <div className="bg-card border rounded-lg p-6 space-y-4 flex flex-col">
         <div>
           <Label htmlFor="source-text" className="text-lg font-semibold">Seu Material de Estudo</Label>
@@ -88,7 +98,6 @@ export function AnkiGeneratorClient() {
         </div>
       </div>
 
-      {/* Coluna de Saída */}
       <div className="bg-card border rounded-lg p-6 flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Flashcards Gerados</h2>
