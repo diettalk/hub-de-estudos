@@ -67,7 +67,6 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
             
-            {/* CORREÇÃO: A barra de ferramentas da tabela agora aparece e desaparece corretamente */}
             {editor.isActive('table') && (
                 <div className="flex flex-wrap gap-2 items-center border-t pt-2 mt-2">
                     <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Antes</button>
@@ -98,7 +97,6 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             TiptapLink.configure({ 
                 openOnClick: true, 
                 autolink: true,
-                // CORREÇÃO: Desativa o sublinhado automático para links
                 HTMLAttributes: {
                     class: 'cursor-pointer',
                 },
@@ -113,7 +111,10 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         content: initialContent || '',
         editorProps: {
             attributes: {
-                class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-card text-card-foreground rounded-b-lg',
+                // --- CORREÇÃO APLICADA AQUI ---
+                // Trocamos 'bg-card' por 'bg-secondary' para usar um fundo um pouco mais claro
+                // no modo escuro, o que deve dar contraste para o texto preto da tabela.
+                class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-secondary text-card-foreground rounded-b-lg',
             },
         },
         onUpdate: ({ editor }) => {
