@@ -42,7 +42,8 @@ const CustomTableCell = TableCell.extend({
 });
 
 
-const MenuBar = ({ editor }: { editor: Editor | null }) => {
+// 1. CORREÇÃO: A barra de menu agora recebe o estado 'isTableActive' como prop
+const MenuBar = ({ editor, isTableActive }: { editor: Editor | null; isTableActive: boolean }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
 
     const setLink = useCallback(() => {
@@ -88,8 +89,8 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
             
-            {/* Barra de Ferramentas da Tabela (Condicional) */}
-            {editor.isActive('table') && (
+            {/* 2. CORREÇÃO: A visibilidade agora é controlada pelo estado do React */}
+            {isTableActive && (
                 <div className="flex flex-wrap gap-2 items-center border-t pt-2 mt-2">
                     <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Antes</button>
                     <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Depois</button>
@@ -120,9 +121,11 @@ interface TextEditorProps {
 }
 
 function TextEditor({ initialContent, onSave }: TextEditorProps) {
+    // 3. CORREÇÃO: Adicionamos um estado para controlar a visibilidade da barra da tabela
+    const [isTableActive, setIsTableActive] = useState(false);
+
     const editor = useEditor({
         extensions: [
-            // O StarterKit já inclui Link e Underline, então não os adicionamos separadamente
             StarterKit.configure({
               link: {
                 openOnClick: true,
@@ -139,7 +142,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             Table.configure({ resizable: true }),
             TableRow,
             TableHeader,
-            CustomTableCell, // Usamos nossa célula customizada para permitir a coloração
+            CustomTableCell,
         ],
         content: initialContent || '',
         editorProps: {
@@ -147,8 +150,13 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-card text-card-foreground rounded-b-lg',
             },
         },
+        // 4. CORREÇÃO: Atualizamos o estado sempre que o conteúdo ou a seleção mudam
         onUpdate: ({ editor }) => {
             onSave(editor.getJSON());
+            setIsTableActive(editor.isActive('table'));
+        },
+        onSelectionUpdate: ({ editor }) => {
+            setIsTableActive(editor.isActive('table'));
         },
     });
 
@@ -163,7 +171,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
 
     return (
         <div className="h-full flex flex-col border rounded-lg">
-            <MenuBar editor={editor} />
+            {/* 5. CORREÇÃO: Passamos o novo estado como prop */}
+            <MenuBar editor={editor} isTableActive={isTableActive} />
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
