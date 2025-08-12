@@ -183,3 +183,21 @@ html, body {
     background-color: hsl(var(--primary-foreground));
 }
 
+@layer base {
+  /*
+    Este bloco corrige a visibilidade da tabela do editor Tiptap no tema escuro.
+    Ele garante que o texto e as bordas sejam claros em fundos escuros.
+  */
+  .dark .ProseMirror table {
+    @apply w-full;
+  }
+
+  .dark .ProseMirror table th,
+  .dark .ProseMirror table td {
+    /* Define a cor do texto para um cinza claro, garantindo a leitura. */
+    color: theme('colors.slate.200');
+    
+    /* Define a cor da borda para um cinza mais escuro, mas visível. */
+    border-color: theme('colors.slate.600');
+  }
+}
