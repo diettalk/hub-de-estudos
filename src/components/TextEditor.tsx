@@ -17,7 +17,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
-import TiptapUnderline from '@tiptap/extension-underline'; // 1. CORREÇÃO: Importamos a extensão de sublinhado
+// import TiptapUnderline from '@tiptap/extension-underline'; // 1. CORREÇÃO: REMOVEMOS a importação duplicada
 
 import './TextEditor.css';
 
@@ -88,7 +88,6 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} className="bg-secondary p-2 rounded" title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
-            {/* A barra de ferramentas da tabela foi removida daqui para o BubbleMenu */}
         </div>
     );
 };
@@ -109,6 +108,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
                   class: 'cursor-pointer',
                 },
               },
+              // O StarterKit já inclui 'underline', então não precisamos adicioná-lo
             }),
             Highlight.configure({ multicolor: true }),
             TextStyle,
@@ -118,7 +118,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             TableRow,
             TableHeader,
             CustomTableCell,
-            TiptapUnderline, // 2. CORREÇÃO: Adicionamos a extensão de volta
+            // TiptapUnderline, // 2. CORREÇÃO: Removemos a extensão duplicada daqui
             BubbleMenuExtension.configure({
                 pluginKey: 'tableMenu',
             }),
@@ -147,7 +147,6 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         <div className="h-full flex flex-col border rounded-lg">
             <MenuBar editor={editor} />
 
-            {/* O Menu Flutuante para a Tabela */}
             {editor && (
                 <BubbleMenu 
                     editor={editor} 
