@@ -115,19 +115,16 @@
   }
 
   /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
-  /*
-    Estilos base para a tabela. O fundo agora é transparente por padrão.
-    A cor de fundo pode ser aplicada manualmente com o seletor de cores.
-  */
   .ProseMirror table th,
   .ProseMirror table td {
     border: 1px solid hsl(var(--border));
     color: hsl(var(--foreground));
-    background-color: transparent; /* Garante que não haja cor de fundo padrão */
+    /* CORREÇÃO: Usamos !important para garantir que esta regra seja aplicada */
+    background-color: transparent !important; 
   }
 
   .ProseMirror table th {
-      font-weight: bold; /* Mantém o cabeçalho em negrito */
+      font-weight: bold;
   }
 }
 
