@@ -17,7 +17,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
-// import TiptapUnderline from '@tiptap/extension-underline'; // 1. CORREÇÃO: REMOVEMOS a importação duplicada
+import TiptapUnderline from '@tiptap/extension-underline'; // 1. CORREÇÃO: Adicionamos a importação de volta
 
 import './TextEditor.css';
 
@@ -108,7 +108,6 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
                   class: 'cursor-pointer',
                 },
               },
-              // O StarterKit já inclui 'underline', então não precisamos adicioná-lo
             }),
             Highlight.configure({ multicolor: true }),
             TextStyle,
@@ -118,7 +117,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             TableRow,
             TableHeader,
             CustomTableCell,
-            // TiptapUnderline, // 2. CORREÇÃO: Removemos a extensão duplicada daqui
+            TiptapUnderline, // 2. CORREÇÃO: Adicionamos a extensão de volta à lista
             BubbleMenuExtension.configure({
                 pluginKey: 'tableMenu',
             }),
