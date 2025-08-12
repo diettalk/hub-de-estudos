@@ -22,12 +22,11 @@
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
-  background-color: transparent;
 }
 
 .ProseMirror th,
 .ProseMirror td {
-  /* CORREÇÃO: Usando a cor de borda principal do tema para mais contraste */
+  /* Usa uma cor de borda com bom contraste */
   border: 1px solid hsl(var(--border)); 
   padding: 0.75rem;
   vertical-align: top;
@@ -36,14 +35,14 @@
 
 .ProseMirror th {
   font-weight: bold;
-  /* Usando a cor 'secondary' para o cabeçalho, que tem bom contraste */
-  background-color: hsl(var(--secondary)); 
+  /* Usa a cor 'accent' para um cabeçalho destacado */
+  background-color: hsl(var(--accent)); 
 }
 
-/* CORREÇÃO ADICIONAL: Dando um fundo sutil para as células normais */
-/* para diferenciá-las do fundo principal do editor */
+/* CORREÇÃO: Dando um fundo diferente para as células normais */
+/* para que se destaquem do fundo principal do editor */
 .ProseMirror td {
-    background-color: hsl(var(--background));
+    background-color: hsl(var(--secondary));
 }
 
 /* Estilos para o redimensionamento de colunas */
