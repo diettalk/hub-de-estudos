@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* NOTA: A diretiva `@custom-variant` não é padrão do Tailwind. 
-  Se ela não estiver sendo usada por um plugin específico, pode ser removida no futuro.
-*/
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -117,19 +114,19 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP (AGORA DINÂMICA) --- */
-  /*
-    Este bloco define os estilos da tabela para que funcionem
-    tanto no modo claro quanto no escuro, usando as variáveis do tema.
-  */
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP (AGORA DINÂMICA E COM CONTRASTE) --- */
   .ProseMirror table th,
   .ProseMirror table td {
     border: 1px solid hsl(var(--border));
     color: hsl(var(--foreground));
+    /* Adicionamos um fundo para a célula se destacar do fundo principal */
+    background-color: hsl(var(--secondary));
   }
 
   .ProseMirror table th {
+      /* Deixamos o cabeçalho com a mesma cor das células para um visual mais limpo */
       background-color: hsl(var(--secondary));
+      font-weight: bold;
   }
 }
 
