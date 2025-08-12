@@ -114,19 +114,20 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP (AGORA DINÂMICA E COM CONTRASTE) --- */
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  /*
+    Estilos base para a tabela. O fundo agora é transparente por padrão.
+    A cor de fundo pode ser aplicada manualmente com o seletor de cores.
+  */
   .ProseMirror table th,
   .ProseMirror table td {
     border: 1px solid hsl(var(--border));
     color: hsl(var(--foreground));
-    /* Adicionamos um fundo para a célula se destacar do fundo principal */
-    background-color: hsl(var(--secondary));
+    background-color: transparent; /* Garante que não haja cor de fundo padrão */
   }
 
   .ProseMirror table th {
-      /* Deixamos o cabeçalho com a mesma cor das células para um visual mais limpo */
-      background-color: hsl(var(--secondary));
-      font-weight: bold;
+      font-weight: bold; /* Mantém o cabeçalho em negrito */
   }
 }
 
