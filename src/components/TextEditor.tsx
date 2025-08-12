@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor, JSONContent, BubbleMenu } from '@tiptap/react'; // 1. Importamos o BubbleMenu
 import { 
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, Underline, Palette
-} from 'lucide-react'; // 1. Importamos o ícone de paleta
+} from 'lucide-react';
 
 // Imports de Extensões do Tiptap
 import StarterKit from '@tiptap/starter-kit';
@@ -16,18 +16,17 @@ import YoutubeExtension from '@tiptap/extension-youtube';
 import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell'; // Importamos a base
+import TableCell from '@tiptap/extension-table-cell';
 import TiptapUnderline from '@tiptap/extension-underline';
+import BubbleMenuExtension from '@tiptap/extension-bubble-menu'; // 2. Importamos a extensão
 
 import './TextEditor.css';
 
-// 2. Criamos uma extensão customizada para a célula da tabela
+// Criamos uma extensão customizada para a célula da tabela
 const CustomTableCell = TableCell.extend({
   addAttributes() {
     return {
-      // Herdamos os atributos originais
       ...this.parent?.(),
-      // Adicionamos nosso novo atributo de cor de fundo
       backgroundColor: {
         default: null,
         parseHTML: element => element.getAttribute('data-background-color'),
@@ -90,29 +89,7 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
                 <button onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} className="bg-secondary p-2 rounded" title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
                 <button onClick={addYoutubeVideo} className="bg-secondary p-2 rounded" title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
-            
-            {editor.isActive('table') && (
-                <div className="flex flex-wrap gap-2 items-center border-t pt-2 mt-2">
-                    <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Antes</button>
-                    <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Depois</button>
-                    <button onClick={() => editor.chain().focus().deleteColumn().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Coluna</button>
-                    <button onClick={() => editor.chain().focus().addRowBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Linha Antes</button>
-                    <button onClick={() => editor.chain().focus().addRowAfter().run()} className="bg-secondary p-2 rounded text-xs">Add Linha Depois</button>
-                    <button onClick={() => editor.chain().focus().deleteRow().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Linha</button>
-                    <button onClick={() => editor.chain().focus().deleteTable().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Tabela</button>
-                    
-                    {/* 3. Adicionamos o seletor de cor para o fundo da célula */}
-                    <div className="flex items-center bg-secondary rounded" title="Cor de Fundo da Célula">
-                        <Palette className="w-4 h-4 mx-2 text-muted-foreground" />
-                        <input
-                            type="color"
-                            onInput={event => editor.chain().focus().setCellAttribute('backgroundColor', (event.target as HTMLInputElement).value).run()}
-                            value={editor.getAttributes('tableCell').backgroundColor || '#000000'}
-                            className="w-8 h-8 p-1 bg-transparent rounded-r cursor-pointer"
-                        />
-                    </div>
-                </div>
-            )}
+            {/* 3. A barra de ferramentas da tabela foi REMOVIDA daqui */}
         </div>
     );
 };
@@ -140,8 +117,11 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             Table.configure({ resizable: true }),
             TableRow,
             TableHeader,
-            CustomTableCell, // 4. Usamos a nossa célula customizada em vez da padrão
+            CustomTableCell,
             TiptapUnderline,
+            BubbleMenuExtension.configure({ // 4. Configuração da extensão
+                pluginKey: 'tableMenu', // Chave única para este menu
+            }),
         ],
         content: initialContent || '',
         editorProps: {
@@ -166,6 +146,37 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
     return (
         <div className="h-full flex flex-col border rounded-lg">
             <MenuBar editor={editor} />
+
+            {/* 5. O Menu Flutuante para a Tabela */}
+            {editor && (
+                <BubbleMenu 
+                    editor={editor} 
+                    pluginKey="tableMenu"
+                    tippyOptions={{ duration: 100 }}
+                    // A "mágica" que faz o menu aparecer apenas para tabelas
+                    shouldShow={({ editor }) => editor.isActive('table')}
+                    className="flex flex-wrap gap-2 items-center p-2 bg-card border rounded-lg shadow-xl"
+                >
+                    <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Antes</button>
+                    <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="bg-secondary p-2 rounded text-xs">Add Coluna Depois</button>
+                    <button onClick={() => editor.chain().focus().deleteColumn().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Coluna</button>
+                    <button onClick={() => editor.chain().focus().addRowBefore().run()} className="bg-secondary p-2 rounded text-xs">Add Linha Antes</button>
+                    <button onClick={() => editor.chain().focus().addRowAfter().run()} className="bg-secondary p-2 rounded text-xs">Add Linha Depois</button>
+                    <button onClick={() => editor.chain().focus().deleteRow().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Linha</button>
+                    <button onClick={() => editor.chain().focus().deleteTable().run()} className="bg-destructive/80 p-2 rounded text-xs">Deletar Tabela</button>
+                    
+                    <div className="flex items-center bg-secondary rounded" title="Cor de Fundo da Célula">
+                        <Palette className="w-4 h-4 mx-2 text-muted-foreground" />
+                        <input
+                            type="color"
+                            onInput={event => editor.chain().focus().setCellAttribute('backgroundColor', (event.target as HTMLInputElement).value).run()}
+                            value={editor.getAttributes('tableCell').backgroundColor || '#000000'}
+                            className="w-8 h-8 p-1 bg-transparent rounded-r cursor-pointer"
+                        />
+                    </div>
+                </BubbleMenu>
+            )}
+
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
