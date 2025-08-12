@@ -110,9 +110,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         content: initialContent || '',
         editorProps: {
             attributes: {
-                // --- CORREÇÃO APLICADA AQUI ---
-                // Trocamos 'bg-secondary' por 'bg-background' para usar a cor de fundo principal.
-                class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-background text-card-foreground rounded-b-lg',
+                // --- CORREÇÃO 1: Fundo do editor usa a cor 'card' ---
+                class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-card text-card-foreground rounded-b-lg',
             },
         },
         onUpdate: ({ editor }) => {
@@ -130,7 +129,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
     }, [initialContent, editor]);
 
     return (
-        <div className="h-full flex flex-col">
+        // --- CORREÇÃO 2: Envolvemos tudo em uma div com borda para criar o contêiner visual ---
+        <div className="h-full flex flex-col border rounded-lg">
             <MenuBar editor={editor} />
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
