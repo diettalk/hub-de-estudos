@@ -18,7 +18,6 @@
 /* --- CORREÇÃO DEFINITIVA PARA ESTILOS DA TABELA --- */
 /* ================================================= */
 
-/* Usamos '.ProseMirror table' para tornar a regra mais específica e forte */
 .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
@@ -28,9 +27,8 @@
 
 .ProseMirror th,
 .ProseMirror td {
-  /* Usamos uma cor de borda semi-transparente baseada na cor do texto.
-     Isto garante que será sempre visível, seja no tema claro ou escuro. */
-  border: 1px solid hsl(var(--foreground) / 0.2); 
+  /* CORREÇÃO: Usando a cor de borda principal do tema para mais contraste */
+  border: 1px solid hsl(var(--border)); 
   padding: 0.75rem;
   vertical-align: top;
   position: relative;
@@ -38,8 +36,14 @@
 
 .ProseMirror th {
   font-weight: bold;
-  /* Usamos a cor 'accent' para um cabeçalho destacado */
-  background-color: hsl(var(--accent)); 
+  /* Usando a cor 'secondary' para o cabeçalho, que tem bom contraste */
+  background-color: hsl(var(--secondary)); 
+}
+
+/* CORREÇÃO ADICIONAL: Dando um fundo sutil para as células normais */
+/* para diferenciá-las do fundo principal do editor */
+.ProseMirror td {
+    background-color: hsl(var(--background));
 }
 
 /* Estilos para o redimensionamento de colunas */
