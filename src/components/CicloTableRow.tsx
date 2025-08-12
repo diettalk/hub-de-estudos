@@ -1,32 +1,28 @@
-// src/components/CicloTableRow.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { toast } from 'sonner';
-import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo } from '@/app/actions';
-import { type SessaoEstudo, type Disciplina } from '@/lib/types';
+import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo, toggleFinalizarSessao } from '@/app/actions';
+import { type SessaoEstudo, type Disciplina, type Node as DisciplinaNode } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks';
-
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-// 1. IMPORTAR O ÍCONE E O COMPONENTE LINK
 import { Trash2, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
-import { DisciplinaCombobox } from './DisciplinaCombobox';
+import { DisciplinaCombobox } from './DisciplinaCombobox'; // O nosso novo combobox
 
 interface CicloTableRowProps {
   sessao: SessaoEstudo;
-  disciplinas: Disciplina[];
+  disciplinaTree: DisciplinaNode[]; // Agora recebe a árvore
 }
 
-export function CicloTableRow({ sessao, disciplinas }: CicloTableRowProps) {
+export function CicloTableRow({ sessao, disciplinaTree }: CicloTableRowProps) {
   const [isPending, startTransition] = useTransition();
-
   const [focoSugerido, setFocoSugerido] = useState(sessao.foco_sugerido || '');
   const debouncedFoco = useDebounce(focoSugerido, 1000);
 
-  useState(() => {
+  useEffect(() => {
     if (debouncedFoco !== (sessao.foco_sugerido || '')) {
       updateSessaoEstudo({ id: sessao.id, foco_sugerido: debouncedFoco });
     }
@@ -64,14 +60,20 @@ export function CicloTableRow({ sessao, disciplinas }: CicloTableRowProps) {
   };
   
   const handleDelete = () => {
-    // Usando um modal customizado ou o confirm do navegador
-    if(confirm(`Tem certeza que deseja deletar a sessão ${sessao.ordem}?`)) {
+    if(confirm(`Tem a certeza de que deseja deletar a sessão ${sessao.ordem}?`)) {
         startTransition(async () => {
             await deleteSessaoCiclo(sessao.id);
             toast.success("Sessão deletada.");
         });
     }
   }
+
+  const handleToggleFinalizada = (checked: boolean) => {
+    startTransition(async () => {
+      await toggleFinalizarSessao(sessao.id, checked);
+      toast.success("Status de finalização alterado.");
+    });
+  };
 
   const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return '';
@@ -87,21 +89,20 @@ export function CicloTableRow({ sessao, disciplinas }: CicloTableRowProps) {
       <td className="p-3 text-center"><Checkbox checked={sessao.concluida} onCheckedChange={handleToggleConclusao} disabled={isPending} /></td>
       <td className="p-3 font-mono text-center">{sessao.ordem.toString().padStart(2, '0')}</td>
       
-      {/* 2. ALTERAÇÃO PRINCIPAL AQUI */}
       <td className="p-2 w-[300px]">
         <div className="flex items-center gap-1">
           <div className="flex-grow">
+            {/* --- ALTERAÇÃO PRINCIPAL AQUI --- */}
             <DisciplinaCombobox
-                disciplinas={disciplinas}
+                disciplinaTree={disciplinaTree}
                 value={sessao.disciplina_id}
                 onSelect={handleSelectDisciplina}
                 disabled={isPending}
                 className="bg-input"
             />
           </div>
-          {/* O link só aparece se uma disciplina estiver selecionada */}
           {sessao.disciplina_id && (
-            <Link href={`/disciplinas?id=${sessao.disciplina_id}`} passHref legacyBehavior>
+            <Link href={`/disciplinas?page=${sessao.disciplina_id}`} passHref legacyBehavior>
               <a target="_blank" rel="noopener noreferrer" title="Abrir disciplina em nova aba">
                 <Button variant="ghost" size="icon" disabled={isPending} className="flex-shrink-0">
                   <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
@@ -121,7 +122,7 @@ export function CicloTableRow({ sessao, disciplinas }: CicloTableRowProps) {
       <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
       <td className="p-2"><Input type="date" defaultValue={formatDateForInput(sessao.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
 
-      <td className="p-3 text-center"><Checkbox checked={sessao.materia_finalizada} /></td>
+      <td className="p-3 text-center"><Checkbox checked={sessao.materia_finalizada} onCheckedChange={(checked) => handleToggleFinalizada(!!checked)} /></td>
       <td className="p-3 text-center"><Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}><Trash2 className="w-4 h-4 text-destructive" /></Button></td>
     </tr>
   );

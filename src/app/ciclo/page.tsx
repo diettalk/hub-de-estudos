@@ -5,10 +5,40 @@ import { seedFase1Ciclo, addSessaoCiclo } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
 import { CicloTableRow } from '@/components/CicloTableRow';
-import { type SessaoEstudo, type Disciplina } from '@/lib/types';
+import { type SessaoEstudo, type Disciplina, type Node } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
 
 export const dynamic = 'force-dynamic';
+
+// Função para construir a árvore a partir de uma lista plana de disciplinas
+const buildTree = (disciplinas: Disciplina[]): Node[] => {
+    const map = new Map<number, Node>();
+    const roots: Node[] = [];
+    
+    // Primeiro, cria um mapa de todos os nós para acesso rápido
+    disciplinas.forEach(d => {
+        map.set(d.id, { ...d, children: [] });
+    });
+
+    // Agora, atribui cada nó ao seu pai correto
+    disciplinas.forEach(d => {
+        const node = map.get(d.id);
+        if (node) {
+            if (d.parent_id && map.has(d.parent_id)) {
+                const parent = map.get(d.parent_id)!;
+                // Garante que a propriedade children exista
+                if (!parent.children) {
+                    parent.children = [];
+                }
+                parent.children.push(node);
+            } else {
+                roots.push(node);
+            }
+        }
+    });
+    return roots;
+};
+
 
 export default async function CicloPage() {
   const supabase = createServerComponentClient({ cookies });
@@ -23,14 +53,12 @@ export default async function CicloPage() {
     sessoes = novasSessoes;
   }
   
-  const { data: disciplinas } = await supabase.from('paginas').select('id, title, emoji').order('title');
+  const { data: disciplinas } = await supabase.from('paginas').select('*').order('title');
   const legendaDefault = `LP: Língua Portuguesa\nRLM: Raciocínio Lógico\nG.GOV: Gestão Governamental\nP.PUB: Políticas Públicas`;
 
-  // --- CORREÇÃO ADICIONADA AQUI ---
-  // Cria uma lista de disciplinas únicas, removendo duplicados com base no 'title'
-  const disciplinasUnicas = disciplinas
-    ? Array.from(new Map(disciplinas.map(item => [item.title, item])).values())
-    : [];
+  // --- ALTERAÇÃO AQUI ---
+  // Constrói a árvore de disciplinas
+  const disciplinaTree = buildTree((disciplinas as Disciplina[]) || []);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-8">
@@ -60,8 +88,8 @@ export default async function CicloPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {/* Passa a lista de disciplinas únicas para a tabela */}
-                {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinas={disciplinasUnicas as Disciplina[] || []} />)}
+                {/* Passa a árvore de disciplinas para a tabela */}
+                {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinaTree={disciplinaTree} />)}
               </tbody>
             </table>
           </div>
