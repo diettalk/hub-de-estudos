@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* NOTA: A diretiva `@custom-variant` não é padrão do Tailwind. 
+  Se ela não estiver sendo usada por um plugin específico, pode ser removida no futuro.
+*/
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -46,27 +49,27 @@
 :root {
   --radius: 0.625rem;
   /* TEMA CLARO REFINADO */
-  --background: oklch(0.98 0.005 240); /* Fundo branco levemente azulado */
+  --background: oklch(0.98 0.005 240);
   --foreground: oklch(0.147 0.004 49.25);
-  --card: oklch(1 0 0); /* Cards em branco puro para se destacarem */
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.147 0.004 49.25);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.147 0.004 49.25);
-  --primary: oklch(0.45 0.22 260); /* Roxo/Azul mais vibrante */
+  --primary: oklch(0.45 0.22 260);
   --primary-foreground: oklch(0.985 0.001 106.423);
-  --secondary: oklch(0.94 0.01 240); /* Cinza claro para fundos secundários */
+  --secondary: oklch(0.94 0.01 240);
   --secondary-foreground: oklch(0.216 0.006 56.043);
   --muted: oklch(0.94 0.01 240);
   --muted-foreground: oklch(0.553 0.013 58.071);
   --accent: oklch(0.94 0.01 240);
   --accent-foreground: oklch(0.216 0.006 56.043);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.02 240); /* Borda um pouco mais escura */
+  --border: oklch(0.9 0.02 240);
   --input: oklch(0.9 0.02 240);
   --ring: oklch(0.45 0.22 260);
   
   /* Cores da Sidebar para o Tema Claro */
-  --sidebar: oklch(0.96 0.01 240); /* Cinza um pouco mais escuro que o fundo */
+  --sidebar: oklch(0.96 0.01 240);
   --sidebar-foreground: oklch(0.25 0.005 240);
   --sidebar-primary: oklch(0.45 0.22 260);
   --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
@@ -77,7 +80,7 @@
 }
 
 .dark {
-  /* O seu tema escuro, que já está ótimo, continua aqui sem alterações */
+  /* Tema Escuro */
   --background: oklch(0.147 0.004 49.25);
   --foreground: oklch(0.985 0.001 106.423);
   --card: oklch(0.216 0.006 56.043);
@@ -113,55 +116,42 @@
   body {
     @apply bg-background text-foreground;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border;
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  /*
+    Este bloco força o texto e as bordas da tabela a serem
+    claros no modo escuro, resolvendo o problema de visibilidade.
+  */
+  .dark .ProseMirror table th,
+  .dark .ProseMirror table td {
+    color: theme('colors.slate.200'); /* Força o texto para um cinza claro */
+    border-color: theme('colors.slate.600'); /* Deixa as bordas visíveis */
   }
-  body {
-    @apply bg-background text-foreground;
+
+  .dark .ProseMirror table th {
+      background-color: theme('colors.slate.800'); /* Fundo para o cabeçalho da tabela */
   }
 }
 
-/* No final de src/app/globals.css */
-
-html, body {
-  background-color: #000000 !important; /* Força o fundo a ser sempre preto */
-}
-
-.card {
-    @apply bg-gray-800/50 p-6 rounded-lg border border-gray-700;
-}
-
-/* Adicione estas classes ao seu src/app/globals.css */
-
-/* Estilo para o dia com evento */
-.day-with-event {
-  font-weight: 700 !important;
-  color: hsl(var(--destructive)) !important; /* Alterado para a cor destrutiva (vermelho) */
-}
-
-/* Adicione estas classes ao seu src/app/globals.css */
-
-/* NOVO ESTILO: Adiciona um ponto vermelho abaixo dos dias com eventos */
+/* Estilos para o Calendário */
 .day-with-event {
   position: relative;
+  font-weight: 700 !important;
+  color: hsl(var(--destructive)) !important;
 }
 
 .day-with-event::after {
   content: '';
   position: absolute;
-  bottom: 6px; /* Ajuste a posição vertical do ponto */
+  bottom: 6px;
   left: 50%;
   transform: translateX(-50%);
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background-color: hsl(var(--destructive)); /* Usa a cor vermelha do tema */
+  background-color: hsl(var(--destructive));
 }
 
-/* Estilo para o componente DayPicker se adaptar ao seu tema */
 .rdp {
     --rdp-cell-size: 40px;
     --rdp-caption-font-size: 1rem;
@@ -178,8 +168,6 @@ html, body {
     color: hsl(var(--primary-foreground)) !important;
 }
 
-/* Garante que o ponto fique visível (branco) quando o dia está selecionado */
 .rdp-day_selected.day-with-event::after {
     background-color: hsl(var(--primary-foreground));
 }
-
