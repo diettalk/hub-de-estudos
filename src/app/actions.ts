@@ -886,3 +886,34 @@ export async function deleteStudyGoal(id: number) {
   revalidatePath('/');
   return { success: true };
 }
+
+// Adicione esta nova função ao seu arquivo src/app/actions.ts
+
+export async function updateStudyGoal(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const id = Number(formData.get('id'));
+  const title = formData.get('title') as string;
+  const type = formData.get('type') as string;
+  const target_value = Number(formData.get('target_value'));
+
+  if (!id || !title || !type || !target_value) {
+    return { error: "Faltam dados essenciais para atualizar a meta." };
+  }
+
+  const { error } = await supabase
+    .from('study_goals')
+    .update({ title, type, target_value })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error("Erro ao atualizar meta:", error);
+    return { error: "Falha ao atualizar a meta de estudo." };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}

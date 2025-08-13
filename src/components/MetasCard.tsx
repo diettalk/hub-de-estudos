@@ -19,18 +19,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { addStudyGoal, deleteStudyGoal } from '@/app/actions';
+// 1. IMPORTAR AS ACTIONS NECESSÁRIAS
+import { addStudyGoal, updateStudyGoal, updateStudyGoalValue, deleteStudyGoal } from '@/app/actions';
 import { type StudyGoal } from '@/lib/types';
 import { toast } from 'sonner';
-import { Target, Trash2, Plus } from 'lucide-react';
+import { Target, Trash2, Plus, Edit } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 
-// Sub-componente para o formulário de criação de metas
-function GoalFormModal({ onGoalAdded }: { onGoalAdded: () => void }) {
+// Sub-componente para o formulário, agora reutilizável para criar e editar
+function GoalFormModal({ goal, onActionComplete }: { goal?: StudyGoal | null, onActionComplete: () => void }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const isEditMode = !!goal;
 
   const handleSubmit = (formData: FormData) => {
+    if (isEditMode) {
+      formData.append('id', String(goal.id));
+    }
+    
     // Adiciona as datas de início e fim com base na seleção
     const type = formData.get('type') as string;
     const today = new Date();
@@ -49,13 +55,15 @@ function GoalFormModal({ onGoalAdded }: { onGoalAdded: () => void }) {
     formData.append('start_date', startDate);
     formData.append('end_date', endDate);
 
+    const action = isEditMode ? updateStudyGoal : addStudyGoal;
+
     startTransition(async () => {
-      const result = await addStudyGoal(formData);
+      const result = await action(formData);
       if (result?.error) {
         toast.error(result.error);
       } else {
-        toast.success("Nova meta adicionada com sucesso!");
-        onGoalAdded();
+        toast.success(isEditMode ? "Meta atualizada!" : "Nova meta adicionada!");
+        onActionComplete();
         setOpen(false);
       }
     });
@@ -64,22 +72,28 @@ function GoalFormModal({ onGoalAdded }: { onGoalAdded: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6">
-          <Plus className="h-4 w-4" />
-        </Button>
+        {isEditMode ? (
+          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+            <Edit className="h-3 w-3" />
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" className="h-6 w-6">
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Criar Nova Meta</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{isEditMode ? 'Editar Meta' : 'Criar Nova Meta'}</DialogTitle></DialogHeader>
         <form action={handleSubmit}>
           <div className="py-4 space-y-4">
             <div>
               <Label htmlFor="title">Título da Meta</Label>
-              <Input id="title" name="title" placeholder="Ex: Questões de Direito Constitucional" required />
+              <Input id="title" name="title" defaultValue={goal?.title || ''} placeholder="Ex: Questões de Direito Constitucional" required />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="type">Tipo</Label>
-                <Select name="type" required>
+                <Select name="type" defaultValue={goal?.type} required>
                   <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="weekly_hours">Horas Semanais</SelectItem>
@@ -89,12 +103,12 @@ function GoalFormModal({ onGoalAdded }: { onGoalAdded: () => void }) {
               </div>
               <div>
                 <Label htmlFor="target_value">Valor Alvo</Label>
-                <Input id="target_value" name="target_value" type="number" placeholder="Ex: 20" required />
+                <Input id="target_value" name="target_value" type="number" defaultValue={goal?.target_value} placeholder="Ex: 20" required />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={isPending}>{isPending ? 'A criar...' : 'Criar Meta'}</Button>
+            <Button type="submit" disabled={isPending}>{isPending ? 'A salvar...' : 'Salvar'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -116,6 +130,13 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
     }
   };
 
+  const handleIncrement = (goal: StudyGoal) => {
+    const newValue = goal.current_value + 1;
+    startTransition(async () => {
+        await updateStudyGoalValue(goal.id, newValue);
+    });
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
@@ -123,7 +144,7 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
           <Target className="w-5 h-5 text-muted-foreground" />
           <h2 className="text-lg font-semibold">Metas de Estudo</h2>
         </div>
-        <GoalFormModal onGoalAdded={() => {}} />
+        <GoalFormModal onActionComplete={() => {}} />
       </div>
       <div className="flex-grow space-y-4 overflow-y-auto">
         {goals.length === 0 && (
@@ -137,6 +158,10 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
                 <p className="text-sm font-medium truncate">{goal.title}</p>
                 <div className="flex items-center">
                   <p className="text-sm text-muted-foreground">{goal.current_value} / {goal.target_value}</p>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleIncrement(goal)}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <GoalFormModal goal={goal} onActionComplete={() => {}} />
                   <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDelete(goal.id)}>
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
