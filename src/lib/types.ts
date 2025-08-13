@@ -1,13 +1,24 @@
-// src/lib/types.ts
+import { type JSONContent } from '@tiptap/react';
 
-// Define a estrutura para as suas Disciplinas/Páginas
-export type Disciplina = {
+// O tipo Node agora é mais genérico para representar qualquer item hierárquico
+export type Node = {
   id: number;
-  nome: string;
-  emoji?: string;
+  parent_id: number | null;
+  title: string;
+  children: Node[];
+  // Campos opcionais de Disciplinas/Documentos
+  emoji?: string | null;
+  content?: JSONContent | null;
+  // Campos opcionais de Recursos
+  type?: 'link' | 'pdf' | 'folder';
+  url?: string | null;
+  file_path?: string | null;
+  description?: string | null;
 };
 
-// Define a estrutura completa para cada linha do seu Ciclo de Estudos
+// O tipo Disciplina agora estende o Node para maior consistência
+export type Disciplina = Node;
+
 export type SessaoEstudo = {
   id: number;
   ordem: number;
@@ -23,21 +34,51 @@ export type SessaoEstudo = {
   data_revisao_2: string | null;
   data_revisao_3: string | null;
   materia_finalizada: boolean;
+  disciplinas?: { nome: string, emoji: string | null } | null;
 };
 
-// Define a estrutura para os eventos de revisão que serão gerados
-// Esta é a nossa ÚNICA fonte da verdade para o que é uma revisão.
-export type EventoRevisao = {
+export type Revisao = {
   id: number;
-  sessao_id: number; // ID da sessão de estudo original
-  title: string;
-  type: '24h' | '7 dias' | '30 dias'; // Tipos corretos
-  completed: boolean;
-  color: string;
-  data: string; // Data no formato ISO (ex: "2025-07-01T...")
+  ciclo_sessao_id: number | null;
+  data_revisao: string;
+  tipo_revisao: string;
+  concluida: boolean;
+  materia_nome: string | null;
+  foco_sugerido: string | null;
 };
 
-// Adicione este tipo ao seu arquivo src/lib/types.ts
+export type Tarefa = {
+  id: number;
+  title: string;
+  completed: boolean;
+  due_date: string | null;
+  created_at: string;
+  status?: 'pendente' | 'concluida' | 'arquivada';
+};
+
+export type Anotacao = {
+  id: number;
+  content: string | null;
+  created_at: string;
+};
+
+export type Lembrete = {
+  id: number;
+  titulo: string;
+  data: string;
+  cor: string | null;
+};
+
+export type Concurso = {
+  id: number;
+  nome: string;
+  banca: string | null;
+  data_prova: string | null;
+  status: 'ativo' | 'previsto' | 'arquivado';
+  edital_url: string | null;
+  prioridades: string[] | null;
+  concurso_paginas: { paginas: Disciplina | null }[]; 
+};
 
 export type Profile = {
   id: string;
@@ -46,33 +87,5 @@ export type Profile = {
   updated_at: string | null;
 };
 
-// Adicione este novo tipo ao seu arquivo src/lib/types.ts
-
-export type StudyGoal = {
-  id: number;
-  user_id: string;
-  created_at: string;
-  title: string;
-  type: string;
-  target_value: number;
-  current_value: number;
-  start_date: string;
-  end_date: string;
-};
-
-// Adicione este novo tipo ao seu arquivo src/lib/types.ts
-
-export type Resource = {
-  id: number;
-  user_id: string;
-  disciplina_id: number | null;
-  created_at: string;
-  title: string;
-  description: string | null;
-  type: 'link' | 'pdf';
-  url: string | null;
-  file_path: string | null;
-  file_name: string | null;
-  // Para quando fizermos o JOIN com a tabela de disciplinas
-  paginas?: { title: string } | null;
-};
+// NOVO TIPO: Define a estrutura de um Recurso da Biblioteca
+export type Resource = Node; // Um Recurso é um tipo de Nó

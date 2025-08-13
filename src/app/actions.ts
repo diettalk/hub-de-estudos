@@ -918,17 +918,44 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
+// Substitua a secção da Biblioteca no seu arquivo src/app/actions.ts por este código
 
 // ==================================================================
 // --- AÇÕES PARA A BIBLIOTECA DE RECURSOS ---
 // ==================================================================
 
-export async function addResource(formData: FormData) {
+// Action para criar um novo recurso (link, pdf ou pasta)
+export async function createResource(parentId: number | null, type: 'folder' | 'link' | 'pdf', title: string) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
+  const resourceData: { [key: string]: any } = {
+    user_id: user.id,
+    parent_id: parentId,
+    type,
+    title,
+  };
+
+  const { data, error } = await supabase.from('resources').insert(resourceData).select('id').single();
+
+  if (error) {
+    console.error("Erro ao criar recurso:", error);
+    return { error: "Falha ao criar o recurso." };
+  }
+
+  revalidatePath('/biblioteca');
+  return { success: true, newResource: data };
+}
+
+
+// Action para adicionar um link ou ficheiro a um recurso existente
+export async function addResourceContent(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
   const type = formData.get('type') as 'link' | 'pdf';
@@ -936,60 +963,53 @@ export async function addResource(formData: FormData) {
   const url = formData.get('url') as string;
   const file = formData.get('file') as File;
 
-  if (!title || !type) {
-    return { error: "Título e tipo são obrigatórios." };
+  if (!id || !title || !type) {
+    return { error: "Dados inválidos." };
   }
 
   let resourceData: { [key: string]: any } = {
-    user_id: user.id,
     title,
     description,
-    type,
     disciplina_id: isNaN(disciplina_id) ? null : disciplina_id,
   };
 
-  // Lógica para upload de ficheiro PDF
   if (type === 'pdf' && file && file.size > 0) {
     const filePath = `${user.id}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
-      .from('resources') // Nome do bucket para os PDFs
+      .from('resources')
       .upload(filePath, file);
 
     if (uploadError) {
-      console.error("Erro no upload do PDF:", uploadError);
       return { error: "Falha ao fazer o upload do ficheiro." };
     }
     resourceData.file_path = filePath;
     resourceData.file_name = file.name;
+    resourceData.url = null; // Garante que não há URL se for um PDF
   } else if (type === 'link') {
     resourceData.url = url;
+    resourceData.file_path = null; // Garante que não há ficheiro se for um link
+    resourceData.file_name = null;
   }
 
-  const { error } = await supabase.from('resources').insert(resourceData);
+  const { error } = await supabase.from('resources').update(resourceData).eq('id', id);
 
   if (error) {
-    console.error("Erro ao criar recurso:", error);
-    return { error: "Falha ao criar o recurso." };
+    return { error: "Falha ao atualizar o recurso." };
   }
 
-  revalidatePath('/biblioteca'); // Vamos criar esta página a seguir
+  revalidatePath('/biblioteca');
   return { success: true };
 }
 
+
+// Action para apagar um recurso (e o seu ficheiro, se for um PDF)
 export async function deleteResource(id: number, filePath?: string | null) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
-  // Se o recurso for um PDF, apaga o ficheiro do Storage primeiro
   if (filePath) {
-    const { error: storageError } = await supabase.storage
-      .from('resources')
-      .remove([filePath]);
-    if (storageError) {
-      console.error("Erro ao apagar ficheiro do Storage:", storageError);
-      // Continua mesmo se falhar, para apagar o registo da base de dados
-    }
+    await supabase.storage.from('resources').remove([filePath]);
   }
 
   const { error } = await supabase
@@ -1004,4 +1024,40 @@ export async function deleteResource(id: number, filePath?: string | null) {
 
   revalidatePath('/biblioteca');
   return { success: true };
+}
+
+// Action para mover um recurso para uma nova pasta
+export async function updateResourceParent(resourceId: number, newParentId: number | null) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    const { error } = await supabase
+        .from('resources')
+        .update({ parent_id: newParentId })
+        .eq('id', resourceId)
+        .eq('user_id', user.id);
+
+    if (error) return { error: "Falha ao mover o recurso." };
+    
+    revalidatePath('/biblioteca');
+    return { success: true };
+}
+
+// Action para renomear um recurso
+export async function updateResourceTitle(id: number, newTitle: string) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    const { error } = await supabase
+        .from('resources')
+        .update({ title: newTitle })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) return { error: "Falha ao renomear o recurso." };
+
+    revalidatePath('/biblioteca');
+    return { success: true };
 }

@@ -97,7 +97,7 @@ function AddResourceForm({ disciplinas }: { disciplinas: Disciplina[] }) {
 }
 
 // Componente principal da Biblioteca
-export function BibliotecaClient({ resources, disciplinas }: { resources: Resource[], disciplinas: Disciplina[] }) {
+export function BibliotecaClient({ resourceTree, disciplinas }: { resourceTree: Resource[], disciplinas: Disciplina[] }) {
   const [, startTransition] = useTransition();
 
   const handleDelete = (id: number, filePath: string | null) => {
@@ -116,10 +116,10 @@ export function BibliotecaClient({ resources, disciplinas }: { resources: Resour
       <div>
         <h2 className="text-2xl font-bold mb-4">Seus Recursos</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {resources.length === 0 && (
+          {resourceTree.length === 0 && (
             <p className="text-muted-foreground col-span-full text-center py-8">A sua biblioteca está vazia.</p>
           )}
-          {resources.map(resource => (
+          {resourceTree.map(resource => (
             <div key={resource.id} className="bg-card p-4 rounded-lg border flex flex-col group">
               <div className="flex-grow">
                 <div className="flex items-start justify-between">
