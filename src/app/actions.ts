@@ -1,5 +1,3 @@
-// src/app/actions.ts
-
 'use server';
 
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
@@ -7,6 +5,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
 import { type SessaoEstudo } from '@/lib/types';
+import { type JSONContent } from '@tiptap/react'; // Adicionada a importação que faltava
 
 // --- AÇÕES DE CONCURSOS ---
 export async function addConcurso(formData: FormData) {
@@ -371,8 +370,6 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
 }
 
 // --- AÇÕES PARA DOCUMENTOS (CORRIGIDO) ---
-
-// CORRIGIDO: A função agora aceita FormData para ser compatível com o componente da barra lateral.
 export async function addDocumento(formData: FormData) {
   const title = formData.get('title') as string;
   const parentIdValue = formData.get('parent_id') as string | null;
@@ -393,10 +390,10 @@ export async function addDocumento(formData: FormData) {
     .insert({
       title,
       user_id: user.id,
-      content: null, // Documentos são criados sem conteúdo inicial
+      content: null,
       parent_id: parentId,
     })
-    .select('id') // Retorna o ID do novo documento
+    .select('id')
     .single();
 
   if (error) {
@@ -405,11 +402,9 @@ export async function addDocumento(formData: FormData) {
   }
 
   revalidatePath('/documentos');
-  return { data }; // Retorna { data: { id: new_id } } para o cliente
+  return { data };
 }
 
-// NOVO: Criada a função 'updateDocumentoContent' que estava faltando e era importada na página.
-// Esta é a função que o Editor principal usa para salvar.
 export async function updateDocumentoContent(formData: FormData) {
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
@@ -425,7 +420,6 @@ export async function updateDocumentoContent(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
 
   try {
-    // Tiptap gera um JSON. O banco espera um JSONB.
     const contentToSave = contentJSON ? JSON.parse(contentJSON) : null;
     const { error } = await supabase
       .from('documentos')
@@ -444,14 +438,12 @@ export async function updateDocumentoContent(formData: FormData) {
   }
 }
 
-// MANTIDO: A função de deleção já usa o RPC e está correta.
 export async function deleteDocumento(id: number) {
   if (isNaN(id)) {
     return { error: "ID inválido." };
   }
 
   const supabase = createServerActionClient({ cookies });
-  // Chama a função SQL 'delete_documento_e_filhos' que deleta em cascata.
   const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
 
   if (error) {
@@ -520,11 +512,7 @@ export async function deleteAnotacao(formData: FormData) {
   revalidatePath('/');
 }
 
-// Adicione esta função no final de src/app/actions.ts
-
-// ==================================================================
 // --- AÇÕES DE PERFIL ---
-// ==================================================================
 export async function updateProfile({ id, fullName, avatarUrl }: { id: string, fullName: string, avatarUrl: string | null }) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -543,30 +531,26 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
     return { error: error.message };
   }
   
-  revalidatePath('/perfil'); // Atualiza os dados na página de perfil
-  revalidatePath('/'); // Atualiza a sidebar em todas as páginas
+  revalidatePath('/perfil');
+  revalidatePath('/');
   return { success: true };
 }
 
-// ==================================================================
 // --- AÇÃO PARA REORDENAR CONCURSOS ---
-// ==================================================================
 export async function updateConcursosOrdem(orderedIds: number[]) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
   try {
-    // O 'map' cria uma série de promessas de atualização
     const updatePromises = orderedIds.map((id, index) =>
       supabase
         .from('concursos')
-        .update({ ordem: index }) // Atualiza a coluna 'ordem' com a nova posição
+        .update({ ordem: index })
         .eq('id', id)
         .eq('user_id', user.id)
     );
 
-    // Executa todas as promessas de atualização em paralelo
     await Promise.all(updatePromises);
 
     revalidatePath('/guia-estudos');
@@ -577,12 +561,7 @@ export async function updateConcursosOrdem(orderedIds: number[]) {
   }
 }
 
-// Adicione este bloco de código ao seu arquivo src/app/actions.ts
-
-// ==================================================================
 // --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS E DISCIPLINAS) ---
-// ==================================================================
-
 type NewItemData = {
   title: string;
   user_id: string;
@@ -591,21 +570,26 @@ type NewItemData = {
   emoji?: string;
 };
 
-export async function createItem(table: 'documentos' | 'paginas', parentId: number | null) {
+export async function createItem(table: 'documentos' | 'paginas' | 'recursos', parentId: number | null, type?: string, title?: string) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
-  const newItemData: NewItemData = {
-    title: 'Novo Item',
+  const newItemData: any = {
+    title: title || 'Novo Item',
     user_id: user.id,
     parent_id: parentId,
-    content: { type: 'doc', content: [{ type: 'paragraph' }] },
   };
 
   if (table === 'paginas') {
     newItemData.emoji = '📄';
+    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
+  } else if (table === 'documentos') {
+    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
+  } else if (table === 'recursos') {
+    newItemData.type = type || 'folder';
   }
+
 
   try {
     const { data, error } = await supabase
@@ -616,7 +600,7 @@ export async function createItem(table: 'documentos' | 'paginas', parentId: numb
 
     if (error) throw error;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
     return { success: true, newItem: data };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -624,7 +608,7 @@ export async function createItem(table: 'documentos' | 'paginas', parentId: numb
   }
 }
 
-export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
+export async function updateItemTitle(table: 'documentos' | 'paginas' | 'recursos', id: number, newTitle: string) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
@@ -638,7 +622,7 @@ export async function updateItemTitle(table: 'documentos' | 'paginas', id: numbe
 
     if (error) throw error;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -646,21 +630,31 @@ export async function updateItemTitle(table: 'documentos' | 'paginas', id: numbe
   }
 }
 
-export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
+export async function deleteItem(table: 'documentos' | 'paginas' | 'recursos', id: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
   try {
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
+    
+    const deleteWithChildren = async (idToDelete: number) => {
+        const { data: children } = await supabase
+            .from(table)
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('parent_id', idToDelete);
 
-    if (error) throw error;
+        if (children) {
+            for (const child of children) {
+                await deleteWithChildren(child.id);
+            }
+        }
+        await supabase.from(table).delete().eq('user_id', user.id).eq('id', idToDelete);
+    };
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    await deleteWithChildren(id);
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -668,7 +662,7 @@ export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
   }
 }
 
-export async function updateItemParent(table: 'documentos' | 'paginas', itemId: number, newParentId: number | null) {
+export async function updateItemParent(table: 'documentos' | 'paginas' | 'recursos', itemId: number, newParentId: number | null) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
@@ -682,7 +676,7 @@ export async function updateItemParent(table: 'documentos' | 'paginas', itemId: 
 
     if (error) throw error;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -690,9 +684,12 @@ export async function updateItemParent(table: 'documentos' | 'paginas', itemId: 
   }
 }
 
-// ==================================================================
 // --- AÇÕES PARA GERADOR DE ANKI ---
-// ==================================================================
+type Flashcard = {
+  question: string;
+  answer: string;
+};
+
 export async function generateAnkiCards(formData: FormData) {
   const sourceText = formData.get('sourceText') as string;
   const numCards = Number(formData.get('numCards'));
@@ -767,7 +764,6 @@ export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
   return { success: true, newDeckId: data.id };
 }
 
-// ADICIONADO: A função para apagar o deck que estava em falta
 export async function deleteAnkiDeck(deckId: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -783,8 +779,6 @@ export async function deleteAnkiDeck(deckId: number) {
   return { success: true };
 }
 
-// Adicione esta nova função ao seu arquivo src/app/actions.ts
-
 export async function updateTarefaStatus(
   id: number,
   status: 'pendente' | 'concluida' | 'arquivada'
@@ -793,7 +787,6 @@ export async function updateTarefaStatus(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
-  // A coluna 'completed' será atualizada com base no novo status
   const isCompleted = status === 'concluida';
 
   const { error } = await supabase
@@ -810,12 +803,7 @@ export async function updateTarefaStatus(
   return { success: true };
 }
 
-// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
-
-// ==================================================================
 // --- AÇÕES PARA METAS DE ESTUDO ---
-// ==================================================================
-
 export async function addStudyGoal(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -845,7 +833,7 @@ export async function addStudyGoal(formData: FormData) {
     return { error: "Falha ao criar a meta de estudo." };
   }
 
-  revalidatePath('/'); // Para atualizar o Dashboard
+  revalidatePath('/');
   return { success: true };
 }
 
@@ -887,8 +875,6 @@ export async function deleteStudyGoal(id: number) {
   return { success: true };
 }
 
-// Adicione esta nova função ao seu arquivo src/app/actions.ts
-
 export async function updateStudyGoal(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -918,84 +904,9 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// ============================================================================
-// Funções Genéricas para Hierarquia (Páginas, Documentos, Recursos)
-// ============================================================================
+// --- CORREÇÃO: FUNÇÕES ESPECÍFICAS DE CONTEÚDO ---
+// Estas funções foram movidas para fora do bloco genérico para evitar conflitos
 
-type TableName = 'paginas' | 'documentos' | 'recursos';
-
-// Ação para criar um novo item (página, documento, recurso ou pasta)
-export async function createItem(
-  table: TableName,
-  title: string,
-  type: string = 'page', // 'page', 'folder', 'link', 'pdf', etc.
-  parentId: number | null = null
-) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from(table).insert({ 
-    title, 
-    user_id: user.id, 
-    parent_id: parentId,
-    type: type // Adiciona o tipo ao inserir
-  });
-  revalidatePath(`/${table}`);
-}
-
-// Ação para apagar um item e todos os seus descendentes
-export async function deleteItem(table: TableName, itemId: number) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  // Função recursiva para apagar um item e os seus filhos
-  const deleteWithChildren = async (id: number) => {
-    const { data: children } = await supabase
-      .from(table)
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('parent_id', id);
-
-    if (children) {
-      for (const child of children) {
-        await deleteWithChildren(child.id);
-      }
-    }
-    await supabase.from(table).delete().eq('user_id', user.id).eq('id', id);
-  };
-
-  await deleteWithChildren(itemId);
-  revalidatePath(`/${table}`);
-}
-
-// Ação para atualizar o título de um item
-export async function updateItemTitle(table: TableName, itemId: number, newTitle: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from(table).update({ title: newTitle }).eq('user_id', user.id).eq('id', itemId);
-  revalidatePath(`/${table}`);
-}
-
-// Ação para mover um item para um novo pai (drag-and-drop)
-export async function updateItemParent(table: TableName, itemId: number, newParentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from(table).update({ parent_id: newParentId }).eq('user_id', user.id).eq('id', itemId);
-  revalidatePath(`/${table}`);
-}
-
-
-// ============================================================================
-// Funções Específicas (Conteúdo, etc.)
-// ============================================================================
-
-// Ação para atualizar o conteúdo de uma página (Tiptap)
 export async function updatePaginaContent(paginaId: number, newContent: JSONContent) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -1005,19 +916,7 @@ export async function updatePaginaContent(paginaId: number, newContent: JSONCont
   revalidatePath('/disciplinas');
 }
 
-// Ação para atualizar o conteúdo de um documento (Tiptap)
-export async function updateDocumentoContent(documentoId: number, newContent: JSONContent) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from('documentos').update({ content: newContent }).eq('user_id', user.id).eq('id', documentoId);
-  revalidatePath('/documentos');
-}
-
 // --- BIBLIOTECA DE RECURSOS (SEÇÃO ATUALIZADA) ---
-
-// Ação para atualizar o conteúdo de um recurso (link, pdf, etc.)
 export async function updateResourceContent(resourceId: number, newContent: object) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
