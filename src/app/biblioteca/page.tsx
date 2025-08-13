@@ -2,6 +2,7 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { BibliotecaClient } from '@/components/BibliotecaClient';
+import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import { type Resource, type Disciplina, type Node } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -53,12 +54,14 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
       <div className="md:col-span-1 h-full">
-        {/* Usaremos a HierarchicalSidebar para os recursos */}
-        <p>Sidebar da Biblioteca (a ser implementada)</p>
+        <HierarchicalSidebar 
+            tree={resourceTree} 
+            table="resources" // Informa a sidebar que estamos a trabalhar com a tabela 'resources'
+            title="BIBLIOTECA"
+        />
       </div>
       <div className="md:col-span-3 h-full">
         <BibliotecaClient 
-          resourceTree={resourceTree} 
           disciplinas={(disciplinas as Disciplina[]) || []} 
           selectedResource={selectedResource as Resource | null}
         />

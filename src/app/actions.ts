@@ -949,8 +949,8 @@ export async function createResource(parentId: number | null, type: 'folder' | '
 }
 
 
-// Action para adicionar um link ou ficheiro a um recurso existente
-export async function addResourceContent(formData: FormData) {
+// Action para adicionar/atualizar o conteúdo de um recurso existente
+export async function updateResourceContent(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
