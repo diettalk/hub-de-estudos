@@ -809,3 +809,80 @@ export async function updateTarefaStatus(
   revalidatePath('/tarefas');
   return { success: true };
 }
+
+// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES PARA METAS DE ESTUDO ---
+// ==================================================================
+
+export async function addStudyGoal(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const title = formData.get('title') as string;
+  const type = formData.get('type') as string;
+  const target_value = Number(formData.get('target_value'));
+  const start_date = formData.get('start_date') as string;
+  const end_date = formData.get('end_date') as string;
+
+  if (!title || !type || !target_value || !start_date || !end_date) {
+    return { error: "Faltam dados essenciais para criar a meta." };
+  }
+
+  const { error } = await supabase.from('study_goals').insert({
+    user_id: user.id,
+    title,
+    type,
+    target_value,
+    start_date,
+    end_date,
+  });
+
+  if (error) {
+    console.error("Erro ao criar meta:", error);
+    return { error: "Falha ao criar a meta de estudo." };
+  }
+
+  revalidatePath('/'); // Para atualizar o Dashboard
+  return { success: true };
+}
+
+export async function updateStudyGoalValue(id: number, new_value: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase
+    .from('study_goals')
+    .update({ current_value: new_value })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: "Falha ao atualizar o progresso da meta." };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function deleteStudyGoal(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase
+    .from('study_goals')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: "Falha ao apagar a meta." };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}

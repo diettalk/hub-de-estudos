@@ -45,3 +45,17 @@ export type Profile = {
   avatar_url: string | null;
   updated_at: string | null;
 };
+
+// Adicione este novo tipo ao seu arquivo src/lib/types.ts
+
+export type StudyGoal = {
+  id: number;
+  user_id: string;
+  created_at: string;
+  title: string;
+  type: string;
+  target_value: number;
+  current_value: number;
+  start_date: string;
+  end_date: string;
+};
