@@ -59,3 +59,20 @@ export type StudyGoal = {
   start_date: string;
   end_date: string;
 };
+
+// Adicione este novo tipo ao seu arquivo src/lib/types.ts
+
+export type Resource = {
+  id: number;
+  user_id: string;
+  disciplina_id: number | null;
+  created_at: string;
+  title: string;
+  description: string | null;
+  type: 'link' | 'pdf';
+  url: string | null;
+  file_path: string | null;
+  file_name: string | null;
+  // Para quando fizermos o JOIN com a tabela de disciplinas
+  paginas?: { title: string } | null;
+};

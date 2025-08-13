@@ -917,3 +917,91 @@ export async function updateStudyGoal(formData: FormData) {
   revalidatePath('/');
   return { success: true };
 }
+
+// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS ---
+// ==================================================================
+
+export async function addResource(formData: FormData) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const title = formData.get('title') as string;
+  const description = formData.get('description') as string;
+  const type = formData.get('type') as 'link' | 'pdf';
+  const disciplina_id = Number(formData.get('disciplina_id'));
+  const url = formData.get('url') as string;
+  const file = formData.get('file') as File;
+
+  if (!title || !type) {
+    return { error: "Título e tipo são obrigatórios." };
+  }
+
+  let resourceData: { [key: string]: any } = {
+    user_id: user.id,
+    title,
+    description,
+    type,
+    disciplina_id: isNaN(disciplina_id) ? null : disciplina_id,
+  };
+
+  // Lógica para upload de ficheiro PDF
+  if (type === 'pdf' && file && file.size > 0) {
+    const filePath = `${user.id}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from('resources') // Nome do bucket para os PDFs
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Erro no upload do PDF:", uploadError);
+      return { error: "Falha ao fazer o upload do ficheiro." };
+    }
+    resourceData.file_path = filePath;
+    resourceData.file_name = file.name;
+  } else if (type === 'link') {
+    resourceData.url = url;
+  }
+
+  const { error } = await supabase.from('resources').insert(resourceData);
+
+  if (error) {
+    console.error("Erro ao criar recurso:", error);
+    return { error: "Falha ao criar o recurso." };
+  }
+
+  revalidatePath('/biblioteca'); // Vamos criar esta página a seguir
+  return { success: true };
+}
+
+export async function deleteResource(id: number, filePath?: string | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  // Se o recurso for um PDF, apaga o ficheiro do Storage primeiro
+  if (filePath) {
+    const { error: storageError } = await supabase.storage
+      .from('resources')
+      .remove([filePath]);
+    if (storageError) {
+      console.error("Erro ao apagar ficheiro do Storage:", storageError);
+      // Continua mesmo se falhar, para apagar o registo da base de dados
+    }
+  }
+
+  const { error } = await supabase
+    .from('resources')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: "Falha ao apagar o recurso." };
+  }
+
+  revalidatePath('/biblioteca');
+  return { success: true };
+}
