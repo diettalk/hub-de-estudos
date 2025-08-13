@@ -62,47 +62,6 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/guia-estudos');
 }
 
-// --- AÇÕES DE DISCIPLINAS ---
-export async function createPagina(parentId: number | null, title: string, emoji: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado' };
-
-  const { data, error } = await supabase
-    .from('paginas')
-    .insert({ title, emoji, parent_id: parentId, user_id: user.id })
-    .select()
-    .single();
-
-  if (error) return { error: error.message };
-  
-  revalidatePath('/disciplinas');
-  return { data };
-}
-
-export async function updatePagina(formData: FormData) {
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const emoji = formData.get('emoji') as string;
-  const content = formData.get('content') as string;
-
-  if (isNaN(id)) return;
-
-  const supabase = createServerActionClient({ cookies });
-  await supabase
-    .from('paginas')
-    .update({ title, emoji, content: content ? JSON.parse(content) : null })
-    .eq('id', id);
-
-  revalidatePath('/disciplinas');
-}
-
-export async function deletePagina(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('paginas').delete().eq('id', id);
-  revalidatePath('/disciplinas');
-}
-
 // --- AÇÕES DE VÍNCULO ---
 export async function linkPastaToConcurso(concursoId: number, paginaId: number) {
   const supabase = createServerActionClient({ cookies });
@@ -369,93 +328,6 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
     return { success: true };
 }
 
-// --- AÇÕES PARA DOCUMENTOS (CORRIGIDO) ---
-export async function addDocumento(formData: FormData) {
-  const title = formData.get('title') as string;
-  const parentIdValue = formData.get('parent_id') as string | null;
-  const parentId = parentIdValue ? Number(parentIdValue) : null;
-
-  if (!title || title.trim() === '') {
-    return { error: 'O título é obrigatório.' };
-  }
-
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: 'Usuário não autenticado.' };
-  }
-
-  const { data, error } = await supabase
-    .from('documentos')
-    .insert({
-      title,
-      user_id: user.id,
-      content: null,
-      parent_id: parentId,
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    console.error("Erro ao adicionar documento:", error);
-    return { error: error.message };
-  }
-
-  revalidatePath('/documentos');
-  return { data };
-}
-
-export async function updateDocumentoContent(formData: FormData) {
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const contentJSON = formData.get('content') as string;
-
-  if (!id) {
-    return { error: "ID do documento é necessário." };
-  }
-  if (!title) {
-    return { error: "O título não pode ser vazio." };
-  }
-
-  const supabase = createServerActionClient({ cookies });
-
-  try {
-    const contentToSave = contentJSON ? JSON.parse(contentJSON) : null;
-    const { error } = await supabase
-      .from('documentos')
-      .update({ title, content: contentToSave })
-      .eq('id', id);
-
-    if (error) throw error;
-
-    revalidatePath('/documentos');
-    return { success: true };
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
-    console.error("Erro ao atualizar conteúdo do documento:", errorMessage);
-    return { error: `Falha ao salvar: ${errorMessage}` };
-  }
-}
-
-export async function deleteDocumento(id: number) {
-  if (isNaN(id)) {
-    return { error: "ID inválido." };
-  }
-
-  const supabase = createServerActionClient({ cookies });
-  const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
-
-  if (error) {
-    console.error("Erro ao deletar documento:", error);
-    return { error: error.message };
-  }
-
-  revalidatePath('/documentos');
-  return { success: true };
-}
-
-
 // --- AÇÕES PARA TAREFAS ---
 export async function addTarefa(formData: FormData) {
   const title = formData.get('title') as string;
@@ -558,132 +430,6 @@ export async function updateConcursosOrdem(orderedIds: number[]) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
     return { error: `Falha ao salvar a ordem: ${message}` };
-  }
-}
-
-// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS E DISCIPLINAS) ---
-type NewItemData = {
-  title: string;
-  user_id: string;
-  parent_id: number | null;
-  content: JSONContent;
-  emoji?: string;
-};
-
-export async function createItem(table: 'documentos' | 'paginas' | 'recursos', parentId: number | null, type?: string, title?: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  const newItemData: any = {
-    title: title || 'Novo Item',
-    user_id: user.id,
-    parent_id: parentId,
-  };
-
-  if (table === 'paginas') {
-    newItemData.emoji = '📄';
-    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
-  } else if (table === 'documentos') {
-    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
-  } else if (table === 'recursos') {
-    newItemData.type = type || 'folder';
-    // --- CORREÇÃO APLICADA AQUI ---
-    // Adicionamos um objeto de conteúdo padrão para novos recursos
-    newItemData.content = {}; 
-  }
-
-
-  try {
-    const { data, error } = await supabase
-      .from(table)
-      .insert(newItemData)
-      .select('id')
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true, newItem: data };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao criar: ${message}` };
-  }
-}
-
-export async function updateItemTitle(table: 'documentos' | 'paginas' | 'recursos', id: number, newTitle: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const { error } = await supabase
-      .from(table)
-      .update({ title: newTitle })
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao salvar título: ${message}` };
-  }
-}
-
-export async function deleteItem(table: 'documentos' | 'paginas' | 'recursos', id: number) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    
-    const deleteWithChildren = async (idToDelete: number) => {
-        const { data: children } = await supabase
-            .from(table)
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('parent_id', idToDelete);
-
-        if (children) {
-            for (const child of children) {
-                await deleteWithChildren(child.id);
-            }
-        }
-        await supabase.from(table).delete().eq('user_id', user.id).eq('id', idToDelete);
-    };
-
-    await deleteWithChildren(id);
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao deletar: ${message}` };
-  }
-}
-
-export async function updateItemParent(table: 'documentos' | 'paginas' | 'recursos', itemId: number, newParentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const { error } = await supabase
-      .from(table)
-      .update({ parent_id: newParentId })
-      .eq('id', itemId)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao mover: ${message}` };
   }
 }
 
@@ -907,8 +653,128 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// --- CORREÇÃO: FUNÇÕES ESPECÍFICAS DE CONTEÚDO ---
-// Estas funções foram movidas para fora do bloco genérico para evitar conflitos
+// ============================================================================
+// --- AÇÕES GENÉRICAS PARA HIERARQUIA (PÁGINAS, DOCUMENTOS, RECURSOS) ---
+// ============================================================================
+type TableName = 'paginas' | 'documentos' | 'recursos';
+
+export async function createItem(table: TableName, parentId: number | null, type?: string, title?: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const newItemData: any = {
+    title: title || 'Novo Item',
+    user_id: user.id,
+    parent_id: parentId,
+  };
+
+  if (table === 'paginas') {
+    newItemData.emoji = '📄';
+    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
+  } else if (table === 'documentos') {
+    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
+  } else if (table === 'recursos') {
+    newItemData.type = type || 'folder';
+    newItemData.content = {}; // Adiciona um objeto de conteúdo padrão
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .insert(newItemData)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
+    return { success: true, newItem: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error(`Falha ao criar item na tabela ${table}:`, error);
+    return { error: `Falha ao criar: ${message}` };
+  }
+}
+
+export async function updateItemTitle(table: TableName, id: number, newTitle: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ title: newTitle })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao salvar título: ${message}` };
+  }
+}
+
+export async function deleteItem(table: TableName, id: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const deleteWithChildren = async (idToDelete: number) => {
+        const { data: children } = await supabase
+            .from(table)
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('parent_id', idToDelete);
+
+        if (children) {
+            for (const child of children) {
+                await deleteWithChildren(child.id);
+            }
+        }
+        await supabase.from(table).delete().eq('user_id', user.id).eq('id', idToDelete);
+    };
+
+    await deleteWithChildren(id);
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao deletar: ${message}` };
+  }
+}
+
+export async function updateItemParent(table: TableName, itemId: number, newParentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ parent_id: newParentId })
+      .eq('id', itemId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao mover: ${message}` };
+  }
+}
+
+// ============================================================================
+// --- AÇÕES ESPECÍFICAS DE CONTEÚDO ---
+// ============================================================================
 
 export async function updatePaginaContent(paginaId: number, newContent: JSONContent) {
   const supabase = createServerActionClient({ cookies });
@@ -919,7 +785,15 @@ export async function updatePaginaContent(paginaId: number, newContent: JSONCont
   revalidatePath('/disciplinas');
 }
 
-// --- BIBLIOTECA DE RECURSOS (SEÇÃO ATUALIZADA) ---
+export async function updateDocumentoContent(documentoId: number, newContent: JSONContent) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from('documentos').update({ content: newContent }).eq('user_id', user.id).eq('id', documentoId);
+  revalidatePath('/documentos');
+}
+
 export async function updateResourceContent(resourceId: number, newContent: object) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
