@@ -782,3 +782,30 @@ export async function deleteAnkiDeck(deckId: number) {
   revalidatePath('/anki');
   return { success: true };
 }
+
+// Adicione esta nova função ao seu arquivo src/app/actions.ts
+
+export async function updateTarefaStatus(
+  id: number,
+  status: 'pendente' | 'concluida' | 'arquivada'
+) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  // A coluna 'completed' será atualizada com base no novo status
+  const isCompleted = status === 'concluida';
+
+  const { error } = await supabase
+    .from('tarefas')
+    .update({ status: status, completed: isCompleted })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: "Falha ao atualizar o status da tarefa." };
+  }
+
+  revalidatePath('/tarefas');
+  return { success: true };
+}
