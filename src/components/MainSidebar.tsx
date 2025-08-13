@@ -1,15 +1,15 @@
-// src/components/MainSidebar.tsx
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation'; // 1. Importar useRouter
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'; // 2. Importar o client
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
+// 1. IMPORTAR O ÍCONE DA BIBLIOTECA
 import {
     LayoutDashboard, BookOpen, PenSquare, Recycle, ListTodo, Calendar,
-    ChevronsLeft, ChevronsRight, FileText, BrainCircuit, User as UserIcon, LogOut
+    ChevronsLeft, ChevronsRight, FileText, BrainCircuit, User as UserIcon, LogOut, Library // Adicionado
 } from 'lucide-react';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,6 +22,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// 2. ADICIONAR O NOVO ITEM DE NAVEGAÇÃO
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Guia de Estudos', href: '/guia-estudos', icon: BookOpen },
@@ -29,6 +30,7 @@ const navItems = [
     { name: 'Ciclo de Estudos', href: '/ciclo', icon: Recycle },
     { name: 'Revisões', href: '/revisoes', icon: ListTodo },
     { name: 'Documentos', href: '/documentos', icon: FileText },
+    { name: 'Biblioteca', href: '/biblioteca', icon: Library }, // Adicionado aqui
     { name: 'Gerador Anki', href: '/anki', icon: BrainCircuit },
     { name: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { name: 'Calendário', href: '/calendario', icon: Calendar },
@@ -47,8 +49,8 @@ interface MainSidebarProps {
 export function MainSidebar({ user, profile }: MainSidebarProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
-    const router = useRouter(); // 3. Inicializar o router
-    const supabase = createClientComponentClient(); // 4. Inicializar o Supabase client
+    const router = useRouter();
+    const supabase = createClientComponentClient();
 
     const getInitials = () => {
         if (profile?.full_name) {
@@ -58,11 +60,10 @@ export function MainSidebar({ user, profile }: MainSidebarProps) {
         return user.email?.[0].toUpperCase() || 'U';
     };
     
-    // 5. Criar uma função de logout explícita
     const handleSignOut = async () => {
         await supabase.auth.signOut();
-        router.push('/login'); // Redireciona para a página de login
-        router.refresh(); // Garante que o estado do servidor é atualizado
+        router.push('/login');
+        router.refresh();
     };
 
     return (
@@ -92,7 +93,6 @@ export function MainSidebar({ user, profile }: MainSidebarProps) {
                             </DropdownMenuItem>
                         </Link>
                         <DropdownMenuSeparator />
-                        {/* 6. CORREÇÃO: Chamar a nova função de logout no onSelect */}
                         <DropdownMenuItem onSelect={handleSignOut} className="cursor-pointer text-red-500 focus:text-red-400">
                            <LogOut className="mr-2 h-4 w-4" />
                            <span>Sair</span>
