@@ -1,151 +1,209 @@
 'use client';
 
-import { useState, useTransition, useRef } from 'react';
+import { useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createResource, deleteResource, updateResource } from '@/app/actions';
+import { type Resource, type Disciplina } from '@/lib/types';
+import { toast } from 'sonner';
+import { Folder, Link as LinkIcon, FilePdf, Plus, MoreVertical, Edit, Trash2, Home, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { addResource, deleteResource } from '@/app/actions';
-import { type Resource, type Disciplina } from '@/lib/types';
-import { toast } from 'sonner';
-import { Plus, Trash2, Link as LinkIcon, FilePdf } from 'lucide-react';
-import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-// Componente para o formulário de adição de recursos
-function AddResourceForm({ disciplinas }: { disciplinas: Disciplina[] }) {
-    const [type, setType] = useState<'link' | 'pdf'>('link');
+// Componente para um item individual (pasta, link ou pdf)
+function ResourceItem({ resource, onSelect }: { resource: Resource; onSelect: (resource: Resource) => void; }) {
+    const router = useRouter();
     const [isPending, startTransition] = useTransition();
-    const formRef = useRef<HTMLFormElement>(null);
 
-    const handleSubmit = (formData: FormData) => {
-        startTransition(async () => {
-            const result = await addResource(formData);
-            if (result?.error) {
-                toast.error(result.error);
-            } else {
-                toast.success("Recurso adicionado com sucesso!");
-                formRef.current?.reset();
-                setType('link'); // Reseta o tipo do formulário
-            }
-        });
+    const handleDelete = () => {
+        if (confirm(`Tem a certeza de que deseja apagar "${resource.title}"? Pastas serão apagadas com todo o seu conteúdo.`)) {
+            startTransition(async () => {
+                await deleteResource(resource);
+                toast.success("Recurso apagado.");
+            });
+        }
+    };
+
+    const handleItemClick = () => {
+        if (resource.type === 'folder') {
+            router.push(`/biblioteca?folderId=${resource.id}`);
+        } else {
+            window.open(resource.url || `/biblioteca`, '_blank');
+        }
     };
 
     return (
-        <form ref={formRef} action={handleSubmit} className="bg-card p-6 rounded-lg border space-y-4">
-            <h3 className="text-lg font-semibold">Adicionar Novo Recurso</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-2">
-                    <Label htmlFor="title">Título</Label>
-                    <Input id="title" name="title" required />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="type">Tipo</Label>
-                    <Select name="type" value={type} onValueChange={(value: 'link' | 'pdf') => setType(value)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="link">Link</SelectItem>
-                            <SelectItem value="pdf">PDF</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+        <div className="bg-card p-4 rounded-lg border flex flex-col group relative">
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <MoreVertical className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => onSelect(resource)}>Editar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleDelete} className="text-destructive">Apagar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Descrição (Opcional)</Label>
-                <Textarea id="description" name="description" rows={2} />
+            <div onClick={handleItemClick} className="cursor-pointer flex-grow flex flex-col items-center justify-center text-center p-4">
+                {resource.type === 'folder' && <Folder className="h-12 w-12 text-primary mb-2" />}
+                {resource.type === 'link' && <LinkIcon className="h-12 w-12 text-blue-500 mb-2" />}
+                {resource.type === 'pdf' && <FilePdf className="h-12 w-12 text-red-500 mb-2" />}
+                <p className="font-semibold text-sm break-all">{resource.title}</p>
             </div>
-            {type === 'link' && (
-                <div className="space-y-2">
-                    <Label htmlFor="url">URL</Label>
-                    <Input id="url" name="url" type="url" placeholder="https://..." />
-                </div>
-            )}
-            {type === 'pdf' && (
-                <div className="space-y-2">
-                    <Label htmlFor="file">Ficheiro PDF</Label>
-                    <Input id="file" name="file" type="file" accept=".pdf" />
-                </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="md:col-span-2 space-y-2">
-                    <Label htmlFor="disciplina_id">Vincular à Disciplina (Opcional)</Label>
-                    <Select name="disciplina_id">
-                        <SelectTrigger><SelectValue placeholder="Selecione uma disciplina..." /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="null">Nenhuma</SelectItem>
-                            {disciplinas.map(d => (
-                                <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="flex items-end">
-                    <Button type="submit" disabled={isPending} className="w-full">
-                        <Plus className="mr-2 h-4 w-4" />
-                        {isPending ? 'A adicionar...' : 'Adicionar Recurso'}
-                    </Button>
-                </div>
-            </div>
-        </form>
+        </div>
+    );
+}
+
+// Componente para o modal de criação/edição
+function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingResource }: { open: boolean, setOpen: (open: boolean) => void, currentFolderId: number | null, disciplinas: Disciplina[], editingResource: Resource | null }) {
+    const [type, setType] = useState<'link' | 'pdf' | 'folder'>('link');
+    const [isPending, startTransition] = useTransition();
+
+    const action = editingResource ? updateResource : createResource;
+
+    const handleSubmit = (formData: FormData) => {
+        if (!editingResource) {
+            formData.append('parent_id', String(currentFolderId));
+        } else {
+            formData.append('id', String(editingResource.id));
+        }
+        
+        startTransition(async () => {
+            const result = await action(formData);
+            if (result?.error) {
+                toast.error(result.error);
+            } else {
+                toast.success(`Recurso ${editingResource ? 'atualizado' : 'criado'} com sucesso!`);
+                setOpen(false);
+            }
+        });
+    };
+    
+    // Atualiza o tipo se estiver a editar
+    useState(() => {
+        if (editingResource) setType(editingResource.type);
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{editingResource ? 'Editar Recurso' : 'Adicionar Novo Recurso'}</DialogTitle>
+                </DialogHeader>
+                <form action={handleSubmit} className="space-y-4">
+                    {!editingResource && (
+                        <div className="space-y-2">
+                             <Label htmlFor="type">Tipo</Label>
+                             <Select name="type" value={type} onValueChange={(value: 'link' | 'pdf' | 'folder') => setType(value)}>
+                                 <SelectTrigger><SelectValue /></SelectTrigger>
+                                 <SelectContent>
+                                     <SelectItem value="folder">Pasta</SelectItem>
+                                     <SelectItem value="link">Link</SelectItem>
+                                     <SelectItem value="pdf">PDF</SelectItem>
+                                 </SelectContent>
+                             </Select>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="title">Título</Label>
+                        <Input id="title" name="title" defaultValue={editingResource?.title || ''} required />
+                    </div>
+                    {type !== 'folder' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="description">Descrição (Opcional)</Label>
+                            <Textarea id="description" name="description" defaultValue={editingResource?.description || ''} rows={2} />
+                        </div>
+                    )}
+                    {type === 'link' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="url">URL</Label>
+                            <Input id="url" name="url" type="url" defaultValue={editingResource?.url || ''} placeholder="https://..." />
+                        </div>
+                    )}
+                    {type === 'pdf' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="file">Ficheiro PDF</Label>
+                            <Input id="file" name="file" type="file" accept=".pdf" />
+                            {editingResource?.file_name && <p className="text-xs text-muted-foreground mt-1">Ficheiro atual: {editingResource.file_name}</p>}
+                        </div>
+                    )}
+                    {type !== 'folder' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="disciplina_id">Vincular à Disciplina (Opcional)</Label>
+                            <Select name="disciplina_id" defaultValue={String(editingResource?.disciplina_id || 'null')}>
+                                <SelectTrigger><SelectValue placeholder="Selecione uma disciplina..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="null">Nenhuma</SelectItem>
+                                    {disciplinas.map(d => (
+                                        <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="ghost">Cancelar</Button></DialogClose>
+                        <Button type="submit" disabled={isPending}>{isPending ? 'A guardar...' : 'Guardar'}</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
 // Componente principal da Biblioteca
-export function BibliotecaClient({ resources, disciplinas }: { resources: Resource[], disciplinas: Disciplina[] }) {
-  const [, startTransition] = useTransition();
+export function BibliotecaClient({ resources, disciplinas, breadcrumbs }: { resources: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const currentFolderId = Number(searchParams.get('folderId')) || null;
+    
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingResource, setEditingResource] = useState<Resource | null>(null);
 
-  const handleDelete = (id: number, filePath: string | null) => {
-    if (confirm("Tem a certeza de que deseja apagar este recurso?")) {
-      startTransition(async () => {
-        await deleteResource(id, filePath);
-        toast.success("Recurso apagado.");
-      });
-    }
-  };
+    const handleEdit = (resource: Resource) => {
+        setEditingResource(resource);
+        setModalOpen(true);
+    };
 
-  return (
-    <div className="space-y-8">
-      <AddResourceForm disciplinas={disciplinas} />
+    const handleAddNew = () => {
+        setEditingResource(null);
+        setModalOpen(true);
+    };
 
-      <div>
-        <h2 className="text-2xl font-bold mb-4">Seus Recursos</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {resources.length === 0 && (
-            <p className="text-muted-foreground col-span-full text-center py-8">A sua biblioteca está vazia.</p>
-          )}
-          {resources.map(resource => (
-            <div key={resource.id} className="bg-card p-4 rounded-lg border flex flex-col group">
-              <div className="flex-grow">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3 mb-2">
-                    {resource.type === 'link' ? <LinkIcon className="h-5 w-5 text-primary" /> : <FilePdf className="h-5 w-5 text-destructive" />}
-                    <h3 className="font-semibold truncate">{resource.title}</h3>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => handleDelete(resource.id, resource.file_path)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                {/* Breadcrumbs */}
+                <div className="flex items-center text-sm text-muted-foreground">
+                    <Home className="h-4 w-4 mr-2 cursor-pointer" onClick={() => router.push('/biblioteca')} />
+                    {breadcrumbs.map(b => (
+                        <div key={b.id} className="flex items-center">
+                            <ChevronRight className="h-4 w-4" />
+                            <span className="mx-2 cursor-pointer hover:text-primary" onClick={() => router.push(`/biblioteca?folderId=${b.id}`)}>{b.title}</span>
+                        </div>
+                    ))}
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">{resource.description}</p>
-              </div>
-              <div className="text-xs text-muted-foreground border-t pt-2 flex justify-between items-center">
-                <span>{resource.paginas?.title || 'Sem disciplina'}</span>
-                {resource.type === 'link' && resource.url && (
-                  <a href={resource.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Abrir Link</a>
-                )}
-                {resource.type === 'pdf' && resource.file_path && (
-                  <a href={`https://etifeomaorcxzsxosxlz.supabase.co/storage/v1/object/public/resources/${resource.file_path}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Abrir PDF</a>
-                )}
-              </div>
+                <Button onClick={handleAddNew}><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>
             </div>
-          ))}
+            
+            <ResourceModal open={modalOpen} setOpen={setModalOpen} currentFolderId={currentFolderId} disciplinas={disciplinas} editingResource={editingResource} />
+            
+            {/* Grelha de Recursos */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {resources.length === 0 && (
+                    <p className="text-muted-foreground col-span-full text-center py-12">Esta pasta está vazia.</p>
+                )}
+                {resources.map(resource => (
+                    <ResourceItem key={resource.id} resource={resource} onSelect={handleEdit} />
+                ))}
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }

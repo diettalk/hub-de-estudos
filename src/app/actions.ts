@@ -918,47 +918,85 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
-
 // ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS ---
+// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS 2.0 ---
 // ==================================================================
 
-export async function addResource(formData: FormData) {
+// Action para criar um novo recurso (pasta, link ou pdf)
+export async function createResource(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'pdf';
-  const disciplina_id = Number(formData.get('disciplina_id'));
+  const type = formData.get('type') as 'link' | 'pdf' | 'folder';
+  const disciplinaIdStr = formData.get('disciplina_id') as string;
+  const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
   const url = formData.get('url') as string;
   const file = formData.get('file') as File;
+  const parentIdStr = formData.get('parent_id') as string;
+  let parent_id = parentIdStr ? Number(parentIdStr) : null;
 
   if (!title || !type) {
     return { error: "Título e tipo são obrigatórios." };
   }
 
-  let resourceData: { [key: string]: any } = {
+  // Lógica de pasta de disciplina automática
+  if (disciplina_id && type !== 'folder') {
+    // 1. Procura uma pasta já existente para esta disciplina
+    const { data: existingFolder } = await supabase
+      .from('resources')
+      .select('id')
+      .eq('disciplina_id', disciplina_id)
+      .eq('type', 'folder')
+      .single();
+
+    if (existingFolder) {
+      parent_id = existingFolder.id;
+    } else {
+      // 2. Se não existir, cria uma nova pasta para a disciplina
+      const { data: disciplina } = await supabase
+        .from('paginas')
+        .select('title')
+        .eq('id', disciplina_id)
+        .single();
+      
+      if (disciplina) {
+        const { data: newFolder, error: newFolderError } = await supabase
+          .from('resources')
+          .insert({
+            user_id: user.id,
+            title: disciplina.title,
+            type: 'folder',
+            disciplina_id: disciplina_id,
+            parent_id: null // Pastas de disciplina ficam sempre na raiz
+          })
+          .select('id')
+          .single();
+        
+        if (newFolderError) throw new Error("Falha ao criar a pasta da disciplina.");
+        parent_id = newFolder.id;
+      }
+    }
+  }
+
+  let resourceData: Partial<Resource> = {
     user_id: user.id,
     title,
     description,
     type,
-    disciplina_id: isNaN(disciplina_id) ? null : disciplina_id,
+    disciplina_id,
+    parent_id,
   };
 
-  // Lógica para upload de ficheiro PDF
   if (type === 'pdf' && file && file.size > 0) {
     const filePath = `${user.id}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage
-      .from('resources') // Nome do bucket para os PDFs
+      .from('resources')
       .upload(filePath, file);
 
-    if (uploadError) {
-      console.error("Erro no upload do PDF:", uploadError);
-      return { error: "Falha ao fazer o upload do ficheiro." };
-    }
+    if (uploadError) return { error: "Falha ao fazer o upload do ficheiro." };
     resourceData.file_path = filePath;
     resourceData.file_name = file.name;
   } else if (type === 'link') {
@@ -972,36 +1010,78 @@ export async function addResource(formData: FormData) {
     return { error: "Falha ao criar o recurso." };
   }
 
-  revalidatePath('/biblioteca'); // Vamos criar esta página a seguir
+  revalidatePath('/biblioteca');
   return { success: true };
 }
 
-export async function deleteResource(id: number, filePath?: string | null) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+// Action para apagar um recurso e os seus filhos
+export async function deleteResource(resource: Resource) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
 
-  // Se o recurso for um PDF, apaga o ficheiro do Storage primeiro
-  if (filePath) {
-    const { error: storageError } = await supabase.storage
-      .from('resources')
-      .remove([filePath]);
-    if (storageError) {
-      console.error("Erro ao apagar ficheiro do Storage:", storageError);
-      // Continua mesmo se falhar, para apagar o registo da base de dados
-    }
-  }
+    const deleteWithChildren = async (res: Resource) => {
+        // Apaga o ficheiro do storage se for um PDF
+        if (res.type === 'pdf' && res.file_path) {
+            await supabase.storage.from('resources').remove([res.file_path]);
+        }
 
-  const { error } = await supabase
-    .from('resources')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+        // Encontra e apaga os filhos recursivamente
+        if (res.type === 'folder') {
+            const { data: children } = await supabase
+                .from('resources')
+                .select('*')
+                .eq('parent_id', res.id);
+            
+            if (children) {
+                for (const child of children) {
+                    await deleteWithChildren(child as Resource);
+                }
+            }
+        }
 
-  if (error) {
-    return { error: "Falha ao apagar o recurso." };
-  }
+        // Apaga o registo da base de dados
+        await supabase.from('resources').delete().eq('id', res.id);
+    };
 
-  revalidatePath('/biblioteca');
-  return { success: true };
+    await deleteWithChildren(resource);
+
+    revalidatePath('/biblioteca');
+    return { success: true };
+}
+
+// Action para mover um recurso (drag-and-drop)
+export async function moveResource(resourceId: number, newParentId: number | null) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    const { error } = await supabase
+        .from('resources')
+        .update({ parent_id: newParentId })
+        .eq('id', resourceId);
+
+    if (error) return { error: "Falha ao mover o recurso." };
+    
+    revalidatePath('/biblioteca');
+    return { success: true };
+}
+
+// Action para atualizar os detalhes de um recurso
+export async function updateResource(formData: FormData) {
+    const supabase = createServerActionClient({ cookies });
+    const id = Number(formData.get('id'));
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const url = formData.get('url') as string;
+
+    const { error } = await supabase
+        .from('resources')
+        .update({ title, description, url })
+        .eq('id', id);
+
+    if (error) return { error: "Falha ao atualizar o recurso." };
+
+    revalidatePath('/biblioteca');
+    return { success: true };
 }
