@@ -1,99 +1,76 @@
-'use client';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
+import BibliotecaClient from '@/components/BibliotecaClient';
 
-import { useState, useTransition, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { updateResourceContent } from '@/app/actions';
-import { type Resource, type Disciplina } from '@/lib/types';
-import { toast } from 'sonner';
-import { Save } from 'lucide-react';
+export const dynamic = 'force-dynamic';
 
-// Formulário para editar o conteúdo de um recurso existente
-function ResourceContentForm({ resource, disciplinas }: { resource: Resource, disciplinas: Disciplina[] }) {
-    const [isPending, startTransition] = useTransition();
-    const formRef = useRef<HTMLFormElement>(null);
+const buildTree = (resources: Node[]): Node[] => {
+    const map = new Map<number, Node>();
+    const roots: Node[] = [];
+    
+    resources.forEach(r => {
+        map.set(r.id, { ...r, children: [] });
+    });
 
-    const handleSubmit = (formData: FormData) => {
-        formData.append('id', String(resource.id));
-        formData.append('type', resource.type!);
-
-        startTransition(async () => {
-            const result = await updateResourceContent(formData);
-            if (result?.error) {
-                toast.error(result.error);
+    resources.forEach(r => {
+        const node = map.get(r.id);
+        if (node) {
+            if (r.parent_id && map.has(r.parent_id)) {
+                const parent = map.get(r.parent_id)!;
+                if (!parent.children) parent.children = [];
+                parent.children.push(node);
             } else {
-                toast.success("Recurso atualizado com sucesso!");
+                roots.push(node);
             }
-        });
-    };
+        }
+    });
+    return roots;
+};
 
-    return (
-        <form ref={formRef} action={handleSubmit} className="bg-card p-6 rounded-lg border space-y-4 h-full flex flex-col">
-            <h3 className="text-lg font-semibold">Editar Recurso</h3>
-            <div className="space-y-2">
-                <Label htmlFor="title">Título</Label>
-                <Input id="title" name="title" defaultValue={resource.title} required />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Descrição (Opcional)</Label>
-                <Textarea id="description" name="description" defaultValue={resource.description || ''} rows={3} />
-            </div>
-            {resource.type === 'link' && (
-                <div className="space-y-2">
-                    <Label htmlFor="url">URL</Label>
-                    <Input id="url" name="url" type="url" defaultValue={resource.url || ''} placeholder="https://..." />
-                </div>
-            )}
-            {resource.type === 'pdf' && (
-                <div className="space-y-2">
-                    <Label htmlFor="file">Substituir PDF (Opcional)</Label>
-                    <Input id="file" name="file" type="file" accept=".pdf" />
-                    {resource.file_name && <p className="text-xs text-muted-foreground mt-1">Ficheiro atual: {resource.file_name}</p>}
-                </div>
-            )}
-            <div className="space-y-2">
-                <Label htmlFor="disciplina_id">Vincular à Disciplina (Opcional)</Label>
-                <Select name="disciplina_id" defaultValue={String(resource.disciplina_id || 'null')}>
-                    <SelectTrigger><SelectValue placeholder="Selecione uma disciplina..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="null">Nenhuma</SelectItem>
-                        {disciplinas.map(d => (
-                            <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="mt-auto pt-4">
-                <Button type="submit" disabled={isPending}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isPending ? 'A salvar...' : 'Salvar Alterações'}
-                </Button>
-            </div>
-        </form>
-    );
-}
-
-// Componente principal da Biblioteca
-export function BibliotecaClient({ disciplinas, selectedResource }: { disciplinas: Disciplina[], selectedResource: Resource | null }) {
-  if (selectedResource && selectedResource.type !== 'folder') {
-    return <ResourceContentForm resource={selectedResource} disciplinas={disciplinas} />;
+// CORREÇÃO: A palavra-chave 'default' é essencial para que o Next.js encontre e renderize esta página.
+export default async function BibliotecaPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+  const supabase = createServerComponentClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    redirect('/login');
   }
 
+  const { data: allResources } = await supabase
+    .from('recursos')
+    .select('id, parent_id, title, type, emoji')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
+
+  const resourceTree = buildTree((allResources as Node[]) || []);
+  
+  const selectedId = searchParams?.page ? Number(String(searchParams.page)) : null;
+  let selectedResource: any = null;
+
+  if (selectedId) {
+    const { data: resourceData } = await supabase
+      .from('recursos')
+      .select('*')
+      .eq('id', selectedId)
+      .eq('user_id', user.id)
+      .single();
+    selectedResource = resourceData;
+  }
+  
   return (
-    <div className="bg-card p-6 rounded-lg border h-full flex items-center justify-center">
-        <div className="text-center">
-            <h2 className="text-xl font-bold mb-2">Biblioteca de Recursos</h2>
-            <p className="text-muted-foreground">Selecione um item na barra lateral para ver os detalhes ou adicione uma nova pasta ou recurso.</p>
-        </div>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
+      <div className="md:col-span-1 h-full">
+        <HierarchicalSidebar 
+            tree={resourceTree} 
+            table="recursos"
+            title="BIBLIOTECA"
+            allowTypes={['folder', 'link', 'pdf']}
+        />
+      </div>
+      <div className="md:col-span-3 h-full">
+        <BibliotecaClient resource={selectedResource} />
+      </div>
     </div>
   );
 }
