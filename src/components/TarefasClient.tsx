@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+// 1. CORREÇÃO: Adicionar 'useEffect' à importação do React
+import { useState, useTransition, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,13 +37,13 @@ const TarefaItem = ({ tarefa }: { tarefa: Tarefa }) => {
   return (
     <div className="flex items-center gap-3 p-3 bg-secondary rounded-md group">
       <Checkbox
-        checked={tarefa.status === 'conclui­da'}
+        checked={tarefa.status === 'concluida'}
         onCheckedChange={(checked) => {
           handleStatusChange(checked ? 'concluida' : 'pendente');
         }}
       />
       <div className="flex-grow">
-        <p className={`${tarefa.status === 'conclui­da' ? 'line-through text-muted-foreground' : ''}`}>
+        <p className={`${tarefa.status === 'concluida' ? 'line-through text-muted-foreground' : ''}`}>
           {tarefa.title}
         </p>
         {tarefa.due_date && (
@@ -52,8 +53,8 @@ const TarefaItem = ({ tarefa }: { tarefa: Tarefa }) => {
         )}
       </div>
       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
-        {tarefa.status !== 'conclui­da' && (
-          <Button variant="ghost" size="icon" title="Marcar como Concluída" onClick={() => handleStatusChange('conclui­da')}>
+        {tarefa.status !== 'concluida' && (
+          <Button variant="ghost" size="icon" title="Marcar como Concluída" onClick={() => handleStatusChange('concluida')}>
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </Button>
         )}
@@ -84,7 +85,7 @@ export function TarefasClient({ tarefas: initialTarefas }: TarefasClientProps) {
   }, [initialTarefas]);
 
   const pendentes = tarefas.filter(t => t.status === 'pendente');
-  const concluidas = tarefas.filter(t => t.status === 'conclui­da');
+  const concluidas = tarefas.filter(t => t.status === 'concluida');
   const arquivadas = tarefas.filter(t => t.status === 'arquivada');
 
   const formAction = (formData: FormData) => {
