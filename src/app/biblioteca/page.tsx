@@ -56,7 +56,7 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
       <div className="md:col-span-1 h-full">
         <HierarchicalSidebar 
             tree={resourceTree} 
-            table="resources" // Informa a sidebar que estamos a trabalhar com a tabela 'resources'
+            table="resources"
             title="BIBLIOTECA"
         />
       </div>
