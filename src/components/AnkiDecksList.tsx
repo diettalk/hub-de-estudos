@@ -1,4 +1,3 @@
-// src/components/AnkiDecksList.tsx
 'use client';
 
 import { useTransition } from 'react';
@@ -8,18 +7,23 @@ import { deleteAnkiDeck } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Trash2, FileText } from 'lucide-react';
 
+type Flashcard = {
+  question: string;
+  answer: string;
+};
+
 type Deck = {
   id: number;
   title: string;
   created_at: string;
-  cards: any[];
+  cards: Flashcard[]; // Corrigido de 'any[]'
 };
 
 export function AnkiDecksList({ decks }: { decks: Deck[] }) {
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = (deckId: number, title: string) => {
-    if (window.confirm(`Tem certeza que deseja apagar o deck "${title}"?`)) {
+    if (window.confirm(`Tem a certeza de que deseja apagar o deck "${title}"?`)) {
       startTransition(async () => {
         const result = await deleteAnkiDeck(deckId);
         if (result.error) {

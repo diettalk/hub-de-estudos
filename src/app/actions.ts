@@ -766,3 +766,19 @@ export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
   revalidatePath('/anki');
   return { success: true, newDeckId: data.id };
 }
+
+// ADICIONADO: A função para apagar o deck que estava em falta
+export async function deleteAnkiDeck(deckId: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase.from('anki_decks').delete().match({ id: deckId, user_id: user.id });
+
+  if (error) {
+    return { error: "Falha ao apagar o deck." };
+  }
+
+  revalidatePath('/anki');
+  return { success: true };
+}
