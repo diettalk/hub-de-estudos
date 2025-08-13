@@ -1,3 +1,5 @@
+// src/app/actions.ts
+
 'use server';
 
 import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
@@ -5,7 +7,6 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
 import { type SessaoEstudo } from '@/lib/types';
-import { type JSONContent } from '@tiptap/react';
 
 // --- AÇÕES DE CONCURSOS ---
 export async function addConcurso(formData: FormData) {
@@ -60,6 +61,47 @@ export async function deleteConcurso(id: number) {
   const supabase = createServerActionClient({ cookies });
   await supabase.from('concursos').delete().eq('id', id);
   revalidatePath('/guia-estudos');
+}
+
+// --- AÇÕES DE DISCIPLINAS ---
+export async function createPagina(parentId: number | null, title: string, emoji: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado' };
+
+  const { data, error } = await supabase
+    .from('paginas')
+    .insert({ title, emoji, parent_id: parentId, user_id: user.id })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  
+  revalidatePath('/disciplinas');
+  return { data };
+}
+
+export async function updatePagina(formData: FormData) {
+  const id = Number(formData.get('id'));
+  const title = formData.get('title') as string;
+  const emoji = formData.get('emoji') as string;
+  const content = formData.get('content') as string;
+
+  if (isNaN(id)) return;
+
+  const supabase = createServerActionClient({ cookies });
+  await supabase
+    .from('paginas')
+    .update({ title, emoji, content: content ? JSON.parse(content) : null })
+    .eq('id', id);
+
+  revalidatePath('/disciplinas');
+}
+
+export async function deletePagina(id: number) {
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('paginas').delete().eq('id', id);
+  revalidatePath('/disciplinas');
 }
 
 // --- AÇÕES DE VÍNCULO ---
@@ -328,6 +370,100 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
     return { success: true };
 }
 
+// --- AÇÕES PARA DOCUMENTOS (CORRIGIDO) ---
+
+// CORRIGIDO: A função agora aceita FormData para ser compatível com o componente da barra lateral.
+export async function addDocumento(formData: FormData) {
+  const title = formData.get('title') as string;
+  const parentIdValue = formData.get('parent_id') as string | null;
+  const parentId = parentIdValue ? Number(parentIdValue) : null;
+
+  if (!title || title.trim() === '') {
+    return { error: 'O título é obrigatório.' };
+  }
+
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: 'Usuário não autenticado.' };
+  }
+
+  const { data, error } = await supabase
+    .from('documentos')
+    .insert({
+      title,
+      user_id: user.id,
+      content: null, // Documentos são criados sem conteúdo inicial
+      parent_id: parentId,
+    })
+    .select('id') // Retorna o ID do novo documento
+    .single();
+
+  if (error) {
+    console.error("Erro ao adicionar documento:", error);
+    return { error: error.message };
+  }
+
+  revalidatePath('/documentos');
+  return { data }; // Retorna { data: { id: new_id } } para o cliente
+}
+
+// NOVO: Criada a função 'updateDocumentoContent' que estava faltando e era importada na página.
+// Esta é a função que o Editor principal usa para salvar.
+export async function updateDocumentoContent(formData: FormData) {
+  const id = Number(formData.get('id'));
+  const title = formData.get('title') as string;
+  const contentJSON = formData.get('content') as string;
+
+  if (!id) {
+    return { error: "ID do documento é necessário." };
+  }
+  if (!title) {
+    return { error: "O título não pode ser vazio." };
+  }
+
+  const supabase = createServerActionClient({ cookies });
+
+  try {
+    // Tiptap gera um JSON. O banco espera um JSONB.
+    const contentToSave = contentJSON ? JSON.parse(contentJSON) : null;
+    const { error } = await supabase
+      .from('documentos')
+      .update({ title, content: contentToSave })
+      .eq('id', id);
+
+    if (error) throw error;
+
+    revalidatePath('/documentos');
+    return { success: true };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido.";
+    console.error("Erro ao atualizar conteúdo do documento:", errorMessage);
+    return { error: `Falha ao salvar: ${errorMessage}` };
+  }
+}
+
+// MANTIDO: A função de deleção já usa o RPC e está correta.
+export async function deleteDocumento(id: number) {
+  if (isNaN(id)) {
+    return { error: "ID inválido." };
+  }
+
+  const supabase = createServerActionClient({ cookies });
+  // Chama a função SQL 'delete_documento_e_filhos' que deleta em cascata.
+  const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
+
+  if (error) {
+    console.error("Erro ao deletar documento:", error);
+    return { error: error.message };
+  }
+
+  revalidatePath('/documentos');
+  return { success: true };
+}
+
+
 // --- AÇÕES PARA TAREFAS ---
 export async function addTarefa(formData: FormData) {
   const title = formData.get('title') as string;
@@ -384,7 +520,11 @@ export async function deleteAnotacao(formData: FormData) {
   revalidatePath('/');
 }
 
+// Adicione esta função no final de src/app/actions.ts
+
+// ==================================================================
 // --- AÇÕES DE PERFIL ---
+// ==================================================================
 export async function updateProfile({ id, fullName, avatarUrl }: { id: string, fullName: string, avatarUrl: string | null }) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -403,26 +543,30 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
     return { error: error.message };
   }
   
-  revalidatePath('/perfil');
-  revalidatePath('/');
+  revalidatePath('/perfil'); // Atualiza os dados na página de perfil
+  revalidatePath('/'); // Atualiza a sidebar em todas as páginas
   return { success: true };
 }
 
+// ==================================================================
 // --- AÇÃO PARA REORDENAR CONCURSOS ---
+// ==================================================================
 export async function updateConcursosOrdem(orderedIds: number[]) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
   try {
+    // O 'map' cria uma série de promessas de atualização
     const updatePromises = orderedIds.map((id, index) =>
       supabase
         .from('concursos')
-        .update({ ordem: index })
+        .update({ ordem: index }) // Atualiza a coluna 'ordem' com a nova posição
         .eq('id', id)
         .eq('user_id', user.id)
     );
 
+    // Executa todas as promessas de atualização em paralelo
     await Promise.all(updatePromises);
 
     revalidatePath('/guia-estudos');
@@ -433,12 +577,122 @@ export async function updateConcursosOrdem(orderedIds: number[]) {
   }
 }
 
-// --- AÇÕES PARA GERADOR DE ANKI ---
-type Flashcard = {
-  question: string;
-  answer: string;
+// Adicione este bloco de código ao seu arquivo src/app/actions.ts
+
+// ==================================================================
+// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS E DISCIPLINAS) ---
+// ==================================================================
+
+type NewItemData = {
+  title: string;
+  user_id: string;
+  parent_id: number | null;
+  content: JSONContent;
+  emoji?: string;
 };
 
+export async function createItem(table: 'documentos' | 'paginas', parentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const newItemData: NewItemData = {
+    title: 'Novo Item',
+    user_id: user.id,
+    parent_id: parentId,
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+  };
+
+  if (table === 'paginas') {
+    newItemData.emoji = '📄';
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .insert(newItemData)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true, newItem: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao criar: ${message}` };
+  }
+}
+
+export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ title: newTitle })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao salvar título: ${message}` };
+  }
+}
+
+export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao deletar: ${message}` };
+  }
+}
+
+export async function updateItemParent(table: 'documentos' | 'paginas', itemId: number, newParentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ parent_id: newParentId })
+      .eq('id', itemId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao mover: ${message}` };
+  }
+}
+
+// ==================================================================
+// --- AÇÕES PARA GERADOR DE ANKI ---
+// ==================================================================
 export async function generateAnkiCards(formData: FormData) {
   const sourceText = formData.get('sourceText') as string;
   const numCards = Number(formData.get('numCards'));
@@ -513,6 +767,7 @@ export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
   return { success: true, newDeckId: data.id };
 }
 
+// ADICIONADO: A função para apagar o deck que estava em falta
 export async function deleteAnkiDeck(deckId: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -528,6 +783,8 @@ export async function deleteAnkiDeck(deckId: number) {
   return { success: true };
 }
 
+// Adicione esta nova função ao seu arquivo src/app/actions.ts
+
 export async function updateTarefaStatus(
   id: number,
   status: 'pendente' | 'concluida' | 'arquivada'
@@ -536,6 +793,7 @@ export async function updateTarefaStatus(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
+  // A coluna 'completed' será atualizada com base no novo status
   const isCompleted = status === 'concluida';
 
   const { error } = await supabase
@@ -552,7 +810,12 @@ export async function updateTarefaStatus(
   return { success: true };
 }
 
+// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
+
+// ==================================================================
 // --- AÇÕES PARA METAS DE ESTUDO ---
+// ==================================================================
+
 export async function addStudyGoal(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -582,7 +845,7 @@ export async function addStudyGoal(formData: FormData) {
     return { error: "Falha ao criar a meta de estudo." };
   }
 
-  revalidatePath('/');
+  revalidatePath('/'); // Para atualizar o Dashboard
   return { success: true };
 }
 
@@ -624,6 +887,8 @@ export async function deleteStudyGoal(id: number) {
   return { success: true };
 }
 
+// Adicione esta nova função ao seu arquivo src/app/actions.ts
+
 export async function updateStudyGoal(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -653,152 +918,90 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// ============================================================================
-// --- AÇÕES GENÉRICAS PARA HIERARQUIA (PÁGINAS, DOCUMENTOS, RECURSOS) ---
-// ============================================================================
-type TableName = 'paginas' | 'documentos' | 'recursos';
+// Adicione este novo bloco de código ao seu arquivo src/app/actions.ts
 
-export async function createItem(table: TableName, parentId: number | null, type?: string, title?: string) {
+// ==================================================================
+// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS ---
+// ==================================================================
+
+export async function addResource(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
-  const newItemData: any = {
-    title: title || 'Novo Item',
+  const title = formData.get('title') as string;
+  const description = formData.get('description') as string;
+  const type = formData.get('type') as 'link' | 'pdf';
+  const disciplina_id = Number(formData.get('disciplina_id'));
+  const url = formData.get('url') as string;
+  const file = formData.get('file') as File;
+
+  if (!title || !type) {
+    return { error: "Título e tipo são obrigatórios." };
+  }
+
+  let resourceData: { [key: string]: any } = {
     user_id: user.id,
-    parent_id: parentId,
+    title,
+    description,
+    type,
+    disciplina_id: isNaN(disciplina_id) ? null : disciplina_id,
   };
 
-  if (table === 'paginas') {
-    newItemData.emoji = '📄';
-    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
-  } else if (table === 'documentos') {
-    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
-  } else if (table === 'recursos') {
-    newItemData.type = type || 'folder';
-    newItemData.content = {}; // Adiciona um objeto de conteúdo padrão
+  // Lógica para upload de ficheiro PDF
+  if (type === 'pdf' && file && file.size > 0) {
+    const filePath = `${user.id}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from('resources') // Nome do bucket para os PDFs
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error("Erro no upload do PDF:", uploadError);
+      return { error: "Falha ao fazer o upload do ficheiro." };
+    }
+    resourceData.file_path = filePath;
+    resourceData.file_name = file.name;
+  } else if (type === 'link') {
+    resourceData.url = url;
   }
 
-  try {
-    const { data, error } = await supabase
-      .from(table)
-      .insert(newItemData)
-      .select('id')
-      .single();
+  const { error } = await supabase.from('resources').insert(resourceData);
 
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true, newItem: data };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    console.error(`Falha ao criar item na tabela ${table}:`, error);
-    return { error: `Falha ao criar: ${message}` };
+  if (error) {
+    console.error("Erro ao criar recurso:", error);
+    return { error: "Falha ao criar o recurso." };
   }
+
+  revalidatePath('/biblioteca'); // Vamos criar esta página a seguir
+  return { success: true };
 }
 
-export async function updateItemTitle(table: TableName, id: number, newTitle: string) {
+export async function deleteResource(id: number, filePath?: string | null) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
-  try {
-    const { error } = await supabase
-      .from(table)
-      .update({ title: newTitle })
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao salvar título: ${message}` };
+  // Se o recurso for um PDF, apaga o ficheiro do Storage primeiro
+  if (filePath) {
+    const { error: storageError } = await supabase.storage
+      .from('resources')
+      .remove([filePath]);
+    if (storageError) {
+      console.error("Erro ao apagar ficheiro do Storage:", storageError);
+      // Continua mesmo se falhar, para apagar o registo da base de dados
+    }
   }
-}
 
-export async function deleteItem(table: TableName, id: number) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  const { error } = await supabase
+    .from('resources')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
 
-  try {
-    const deleteWithChildren = async (idToDelete: number) => {
-        const { data: children } = await supabase
-            .from(table)
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('parent_id', idToDelete);
-
-        if (children) {
-            for (const child of children) {
-                await deleteWithChildren(child.id);
-            }
-        }
-        await supabase.from(table).delete().eq('user_id', user.id).eq('id', idToDelete);
-    };
-
-    await deleteWithChildren(id);
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao deletar: ${message}` };
+  if (error) {
+    return { error: "Falha ao apagar o recurso." };
   }
-}
 
-export async function updateItemParent(table: TableName, itemId: number, newParentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const { error } = await supabase
-      .from(table)
-      .update({ parent_id: newParentId })
-      .eq('id', itemId)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao mover: ${message}` };
-  }
-}
-
-// ============================================================================
-// --- AÇÕES ESPECÍFICAS DE CONTEÚDO ---
-// ============================================================================
-
-export async function updatePaginaContent(paginaId: number, newContent: JSONContent) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from('paginas').update({ content: newContent }).eq('user_id', user.id).eq('id', paginaId);
-  revalidatePath('/disciplinas');
-}
-
-export async function updateDocumentoContent(documentoId: number, newContent: JSONContent) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from('documentos').update({ content: newContent }).eq('user_id', user.id).eq('id', documentoId);
-  revalidatePath('/documentos');
-}
-
-export async function updateResourceContent(resourceId: number, newContent: object) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  await supabase.from('recursos').update({ content: newContent }).eq('user_id', user.id).eq('id', resourceId);
   revalidatePath('/biblioteca');
+  return { success: true };
 }

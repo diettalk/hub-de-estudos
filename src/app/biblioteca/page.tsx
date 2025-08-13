@@ -1,76 +1,40 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
-import BibliotecaClient from '@/components/BibliotecaClient';
+import { BibliotecaClient } from '@/components/BibliotecaClient'; // Vamos criar a seguir
+import { type Resource, type Disciplina } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const buildTree = (resources: Node[]): Node[] => {
-    const map = new Map<number, Node>();
-    const roots: Node[] = [];
-    
-    resources.forEach(r => {
-        map.set(r.id, { ...r, children: [] });
-    });
-
-    resources.forEach(r => {
-        const node = map.get(r.id);
-        if (node) {
-            if (r.parent_id && map.has(r.parent_id)) {
-                const parent = map.get(r.parent_id)!;
-                if (!parent.children) parent.children = [];
-                parent.children.push(node);
-            } else {
-                roots.push(node);
-            }
-        }
-    });
-    return roots;
-};
-
-// CORREÇÃO: A palavra-chave 'default' é essencial para que o Next.js encontre e renderize esta página.
-export default async function BibliotecaPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+export default async function BibliotecaPage() {
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/login');
-  }
+  if (!user) redirect('/login');
 
-  const { data: allResources } = await supabase
-    .from('recursos')
-    .select('id, parent_id, title, type, emoji')
+  // Busca todos os recursos do utilizador, fazendo JOIN com a disciplina correspondente
+  const { data: resources } = await supabase
+    .from('resources')
+    .select('*, paginas(title)')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
 
-  const resourceTree = buildTree((allResources as Node[]) || []);
-  
-  const selectedId = searchParams?.page ? Number(String(searchParams.page)) : null;
-  let selectedResource: any = null;
+  // Busca todas as disciplinas para oferecer no formulário de adição
+  const { data: disciplinas } = await supabase
+    .from('paginas')
+    .select('id, title')
+    .eq('user_id', user.id)
+    .order('title');
 
-  if (selectedId) {
-    const { data: resourceData } = await supabase
-      .from('recursos')
-      .select('*')
-      .eq('id', selectedId)
-      .eq('user_id', user.id)
-      .single();
-    selectedResource = resourceData;
-  }
-  
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
-      <div className="md:col-span-1 h-full">
-        <HierarchicalSidebar 
-            tree={resourceTree} 
-            table="recursos"
-            title="BIBLIOTECA"
-            allowTypes={['folder', 'link', 'pdf']}
-        />
-      </div>
-      <div className="md:col-span-3 h-full">
-        <BibliotecaClient resource={selectedResource} />
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold">Biblioteca de Recursos</h1>
+        <p className="text-muted-foreground">O seu repositório central de links, PDFs e materiais de estudo.</p>
+      </header>
+      <BibliotecaClient 
+        resources={(resources as Resource[]) || []} 
+        disciplinas={(disciplinas as Disciplina[]) || []} 
+      />
     </div>
   );
 }
