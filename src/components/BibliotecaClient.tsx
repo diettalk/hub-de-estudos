@@ -1,99 +1,93 @@
 'use client';
 
-import { useState, useTransition, useRef } from 'react';
+import { updateResourceContent } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { updateResourceContent } from '@/app/actions';
-import { type Resource, type Disciplina } from '@/lib/types';
-import { toast } from 'sonner';
-import { Save } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ExternalLink, FileText } from 'lucide-react';
 
-// Formulário para editar o conteúdo de um recurso existente
-function ResourceContentForm({ resource, disciplinas }: { resource: Resource, disciplinas: Disciplina[] }) {
-    const [isPending, startTransition] = useTransition();
-    const formRef = useRef<HTMLFormElement>(null);
-
-    const handleSubmit = (formData: FormData) => {
-        formData.append('id', String(resource.id));
-        formData.append('type', resource.type!);
-
-        startTransition(async () => {
-            const result = await updateResourceContent(formData);
-            if (result?.error) {
-                toast.error(result.error);
-            } else {
-                toast.success("Recurso atualizado com sucesso!");
-            }
-        });
-    };
-
-    return (
-        <form ref={formRef} action={handleSubmit} className="bg-card p-6 rounded-lg border space-y-4 h-full flex flex-col">
-            <h3 className="text-lg font-semibold">Editar Recurso</h3>
-            <div className="space-y-2">
-                <Label htmlFor="title">Título</Label>
-                <Input id="title" name="title" defaultValue={resource.title} required />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Descrição (Opcional)</Label>
-                <Textarea id="description" name="description" defaultValue={resource.description || ''} rows={3} />
-            </div>
-            {resource.type === 'link' && (
-                <div className="space-y-2">
-                    <Label htmlFor="url">URL</Label>
-                    <Input id="url" name="url" type="url" defaultValue={resource.url || ''} placeholder="https://..." />
-                </div>
-            )}
-            {resource.type === 'pdf' && (
-                <div className="space-y-2">
-                    <Label htmlFor="file">Substituir PDF (Opcional)</Label>
-                    <Input id="file" name="file" type="file" accept=".pdf" />
-                    {resource.file_name && <p className="text-xs text-muted-foreground mt-1">Ficheiro atual: {resource.file_name}</p>}
-                </div>
-            )}
-            <div className="space-y-2">
-                <Label htmlFor="disciplina_id">Vincular à Disciplina (Opcional)</Label>
-                <Select name="disciplina_id" defaultValue={String(resource.disciplina_id || 'null')}>
-                    <SelectTrigger><SelectValue placeholder="Selecione uma disciplina..." /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="null">Nenhuma</SelectItem>
-                        {disciplinas.map(d => (
-                            <SelectItem key={d.id} value={String(d.id)}>{d.title}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="mt-auto pt-4">
-                <Button type="submit" disabled={isPending}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {isPending ? 'A salvar...' : 'Salvar Alterações'}
-                </Button>
-            </div>
-        </form>
-    );
+// Define a estrutura de um Recurso
+interface Resource {
+  id: number;
+  title: string;
+  type: 'link' | 'pdf' | 'folder';
+  content: {
+    url?: string;
+    description?: string;
+    pdf_url?: string;
+  };
 }
 
-// Componente principal da Biblioteca
-export function BibliotecaClient({ disciplinas, selectedResource }: { disciplinas: Disciplina[], selectedResource: Resource | null }) {
-  if (selectedResource && selectedResource.type !== 'folder') {
-    return <ResourceContentForm resource={selectedResource} disciplinas={disciplinas} />;
+interface BibliotecaClientProps {
+  resource: Resource | null;
+}
+
+export default function BibliotecaClient({ resource }: BibliotecaClientProps) {
+  
+  // Se nenhum recurso ou uma pasta for selecionada, mostra uma mensagem
+  if (!resource || resource.type === 'folder') {
+    return (
+      <div className="flex items-center justify-center h-full bg-card border rounded-lg">
+        <p className="text-muted-foreground">Selecione um recurso para ver os detalhes.</p>
+      </div>
+    );
   }
 
+  // Formulário para editar os detalhes do recurso
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const newContent = {
+      url: formData.get('url') as string,
+      description: formData.get('description') as string,
+      pdf_url: resource.content?.pdf_url || '', // Mantém o URL do PDF se existir
+    };
+    await updateResourceContent(resource.id, newContent);
+  };
+
   return (
-    <div className="bg-card p-6 rounded-lg border h-full flex items-center justify-center">
-        <div className="text-center">
-            <h2 className="text-xl font-bold mb-2">Biblioteca de Recursos</h2>
-            <p className="text-muted-foreground">Selecione um item na barra lateral para ver os detalhes ou adicione uma nova pasta ou recurso.</p>
-        </div>
-    </div>
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {resource.type === 'link' ? <ExternalLink size={20} /> : <FileText size={20} />}
+          {resource.title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {resource.type === 'link' && (
+            <div>
+              <label htmlFor="url" className="block text-sm font-medium text-muted-foreground mb-1">URL do Link</label>
+              <Input
+                id="url"
+                name="url"
+                defaultValue={resource.content?.url || ''}
+                placeholder="https://exemplo.com"
+              />
+            </div>
+          )}
+          {resource.type === 'pdf' && resource.content?.pdf_url && (
+             <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Ficheiro PDF:</p>
+                <a href={resource.content.pdf_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">
+                    {resource.content.pdf_url.split('/').pop()}
+                </a>
+             </div>
+          )}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-muted-foreground mb-1">Descrição</label>
+            <Textarea
+              id="description"
+              name="description"
+              defaultValue={resource.content?.description || ''}
+              placeholder="Adicione uma breve descrição sobre este recurso..."
+              rows={5}
+            />
+          </div>
+          <Button type="submit">Guardar Alterações</Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

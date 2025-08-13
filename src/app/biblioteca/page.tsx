@@ -1,13 +1,13 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { BibliotecaClient } from '@/components/BibliotecaClient';
-import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
-import { type Resource, type Disciplina, type Node } from '@/lib/types';
+import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
+import BibliotecaClient from '@/components/BibliotecaClient';
 
 export const dynamic = 'force-dynamic';
 
-const buildTree = (resources: Resource[]): Node[] => {
+// Função para construir a árvore a partir de uma lista plana de recursos
+const buildTree = (resources: Node[]): Node[] => {
     const map = new Map<number, Node>();
     const roots: Node[] = [];
     
@@ -30,41 +30,49 @@ const buildTree = (resources: Resource[]): Node[] => {
     return roots;
 };
 
-export default async function BibliotecaPage({ searchParams }: { searchParams: { id?: string } }) {
+export default async function BibliotecaPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) {
+    redirect('/login');
+  }
 
-  const { data: resources } = await supabase
-    .from('resources')
-    .select('*, paginas(title)')
+  // Busca todos os recursos do utilizador
+  const { data: allResources } = await supabase
+    .from('recursos')
+    .select('id, parent_id, title, type, emoji')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true });
 
-  const { data: disciplinas } = await supabase
-    .from('paginas')
-    .select('id, title')
-    .eq('user_id', user.id)
-    .order('title');
+  const resourceTree = buildTree((allResources as Node[]) || []);
+  
+  const selectedId = searchParams?.page ? Number(String(searchParams.page)) : null;
+  let selectedResource: any = null;
 
-  const resourceTree = buildTree((resources as Resource[]) || []);
-  const selectedId = searchParams.id ? Number(searchParams.id) : null;
-  const selectedResource = selectedId ? resources?.find(r => r.id === selectedId) : null;
-
+  if (selectedId) {
+    const { data: resourceData } = await supabase
+      .from('recursos')
+      .select('*')
+      .eq('id', selectedId)
+      .eq('user_id', user.id)
+      .single();
+    selectedResource = resourceData;
+  }
+  
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
       <div className="md:col-span-1 h-full">
+        {/* A Sidebar Hierárquica agora gere a árvore de recursos */}
         <HierarchicalSidebar 
             tree={resourceTree} 
-            table="resources"
+            table="recursos"
             title="BIBLIOTECA"
+            allowTypes={['folder', 'link', 'pdf']}
         />
       </div>
       <div className="md:col-span-3 h-full">
-        <BibliotecaClient 
-          disciplinas={(disciplinas as Disciplina[]) || []} 
-          selectedResource={selectedResource as Resource | null}
-        />
+        {/* O Cliente da Biblioteca mostra o conteúdo do item selecionado */}
+        <BibliotecaClient resource={selectedResource} />
       </div>
     </div>
   );

@@ -918,146 +918,111 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// Substitua a secção da Biblioteca no seu arquivo src/app/actions.ts por este código
+// ============================================================================
+// Funções Genéricas para Hierarquia (Páginas, Documentos, Recursos)
+// ============================================================================
 
-// ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS ---
-// ==================================================================
+type TableName = 'paginas' | 'documentos' | 'recursos';
 
-// Action para criar um novo recurso (link, pdf ou pasta)
-export async function createResource(parentId: number | null, type: 'folder' | 'link' | 'pdf', title: string) {
+// Ação para criar um novo item (página, documento, recurso ou pasta)
+export async function createItem(
+  table: TableName,
+  title: string,
+  type: string = 'page', // 'page', 'folder', 'link', 'pdf', etc.
+  parentId: number | null = null
+) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return;
 
-  const resourceData: { [key: string]: any } = {
-    user_id: user.id,
+  await supabase.from(table).insert({ 
+    title, 
+    user_id: user.id, 
     parent_id: parentId,
-    type,
-    title,
-  };
-
-  const { data, error } = await supabase.from('resources').insert(resourceData).select('id').single();
-
-  if (error) {
-    console.error("Erro ao criar recurso:", error);
-    return { error: "Falha ao criar o recurso." };
-  }
-
-  revalidatePath('/biblioteca');
-  return { success: true, newResource: data };
+    type: type // Adiciona o tipo ao inserir
+  });
+  revalidatePath(`/${table}`);
 }
 
-
-// Action para adicionar/atualizar o conteúdo de um recurso existente
-export async function updateResourceContent(formData: FormData) {
+// Ação para apagar um item e todos os seus descendentes
+export async function deleteItem(table: TableName, itemId: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return;
 
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'pdf';
-  const disciplina_id = Number(formData.get('disciplina_id'));
-  const url = formData.get('url') as string;
-  const file = formData.get('file') as File;
+  // Função recursiva para apagar um item e os seus filhos
+  const deleteWithChildren = async (id: number) => {
+    const { data: children } = await supabase
+      .from(table)
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('parent_id', id);
 
-  if (!id || !title || !type) {
-    return { error: "Dados inválidos." };
-  }
-
-  let resourceData: { [key: string]: any } = {
-    title,
-    description,
-    disciplina_id: isNaN(disciplina_id) ? null : disciplina_id,
-  };
-
-  if (type === 'pdf' && file && file.size > 0) {
-    const filePath = `${user.id}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from('resources')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      return { error: "Falha ao fazer o upload do ficheiro." };
+    if (children) {
+      for (const child of children) {
+        await deleteWithChildren(child.id);
+      }
     }
-    resourceData.file_path = filePath;
-    resourceData.file_name = file.name;
-    resourceData.url = null;
-  } else if (type === 'link') {
-    resourceData.url = url;
-    resourceData.file_path = null;
-    resourceData.file_name = null;
-  }
+    await supabase.from(table).delete().eq('user_id', user.id).eq('id', id);
+  };
 
-  const { error } = await supabase.from('resources').update(resourceData).eq('id', id);
-
-  if (error) {
-    return { error: "Falha ao atualizar o recurso." };
-  }
-
-  revalidatePath('/biblioteca');
-  return { success: true };
+  await deleteWithChildren(itemId);
+  revalidatePath(`/${table}`);
 }
 
-
-// Action para apagar um recurso (e o seu ficheiro, se for um PDF)
-export async function deleteResource(id: number, filePath?: string | null) {
+// Ação para atualizar o título de um item
+export async function updateItemTitle(table: TableName, itemId: number, newTitle: string) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return;
 
-  if (filePath) {
-    await supabase.storage.from('resources').remove([filePath]);
-  }
+  await supabase.from(table).update({ title: newTitle }).eq('user_id', user.id).eq('id', itemId);
+  revalidatePath(`/${table}`);
+}
 
-  const { error } = await supabase
-    .from('resources')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id);
+// Ação para mover um item para um novo pai (drag-and-drop)
+export async function updateItemParent(table: TableName, itemId: number, newParentId: number | null) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
-  if (error) {
-    return { error: "Falha ao apagar o recurso." };
-  }
+  await supabase.from(table).update({ parent_id: newParentId }).eq('user_id', user.id).eq('id', itemId);
+  revalidatePath(`/${table}`);
+}
 
+
+// ============================================================================
+// Funções Específicas (Conteúdo, etc.)
+// ============================================================================
+
+// Ação para atualizar o conteúdo de uma página (Tiptap)
+export async function updatePaginaContent(paginaId: number, newContent: JSONContent) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from('paginas').update({ content: newContent }).eq('user_id', user.id).eq('id', paginaId);
+  revalidatePath('/disciplinas');
+}
+
+// Ação para atualizar o conteúdo de um documento (Tiptap)
+export async function updateDocumentoContent(documentoId: number, newContent: JSONContent) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from('documentos').update({ content: newContent }).eq('user_id', user.id).eq('id', documentoId);
+  revalidatePath('/documentos');
+}
+
+// --- BIBLIOTECA DE RECURSOS (SEÇÃO ATUALIZADA) ---
+
+// Ação para atualizar o conteúdo de um recurso (link, pdf, etc.)
+export async function updateResourceContent(resourceId: number, newContent: object) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from('recursos').update({ content: newContent }).eq('user_id', user.id).eq('id', resourceId);
   revalidatePath('/biblioteca');
-  return { success: true };
-}
-
-// Action para mover um recurso para uma nova pasta
-export async function updateResourceParent(resourceId: number, newParentId: number | null) {
-    const supabase = createServerActionClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
-
-    const { error } = await supabase
-        .from('resources')
-        .update({ parent_id: newParentId })
-        .eq('id', resourceId)
-        .eq('user_id', user.id);
-
-    if (error) return { error: "Falha ao mover o recurso." };
-    
-    revalidatePath('/biblioteca');
-    return { success: true };
-}
-
-// Action para renomear um recurso
-export async function updateResourceTitle(id: number, newTitle: string) {
-    const supabase = createServerActionClient({ cookies });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
-
-    const { error } = await supabase
-        .from('resources')
-        .update({ title: newTitle })
-        .eq('id', id)
-        .eq('user_id', user.id);
-
-    if (error) return { error: "Falha ao renomear o recurso." };
-
-    revalidatePath('/biblioteca');
-    return { success: true };
 }
