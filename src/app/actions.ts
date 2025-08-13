@@ -984,10 +984,10 @@ export async function addResourceContent(formData: FormData) {
     }
     resourceData.file_path = filePath;
     resourceData.file_name = file.name;
-    resourceData.url = null; // Garante que não há URL se for um PDF
+    resourceData.url = null;
   } else if (type === 'link') {
     resourceData.url = url;
-    resourceData.file_path = null; // Garante que não há ficheiro se for um link
+    resourceData.file_path = null;
     resourceData.file_name = null;
   }
 
