@@ -29,7 +29,7 @@ export default function BibliotecaClient({ resource }: BibliotecaClientProps) {
   if (!resource || resource.type === 'folder') {
     return (
       <div className="flex items-center justify-center h-full bg-card border rounded-lg">
-        <p className="text-muted-foreground">Selecione um recurso para ver os detalhes.</p>
+        <p className="text-muted-foreground">Selecione ou crie um recurso para ver os detalhes.</p>
       </div>
     );
   }

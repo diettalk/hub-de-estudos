@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
 import { type SessaoEstudo } from '@/lib/types';
-import { type JSONContent } from '@tiptap/react'; // Adicionada a importação que faltava
+import { type JSONContent } from '@tiptap/react';
 
 // --- AÇÕES DE CONCURSOS ---
 export async function addConcurso(formData: FormData) {
@@ -588,6 +588,9 @@ export async function createItem(table: 'documentos' | 'paginas' | 'recursos', p
     newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
   } else if (table === 'recursos') {
     newItemData.type = type || 'folder';
+    // --- CORREÇÃO APLICADA AQUI ---
+    // Adicionamos um objeto de conteúdo padrão para novos recursos
+    newItemData.content = {}; 
   }
 
 
