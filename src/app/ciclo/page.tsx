@@ -10,23 +10,19 @@ import { Textarea } from '@/components/ui/textarea';
 
 export const dynamic = 'force-dynamic';
 
-// Função para construir a árvore a partir de uma lista plana de disciplinas
 const buildTree = (disciplinas: Disciplina[]): Node[] => {
     const map = new Map<number, Node>();
     const roots: Node[] = [];
     
-    // Primeiro, cria um mapa de todos os nós para acesso rápido
     disciplinas.forEach(d => {
         map.set(d.id, { ...d, children: [] });
     });
 
-    // Agora, atribui cada nó ao seu pai correto
     disciplinas.forEach(d => {
         const node = map.get(d.id);
         if (node) {
             if (d.parent_id && map.has(d.parent_id)) {
                 const parent = map.get(d.parent_id)!;
-                // Garante que a propriedade children exista
                 if (!parent.children) {
                     parent.children = [];
                 }
@@ -38,7 +34,6 @@ const buildTree = (disciplinas: Disciplina[]): Node[] => {
     });
     return roots;
 };
-
 
 export default async function CicloPage() {
   const supabase = createServerComponentClient({ cookies });
@@ -56,8 +51,6 @@ export default async function CicloPage() {
   const { data: disciplinas } = await supabase.from('paginas').select('*').order('title');
   const legendaDefault = `LP: Língua Portuguesa\nRLM: Raciocínio Lógico\nG.GOV: Gestão Governamental\nP.PUB: Políticas Públicas`;
 
-  // --- ALTERAÇÃO AQUI ---
-  // Constrói a árvore de disciplinas
   const disciplinaTree = buildTree((disciplinas as Disciplina[]) || []);
 
   return (
@@ -73,7 +66,9 @@ export default async function CicloPage() {
             <table className="w-full text-sm text-left text-foreground">
               <thead className="text-xs text-muted-foreground uppercase bg-secondary/50">
                 <tr>
+                  {/* CORREÇÃO: Ordem das colunas alterada */}
                   <th className="p-3">OK</th>
+                  <th className="p-3">Finalizada</th>
                   <th className="p-3">Hora</th>
                   <th className="p-3">Matéria</th>
                   <th className="p-3 min-w-[350px]">Foco Sugerido</th>
@@ -83,12 +78,10 @@ export default async function CicloPage() {
                   <th className="text-center p-3">R1 (24h)</th>
                   <th className="text-center p-3">R7 (7d)</th>
                   <th className="text-center p-3">R30 (30d)</th>
-                  <th className="p-3">Finalizada</th>
                   <th className="p-3">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {/* Passa a árvore de disciplinas para a tabela */}
                 {(sessoes || []).map((sessao) => <CicloTableRow key={sessao.id} sessao={sessao as SessaoEstudo} disciplinaTree={disciplinaTree} />)}
               </tbody>
             </table>
