@@ -22,7 +22,8 @@ import {
 import { addStudyGoal, updateStudyGoal, updateStudyGoalValue, deleteStudyGoal } from '@/app/actions';
 import { type StudyGoal } from '@/lib/types';
 import { toast } from 'sonner';
-import { Target, Trash2, Plus, Edit } from 'lucide-react';
+// 1. CORREÇÃO: Importar os ícones que vamos usar
+import { Target, Trash2, Plus, Edit, Minus, Check } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
 
 // Sub-componente para o formulário, reutilizável para criar e editar
@@ -114,18 +115,9 @@ function GoalFormModal({ goal, onActionComplete }: { goal?: StudyGoal | null, on
   );
 }
 
-// Sub-componente para cada meta individual, agora com estado próprio
+// Sub-componente para cada meta individual, agora com mais interatividade
 function GoalItem({ goal }: { goal: StudyGoal }) {
-    const [isEditingProgress, setIsEditingProgress] = useState(false);
-    const [progressValue, setProgressValue] = useState(goal.current_value);
     const [, startTransition] = useTransition();
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (isEditingProgress) {
-            inputRef.current?.focus();
-        }
-    }, [isEditingProgress]);
 
     const handleDelete = () => {
         if (confirm("Tem a certeza de que deseja apagar esta meta?")) {
@@ -138,11 +130,15 @@ function GoalItem({ goal }: { goal: StudyGoal }) {
         startTransition(() => { updateStudyGoalValue(goal.id, newValue); });
     };
 
-    const handleProgressUpdate = () => {
-        setIsEditingProgress(false);
-        if (progressValue !== goal.current_value) {
-            startTransition(() => { updateStudyGoalValue(goal.id, Number(progressValue)); });
-        }
+    const handleDecrement = () => {
+        const newValue = Math.max(0, goal.current_value - 1); // Garante que não fica negativo
+        startTransition(() => { updateStudyGoalValue(goal.id, newValue); });
+    };
+
+    const handleComplete = () => {
+        startTransition(() => { 
+            updateStudyGoalValue(goal.id, goal.target_value).then(() => toast.success("Meta concluída!"));
+        });
     };
 
     const percentage = goal.target_value > 0 ? Math.round((goal.current_value / goal.target_value) * 100) : 0;
@@ -152,28 +148,25 @@ function GoalItem({ goal }: { goal: StudyGoal }) {
             <div className="flex justify-between items-center mb-1">
                 <p className="text-sm font-medium truncate">{goal.title}</p>
                 <div className="flex items-center">
-                    {isEditingProgress ? (
-                        <Input
-                            ref={inputRef}
-                            type="number"
-                            value={progressValue}
-                            onChange={(e) => setProgressValue(Number(e.target.value))}
-                            onBlur={handleProgressUpdate}
-                            onKeyDown={(e) => e.key === 'Enter' && handleProgressUpdate()}
-                            className="w-16 h-6 text-xs text-right"
-                        />
-                    ) : (
-                        <p className="text-sm text-muted-foreground cursor-pointer" onClick={() => setIsEditingProgress(true)}>
-                            {goal.current_value} / {goal.target_value}
-                        </p>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" title="Incrementar (+1)" onClick={handleIncrement}>
-                        <Plus className="h-4 w-4" />
-                    </Button>
-                    <GoalFormModal goal={goal} onActionComplete={() => {}} />
-                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" title="Apagar Meta" onClick={handleDelete}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    <p className="text-sm text-muted-foreground mr-2">
+                        {goal.current_value} / {goal.target_value}
+                    </p>
+                    {/* 2. CORREÇÃO: Botões de ação visíveis no hover */}
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Decrementar (-1)" onClick={handleDecrement}>
+                            <Minus className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Incrementar (+1)" onClick={handleIncrement}>
+                            <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Concluir Meta" onClick={handleComplete}>
+                            <Check className="h-4 w-4 text-green-500" />
+                        </Button>
+                        <GoalFormModal goal={goal} onActionComplete={() => {}} />
+                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Apagar Meta" onClick={handleDelete}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                    </div>
                 </div>
             </div>
             <Progress value={percentage} />
