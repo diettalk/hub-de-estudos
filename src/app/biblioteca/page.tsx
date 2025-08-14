@@ -37,12 +37,22 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
 
   const currentFolderId = searchParams.folderId ? Number(searchParams.folderId) : null;
 
-  // Busca os recursos que estão na pasta atual
-  const { data: resources } = await supabase
+  // --- CORREÇÃO APLICADA AQUI ---
+  // Construímos a consulta de forma condicional para lidar corretamente com o caso NULL.
+  let query = supabase
     .from('resources')
     .select('*')
-    .eq('user_id', user.id)
-    .eq('parent_id', currentFolderId || null); // Busca pela parent_id
+    .eq('user_id', user.id);
+
+  if (currentFolderId) {
+    // Se estivermos dentro de uma pasta, procuramos por parent_id
+    query = query.eq('parent_id', currentFolderId);
+  } else {
+    // Se estivermos na raiz, procuramos onde parent_id É NULO
+    query = query.is('parent_id', null);
+  }
+
+  const { data: resources } = await query;
 
   // Busca todas as disciplinas para o modal
   const { data: disciplinas } = await supabase
