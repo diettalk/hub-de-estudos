@@ -91,6 +91,27 @@ function ResourceModal({ open, setOpen, allFolders, disciplinas, editingResource
     );
 }
 
+// [NOVO] Helper para remover um nó e todos os seus filhos de uma lista
+const removeNodeAndChildrenFromList = (nodes: Resource[], nodeId: number): Resource[] => {
+    const nodeMap = new Map(nodes.map(node => [node.id, node]));
+    const childrenMap = new Map<number | null, number[]>();
+    nodes.forEach(node => {
+        if (!childrenMap.has(node.parent_id)) childrenMap.set(node.parent_id, []);
+        childrenMap.get(node.parent_id)!.push(node.id);
+    });
+
+    const idsToRemove = new Set<number>();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        idsToRemove.add(currentId);
+        const children = childrenMap.get(currentId) || [];
+        queue.push(...children);
+    }
+
+    return nodes.filter(node => !idsToRemove.has(node.id));
+};
+
 
 export default function BibliotecaClient({ initialData }: { initialData: Awaited<ReturnType<typeof import('../app/actions').getBibliotecaData>> }) {
     const searchParams = useSearchParams();
@@ -112,6 +133,8 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
     useEffect(() => {
         setActiveResources(initialData.activeResources);
         setArchivedItems(initialData.archivedItems);
+        // Hack para disponibilizar o estado atual para a função de clique
+        (window as any).__activeResources = initialData.activeResources;
     }, [initialData]);
 
     const tree = useMemo(() => buildTree(activeResources), [activeResources]);
@@ -138,17 +161,8 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
             title: `Apagar "${resource.title}"?`,
             description: isPermanent ? "Ação irreversível. O item e todos os seus conteúdos serão apagados permanentemente." : "O item será movido para o arquivo.",
             onConfirm: () => {
-                const findAndRemoveRecursively = (nodes: Resource[], id: number): Resource[] => {
-                    return nodes.filter(node => {
-                        if (node.id === id) return false;
-                        if (node.type === 'folder' && (node as any).children) {
-                            (node as any).children = findAndRemoveRecursively((node as any).children, id);
-                        }
-                        return true;
-                    });
-                };
-
-                setActiveResources(prev => findAndRemoveRecursively(prev, resource.id));
+                // [CORREÇÃO DEFINITIVA] Usa a função recursiva para limpar o estado
+                setActiveResources(prev => removeNodeAndChildrenFromList(prev, resource.id));
                 if (view === 'archived') setArchivedItems(prev => prev.filter(r => r.id !== resource.id));
                 
                 startTransition(async () => {
@@ -163,7 +177,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
     const handleArchive = (id: number) => {
         const itemToArchive = activeResources.find(r => r.id === id);
         if (itemToArchive) {
-            setActiveResources(prev => prev.filter(r => r.id !== id));
+            setActiveResources(prev => removeNodeAndChildrenFromList(prev, id));
             setArchivedItems(prev => [...prev, { ...itemToArchive, status: 'arquivado' }]);
         }
         startTransition(async () => {
@@ -182,6 +196,11 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
         });
     };
 
+    const handleMoveItem = (itemId: number, newParentId: number | null) => {
+        setActiveResources(prev => prev.map(r => r.id === itemId ? { ...r, parent_id: newParentId } : r));
+        startTransition(() => updateItemParent('resources', itemId, newParentId));
+    };
+
     const handleDragEnd = (event: DragEndEvent) => {
         setActiveDragItem(null);
         const { active, over } = event;
@@ -198,29 +217,27 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
         
         // Cenário 1: Mover para dentro de uma pasta
         if (isOverFolder && activeItem.parent_id !== overId) {
-            setActiveResources(prev => prev.map(r => r.id === activeId ? { ...r, parent_id: overId } : r));
-            startTransition(() => updateItemParent('resources', activeId, overId));
+            handleMoveItem(activeId, overId);
             return;
         }
 
         // Cenário 2: Reordenar no mesmo nível
-        const activeIndex = activeResources.findIndex(r => r.id === activeId);
-        const overIndex = activeResources.findIndex(r => r.id === overId);
+        if (activeItem.parent_id === overItem.parent_id) {
+            const activeIndex = activeResources.findIndex(r => r.id === activeId);
+            const overIndex = activeResources.findIndex(r => r.id === overId);
+            const newItems = arrayMove(activeResources, activeIndex, overIndex);
+            setActiveResources(newItems);
 
-        if (activeItem.parent_id !== overItem.parent_id && !isOverFolder) return; // Não permite reordenar entre pastas diferentes
+            const parentId = activeItem.parent_id;
+            const itemsInLevel = newItems.filter(item => item.parent_id === parentId);
+            const updates = itemsInLevel.map((item, index) => ({
+                id: item.id,
+                ordem: index,
+                parent_id: item.parent_id
+            }));
 
-        const newItems = arrayMove(activeResources, activeIndex, overIndex);
-        setActiveResources(newItems);
-
-        const parentId = overItem.parent_id;
-        const itemsInLevel = newItems.filter(item => item.parent_id === parentId);
-        const updates = itemsInLevel.map((item, index) => ({
-            id: item.id,
-            ordem: index,
-            parent_id: item.parent_id
-        }));
-
-        startTransition(() => updateResourcesOrder(updates));
+            startTransition(() => updateResourcesOrder(updates));
+        }
     };
 
     return (
@@ -239,6 +256,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                         onEdit={handleEdit}
                         onArchive={handleArchive}
                         onDelete={handleDelete}
+                        onMove={handleMoveItem}
                         selectedFolderId={currentFolderId}
                     />
                 </SortableContext>
@@ -255,8 +273,44 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                         </div>
                     </div>
 
-                    <div className="flex-grow overflow-y-auto">
-                        {/* Conteúdo principal aqui */}
+                    <div className="flex-grow overflow-y-auto p-1">
+                        {view === 'active' ? (
+                            itemsInCurrentFolder.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                    {itemsInCurrentFolder.map(item => (
+                                        <div key={item.id} className="bg-background p-3 rounded-lg flex items-center gap-3 border">
+                                            {item.type === 'folder' && <Folder className="h-6 w-6 text-amber-500 flex-shrink-0" />}
+                                            {item.type === 'link' && <LinkIcon className="h-6 w-6 text-sky-500 flex-shrink-0" />}
+                                            {item.type === 'pdf' && <FilePdf className="h-6 w-6 text-red-500 flex-shrink-0" />}
+                                            <span className="flex-grow truncate text-sm">{item.title}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-center text-muted-foreground"><p>Esta pasta está vazia.</p></div>
+                            )
+                        ) : (
+                            archivedItems.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                    {archivedItems.map(item => (
+                                        <div key={item.id} className="bg-card/50 p-3 rounded-lg border border-dashed flex items-center gap-3 group relative opacity-70">
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Button size="sm" onClick={() => handleUnarchive(item.id)}><ArchiveRestore className="mr-2 h-4 w-4" />Restaurar</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => handleDelete(item, true)}><Trash2 className="mr-2 h-4 w-4" />Apagar</Button>
+                                            </div>
+                                            <div className="flex-grow flex items-center gap-3">
+                                                {item.type === 'folder' && <Folder className="h-6 w-6 text-muted-foreground" />}
+                                                {item.type === 'link' && <LinkIcon className="h-6 w-6 text-muted-foreground" />}
+                                                {item.type === 'pdf' && <FilePdf className="h-6 w-6 text-muted-foreground" />}
+                                                <span className="flex-grow truncate text-sm">{item.title}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-center text-muted-foreground"><p>Não há itens arquivados.</p></div>
+                            )
+                        )}
                     </div>
                 </div>
                 

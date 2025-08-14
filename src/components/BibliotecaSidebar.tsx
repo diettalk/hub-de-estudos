@@ -2,7 +2,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Resource } from '@/lib/types';
 import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical } from 'lucide-react';
@@ -33,6 +33,7 @@ function SortableTreeItem({
     onEdit,
     onArchive,
     onDelete,
+    onMove,
     selectedFolderId 
 }: { 
     item: HierarchicalResource; 
@@ -41,6 +42,7 @@ function SortableTreeItem({
     onEdit: (resource: Resource) => void;
     onArchive: (id: number) => void;
     onDelete: (resource: Resource, isPermanent: boolean) => void;
+    onMove: (itemId: number, newParentId: number | null) => void;
     selectedFolderId: number | null;
 }) {
     const router = useRouter();
@@ -48,6 +50,9 @@ function SortableTreeItem({
     const [isExpanded, setIsExpanded] = React.useState(true);
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+    
+    const clickTimeout = useRef<NodeJS.Timeout | null>(null);
+    const clickCount = useRef(0);
 
     const style = {
         transform: CSS.Translate.toString(transform),
@@ -72,6 +77,28 @@ function SortableTreeItem({
         }
     };
 
+    const handleClicks = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        clickCount.current += 1;
+        if (clickTimeout.current) clearTimeout(clickTimeout.current);
+
+        clickTimeout.current = setTimeout(() => {
+            if (item.parent_id === null) { // Já está na raiz, não faz nada
+                clickCount.current = 0;
+                return;
+            }
+
+            if (clickCount.current === 2) { // Duplo clique: sobe um nível
+                const parent = (window as any).__activeResources.find((r: Resource) => r.id === item.parent_id);
+                const grandparentId = parent ? parent.parent_id : null;
+                onMove(item.id, grandparentId);
+            } else if (clickCount.current >= 3) { // Triplo clique: vai para a raiz
+                onMove(item.id, null);
+            }
+            clickCount.current = 0;
+        }, 250);
+    };
+
     return (
         <div ref={setNodeRef} style={style}>
             <div
@@ -81,7 +108,7 @@ function SortableTreeItem({
                     isActive && "bg-accent text-accent-foreground"
                 )}
             >
-                <div {...listeners} {...attributes} className="p-1 cursor-grab" title="Mover">
+                <div {...listeners} {...attributes} onClick={handleClicks} className="p-1 cursor-grab" title="Mover (Arrastar ou 2/3 cliques)">
                     <GripVertical className="h-5 w-5 text-muted-foreground/50 group-hover:text-muted-foreground" />
                 </div>
                 
@@ -122,6 +149,7 @@ function SortableTreeItem({
                     onEdit={onEdit}
                     onArchive={onArchive}
                     onDelete={onDelete}
+                    onMove={onMove}
                     selectedFolderId={selectedFolderId}
                 />
             ))}
@@ -135,6 +163,7 @@ export default function BibliotecaSidebar({
     onEdit,
     onArchive,
     onDelete,
+    onMove,
     selectedFolderId
 }: { 
     tree: HierarchicalResource[], 
@@ -142,6 +171,7 @@ export default function BibliotecaSidebar({
     onEdit: (resource: Resource) => void;
     onArchive: (id: number) => void;
     onDelete: (resource: Resource, isPermanent: boolean) => void;
+    onMove: (itemId: number, newParentId: number | null) => void;
     selectedFolderId: number | null;
 }) {
     const router = useRouter();
@@ -163,6 +193,7 @@ export default function BibliotecaSidebar({
                         onEdit={onEdit}
                         onArchive={onArchive}
                         onDelete={onDelete}
+                        onMove={onMove}
                         selectedFolderId={selectedFolderId}
                     />
                 ))}
