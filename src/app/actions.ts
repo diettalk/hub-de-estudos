@@ -922,6 +922,7 @@ export async function updateStudyGoal(formData: FormData) {
 // --- AÇÕES PARA A BIBLIOTECA DE RECURSOS 2.0 ---
 // ==================================================================
 
+// Action para criar um novo recurso (pasta, link ou pdf)
 export async function createResource(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -941,6 +942,7 @@ export async function createResource(formData: FormData) {
     return { error: "Título e tipo são obrigatórios." };
   }
 
+  // Lógica de pasta de disciplina automática
   if (disciplina_id && type !== 'folder') {
     const { data: existingFolder } = await supabase.from('resources').select('id').eq('disciplina_id', disciplina_id).eq('type', 'folder').single();
     if (existingFolder) {
@@ -968,12 +970,16 @@ export async function createResource(formData: FormData) {
   }
 
   const { error } = await supabase.from('resources').insert(resourceData);
-  if (error) return { error: "Falha ao criar o recurso." };
+  if (error) {
+    console.error("Erro ao criar recurso:", error);
+    return { error: "Falha ao criar o recurso." };
+  }
 
   revalidatePath('/biblioteca');
   return { success: true };
 }
 
+// Action para apagar um recurso e os seus filhos
 export async function deleteResource(resource: Resource) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
@@ -999,6 +1005,7 @@ export async function deleteResource(resource: Resource) {
     return { success: true };
 }
 
+// Action para mover um recurso (drag-and-drop)
 export async function moveResource(resourceId: number, newParentId: number | null) {
     const supabase = createServerActionClient({ cookies });
     await supabase.from('resources').update({ parent_id: newParentId }).eq('id', resourceId);
@@ -1006,6 +1013,7 @@ export async function moveResource(resourceId: number, newParentId: number | nul
     return { success: true };
 }
 
+// Action para atualizar os detalhes de um recurso
 export async function updateResource(formData: FormData) {
     const supabase = createServerActionClient({ cookies });
     const id = Number(formData.get('id'));
@@ -1017,6 +1025,7 @@ export async function updateResource(formData: FormData) {
     return { success: true };
 }
 
+// Action para arquivar ou restaurar um recurso
 export async function updateResourceStatus(resourceId: number, status: 'ativo' | 'arquivado') {
     const supabase = createServerActionClient({ cookies });
     await supabase.from('resources').update({ status }).eq('id', resourceId);
@@ -1024,6 +1033,7 @@ export async function updateResourceStatus(resourceId: number, status: 'ativo' |
     return { success: true };
 }
 
+// Action para reordenar recursos
 export async function updateResourcesOrder(items: {id: number, ordem: number}[]) {
     const supabase = createServerActionClient({ cookies });
     const updates = items.map(item => 

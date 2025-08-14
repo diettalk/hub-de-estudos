@@ -28,7 +28,6 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
         if (resource.type === 'folder') router.push(`/biblioteca?folderId=${resource.id}`);
         else if (resource.url) window.open(resource.url, '_blank');
         else if (resource.file_path) {
-            // Constrói o URL público do ficheiro
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
             const publicUrl = `${supabaseUrl}/storage/v1/object/public/resources/${resource.file_path}`;
             window.open(publicUrl, '_blank');
@@ -58,15 +57,15 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
 }
 
 // Modal para criar/editar recursos
-function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingResource }: { open: boolean; setOpen: (o: boolean) => void; currentFolderId: number | null; disciplinas: Disciplina[]; editingResource: Resource | null; }) {
-    const [type, setType] = useState<'link' | 'pdf' | 'folder'>('link');
+function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingResource, defaultType }: { open: boolean; setOpen: (o: boolean) => void; currentFolderId: number | null; disciplinas: Disciplina[]; editingResource: Resource | null; defaultType?: 'folder' | 'link' | 'pdf' }) {
+    const [type, setType] = useState(defaultType || 'link');
     const [isPending, startTransition] = useTransition();
     const action = editingResource ? updateResource : createResource;
 
     useEffect(() => {
         if (editingResource) setType(editingResource.type);
-        else setType('link');
-    }, [editingResource]);
+        else setType(defaultType || 'link');
+    }, [editingResource, defaultType, open]);
 
     const handleSubmit = (formData: FormData) => {
         if (!editingResource) formData.append('parent_id', String(currentFolderId));
@@ -157,6 +156,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
     
     const [modalOpen, setModalOpen] = useState(false);
     const [editingResource, setEditingResource] = useState<Resource | null>(null);
+    const [defaultModalType, setDefaultModalType] = useState<'folder'|'link'|'pdf'>('link');
     const [, startTransition] = useTransition();
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -166,8 +166,9 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         setModalOpen(true);
     };
 
-    const handleAddNew = () => {
+    const handleAddNew = (type: 'folder'|'link'|'pdf' = 'link') => {
         setEditingResource(null);
+        setDefaultModalType(type);
         setModalOpen(true);
     };
     
@@ -200,7 +201,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         // Mover um item para dentro de uma pasta
         if (!activeIsFolder && overIsFolder) {
             startTransition(() => { moveResource(Number(active.id), Number(over.id)); });
-            setItems(prev => prev.filter(item => item.id !== active.id)); // Atualização otimista
+            setItems(prev => prev.filter(item => item.id !== active.id));
             return;
         }
 
@@ -235,50 +236,60 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
                         {view === 'active' ? <Archive className="mr-2 h-4 w-4" /> : <ArchiveRestore className="mr-2 h-4 w-4" />}
                         {view === 'active' ? 'Arquivados' : 'Ativos'}
                     </Button>
-                    <Button onClick={handleAddNew}><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>
+                    <Button onClick={() => handleAddNew('link')}><Plus className="mr-2 h-4 w-4" /> Adicionar</Button>
                 </div>
             </div>
             
-            <ResourceModal open={modalOpen} setOpen={setModalOpen} currentFolderId={currentFolderId} disciplinas={disciplinas} editingResource={editingResource} />
+            <ResourceModal open={modalOpen} setOpen={setModalOpen} currentFolderId={currentFolderId} disciplinas={disciplinas} editingResource={editingResource} defaultType={defaultModalType} />
             
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 {view === 'active' ? (
                     <div className="space-y-8">
-                        {folders.length > 0 && <h2 className="text-xl font-bold border-b pb-2">Pastas</h2>}
-                        <SortableContext items={folders} strategy={rectSortingStrategy}>
-                            <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
-                                {folders.map(folder => <SortableItem key={folder.id} resource={folder} onSelect={handleEdit} onArchive={handleArchive} onDelete={handleDelete} />)}
+                        <div>
+                            <div className="flex justify-between items-center border-b pb-2 mb-4">
+                                <h2 className="text-xl font-bold">Pastas</h2>
+                                <Button variant="ghost" size="sm" onClick={() => handleAddNew('folder')}><Plus className="mr-2 h-4 w-4" /> Criar Pasta</Button>
                             </div>
-                        </SortableContext>
+                            {folders.length > 0 ? (
+                                <SortableContext items={folders} strategy={rectSortingStrategy}>
+                                    <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
+                                        {folders.map(folder => <SortableItem key={folder.id} resource={folder} onSelect={handleEdit} onArchive={handleArchive} onDelete={handleDelete} />)}
+                                    </div>
+                                </SortableContext>
+                            ) : (<p className="text-muted-foreground text-center py-8">Sem pastas aqui.</p>)}
+                        </div>
                         
-                        {(items.length > 0) && <h2 className="text-xl font-bold border-b pb-2">Recursos</h2>}
-                        <SortableContext items={items} strategy={rectSortingStrategy}>
-                            <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
-                                {items.map(item => <SortableItem key={item.id} resource={item} onSelect={handleEdit} onArchive={handleArchive} onDelete={handleDelete} />)}
-                            </div>
-                        </SortableContext>
-
-                        {(folders.length === 0 && items.length === 0) && <p className="text-muted-foreground text-center py-12">Esta pasta está vazia.</p>}
+                        <div>
+                            <h2 className="text-xl font-bold border-b pb-2 mb-4">Recursos</h2>
+                            {items.length > 0 ? (
+                                <SortableContext items={items} strategy={rectSortingStrategy}>
+                                    <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
+                                        {items.map(item => <SortableItem key={item.id} resource={item} onSelect={handleEdit} onArchive={handleArchive} onDelete={handleDelete} />)}
+                                    </div>
+                                </SortableContext>
+                            ) : (<p className="text-muted-foreground text-center py-8">Sem recursos aqui.</p>)}
+                        </div>
                     </div>
                 ) : (
                     <div className="space-y-8">
                         <h2 className="text-xl font-bold border-b pb-2">Arquivados</h2>
-                        <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
-                            {archivedItems.map(item => (
-                                <div key={item.id} className="bg-card p-2 rounded-lg border flex flex-col group relative">
-                                    <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnarchive(item.id)}><ArchiveRestore className="h-4 w-4" /></Button>
+                        {archivedItems.length > 0 ? (
+                            <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
+                                {archivedItems.map(item => (
+                                    <div key={item.id} className="bg-card p-2 rounded-lg border flex flex-col group relative">
+                                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnarchive(item.id)}><ArchiveRestore className="h-4 w-4" /></Button>
+                                        </div>
+                                        <div className="flex-grow flex flex-col items-center justify-center text-center p-2 opacity-60">
+                                            {item.type === 'folder' && <Folder className="h-10 w-10 text-muted-foreground mb-2" />}
+                                            {item.type === 'link' && <LinkIcon className="h-10 w-10 text-muted-foreground mb-2" />}
+                                            {item.type === 'pdf' && <FilePdf className="h-10 w-10 text-muted-foreground mb-2" />}
+                                            <p className="font-medium text-xs break-all line-clamp-2">{item.title}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex-grow flex flex-col items-center justify-center text-center p-2 opacity-60">
-                                        {item.type === 'folder' && <Folder className="h-10 w-10 text-muted-foreground mb-2" />}
-                                        {item.type === 'link' && <LinkIcon className="h-10 w-10 text-muted-foreground mb-2" />}
-                                        {item.type === 'pdf' && <FilePdf className="h-10 w-10 text-muted-foreground mb-2" />}
-                                        <p className="font-medium text-xs break-all line-clamp-2">{item.title}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {archivedItems.length === 0 && <p className="text-muted-foreground text-center py-12">Não há itens arquivados.</p>}
+                                ))}
+                            </div>
+                        ) : (<p className="text-muted-foreground text-center py-12">Não há itens arquivados.</p>)}
                     </div>
                 )}
             </DndContext>
