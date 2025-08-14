@@ -458,6 +458,41 @@ export async function deleteDocumento(id: number) {
   return { success: true };
 }
 
+// ============================================================================
+// --- AÇÕES GENÉRICAS PARA HIERARQUIA (PÁGINAS, DOCUMENTOS, RECURSOS) ---
+// ============================================================================
+type TableName = 'paginas' | 'documentos' | 'recursos';
+
+export async function createItem(table: TableName, parentId: number | null, type?: string, title?: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const newItemData: any = {
+    title: title || 'Novo Item',
+    user_id: user.id,
+    parent_id: parentId,
+  };
+
+  if (table === 'paginas' || table === 'documentos') {
+    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
+    if (table === 'paginas') newItemData.emoji = '📄';
+  } else if (table === 'recursos') {
+    newItemData.type = type || 'folder';
+    newItemData.content = {};
+  }
+
+  try {
+    const { data, error } = await supabase.from(table).insert(newItemData).select('id').single();
+    if (error) throw error;
+    revalidatePath(table === 'paginas' ? '/disciplinas' : table === 'documentos' ? '/documentos' : '/biblioteca');
+    return { success: true, newItem: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error(`Falha ao criar item na tabela ${table}:`, error);
+    return { error: `Falha ao criar: ${message}` };
+  }
+}
 
 // --- AÇÕES PARA TAREFAS ---
 export async function addTarefa(formData: FormData) {
