@@ -89,3 +89,12 @@ export type Profile = {
 
 // NOVO TIPO: Define a estrutura de um Recurso da Biblioteca
 export type Resource = Node; // Um Recurso é um tipo de Nó
+
+// Adicione este tipo no final do ficheiro src/lib/types.ts
+
+export type ConfirmationDialogState = {
+  isOpen: boolean;
+  title: string;
+  description: string;
+  onConfirm: () => void;
+};
