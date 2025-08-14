@@ -789,7 +789,7 @@ export async function updateStudyGoal(formData: FormData) {
 }
 
 // ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA (FINAL) ---
+// --- AÇÕES PARA A BIBLIOTECA (FINAL V2) ---
 // ==================================================================
 
 export async function getBibliotecaData() {
@@ -799,7 +799,7 @@ export async function getBibliotecaData() {
 
     const [allResourcesResult, disciplinasResult] = await Promise.all([
         supabase.from('resources').select('*').eq('user_id', user.id).order('ordem'),
-        supabase.from('paginas').select('id, title').eq('user_id', user.id).is('parent_id', null).order('title'),
+        supabase.from('paginas').select('id, title').eq('user_id', user.id).order('title'), // Busca todas as disciplinas
     ]);
 
     if (allResourcesResult.error) throw allResourcesResult.error;
@@ -814,6 +814,35 @@ export async function getBibliotecaData() {
     };
 }
 
+async function getOrCreateDisciplinaFolder(supabase: any, userId: string, disciplinaId: number): Promise<number | null> {
+    const { data: existingFolder } = await supabase
+        .from('resources')
+        .select('id')
+        .eq('disciplina_id', disciplinaId)
+        .eq('type', 'folder')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existingFolder) {
+        return existingFolder.id;
+    } else {
+        const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplinaId).single();
+        if (disciplina) {
+            const { data: newFolder, error: newFolderError } = await supabase
+                .from('resources')
+                .insert({ user_id: userId, title: disciplina.title, type: 'folder', disciplina_id: disciplinaId, parent_id: null, status: 'ativo' })
+                .select('id')
+                .single();
+            if (newFolderError) {
+                console.error("Falha ao criar pasta da disciplina:", newFolderError);
+                return null;
+            }
+            return newFolder.id;
+        }
+    }
+    return null;
+}
+
 export async function createResource(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -821,44 +850,23 @@ export async function createResource(formData: FormData) {
 
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'pdf' | 'folder';
+  const type = formData.get('type') as 'link' | 'video' | 'folder';
   const disciplinaIdStr = formData.get('disciplina_id') as string;
   const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
   const url = formData.get('url') as string;
-  const file = formData.get('file') as File;
   const parentIdStr = formData.get('parent_id') as string;
   let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
 
-  if (!title || !type) {
-    return { error: "Título e tipo são obrigatórios." };
-  }
+  if (!title || !type) return { error: "Título e tipo são obrigatórios." };
 
   if (disciplina_id && type !== 'folder') {
-    const { data: existingFolder, error: folderCheckError } = await supabase
-      .from('resources').select('id').eq('disciplina_id', disciplina_id).eq('type', 'folder').eq('user_id', user.id).maybeSingle();
-    if (folderCheckError) return { error: "Erro ao verificar pasta da disciplina.", details: folderCheckError.message };
-    if (existingFolder) {
-      parent_id = existingFolder.id;
-    } else {
-      const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplina_id).single();
-      if (disciplina) {
-        const { data: newFolder, error: newFolderError } = await supabase
-          .from('resources').insert({ user_id: user.id, title: disciplina.title, type: 'folder', disciplina_id, parent_id: null, status: 'ativo' }).select('id').single();
-        if (newFolderError) return { error: "Falha ao criar a pasta da disciplina.", details: newFolderError.message };
-        parent_id = newFolder.id;
-      }
-    }
+      const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
+      if (folderId) parent_id = folderId;
   }
 
   let resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
 
-  if (type === 'pdf' && file && file.size > 0) {
-    const filePath = `${user.id}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from('resources').upload(filePath, file);
-    if (uploadError) return { error: "Falha ao fazer o upload do ficheiro.", details: uploadError.message };
-    resourceData.file_path = filePath;
-    resourceData.file_name = file.name;
-  } else if (type === 'link') {
+  if (type === 'link' || type === 'video') {
     resourceData.url = url;
   }
 
@@ -869,6 +877,37 @@ export async function createResource(formData: FormData) {
   return { success: true };
 }
 
+export async function updateResource(formData: FormData) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    const id = Number(formData.get('id'));
+    const title = formData.get('title') as string;
+    const description = formData.get('description') as string;
+    const url = formData.get('url') as string;
+    const disciplinaIdStr = formData.get('disciplina_id') as string;
+    const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
+    const parentIdStr = formData.get('parent_id') as string;
+    let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
+    
+    const { data: currentResource } = await supabase.from('resources').select('disciplina_id, type').eq('id', id).single();
+    if (!currentResource) return { error: "Recurso não encontrado." };
+
+    if (disciplina_id && disciplina_id !== currentResource.disciplina_id && currentResource.type !== 'folder') {
+        const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
+        if (folderId) parent_id = folderId;
+    }
+    
+    const { error } = await supabase.from('resources').update({ title, description, url, parent_id, disciplina_id }).eq('id', id);
+    if (error) return { error: "Falha ao atualizar o recurso.", details: error.message };
+
+    revalidatePath('/biblioteca');
+    return { success: true };
+}
+
+
+// ... (deleteResource, updateResourceStatus, updateResourcesOrder, etc. permanecem iguais)
 export async function deleteResource(resourceId: number, isPermanent: boolean) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
@@ -888,20 +927,6 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
     return { success: true };
 }
 
-export async function updateResource(formData: FormData) {
-    const supabase = createServerActionClient({ cookies });
-    const id = Number(formData.get('id'));
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const url = formData.get('url') as string;
-    const parentIdStr = formData.get('parent_id') as string;
-    const parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
-    
-    await supabase.from('resources').update({ title, description, url, parent_id }).eq('id', id);
-    revalidatePath('/biblioteca');
-    return { success: true };
-}
-
 export async function updateResourceStatus(resourceId: number, status: 'ativo' | 'arquivado') {
     const supabase = createServerActionClient({ cookies });
     await supabase.from('resources').update({ status }).eq('id', resourceId);
@@ -909,9 +934,6 @@ export async function updateResourceStatus(resourceId: number, status: 'ativo' |
     return { success: true };
 }
 
-/**
- * [NOVO] Action para salvar a nova ordem dos recursos após reordenar.
- */
 export async function updateResourcesOrder(updates: {id: number, ordem: number, parent_id: number | null}[]) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
