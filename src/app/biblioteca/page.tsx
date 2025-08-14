@@ -1,8 +1,6 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-// --- CORREÇÃO APLICADA AQUI ---
-// Mudamos de 'import { BibliotecaClient }' para 'import BibliotecaClient' para usar a exportação padrão.
 import BibliotecaClient from '@/components/BibliotecaClient';
 import { type Resource, type Disciplina } from '@/lib/types';
 
@@ -31,11 +29,11 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
 
   const currentFolderId = searchParams.folderId ? Number(searchParams.folderId) : null;
 
-  const baseQuery = (table: string) =>
-    supabase.from(table).select('*').eq('user_id', user.id).eq('status', 'ativo');
+  const baseQuery = (status: 'ativo' | 'arquivado') =>
+    supabase.from('resources').select('*').eq('user_id', user.id).eq('status', status);
 
-  const folderQuery = baseQuery('resources').eq('type', 'folder');
-  const itemQuery = baseQuery('resources').not('type', 'eq', 'folder');
+  const folderQuery = baseQuery('ativo').eq('type', 'folder');
+  const itemQuery = baseQuery('ativo').not('type', 'eq', 'folder');
 
   if (currentFolderId) {
     folderQuery.eq('parent_id', currentFolderId);
@@ -47,6 +45,7 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
 
   const { data: folders } = await folderQuery.order('ordem');
   const { data: items } = await itemQuery.order('ordem');
+  const { data: archivedItems } = await baseQuery('arquivado').order('title');
   
   const { data: disciplinas } = await supabase.from('paginas').select('id, title').eq('user_id', user.id).is('parent_id', null).order('title');
   const breadcrumbs = await getBreadcrumbs(supabase, currentFolderId);
@@ -60,6 +59,7 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
       <BibliotecaClient 
         folders={(folders as Resource[]) || []}
         items={(items as Resource[]) || []}
+        archivedItems={(archivedItems as Resource[]) || []}
         disciplinas={(disciplinas as Disciplina[]) || []}
         breadcrumbs={(breadcrumbs as Resource[]) || []}
       />
