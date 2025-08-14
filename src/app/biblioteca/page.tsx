@@ -94,8 +94,6 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
   const currentFolderId = searchParams.folderId ? Number(searchParams.folderId) : null;
 
   try {
-    // --- CORREÇÃO APLICADA AQUI ---
-    // A lógica da consulta foi ajustada para usar '.eq()' ou '.is()' conforme o contexto.
     const createQuery = (type: 'folder' | 'item' | 'archived') => {
         let query = supabase.from('resources').select('*').eq('user_id', user.id);
         
@@ -131,10 +129,13 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
         getBreadcrumbs(supabase, currentFolderId)
     ]);
 
-    const folders = foldersResult.data || [];
-    const items = itemsResult.data || [];
-    const archivedItems = archivedItemsResult.data || [];
-    const disciplinas = disciplinasResult.data || [];
+    // --- CORREÇÃO APLICADA AQUI ---
+    // Usamos optional chaining (?.) para aceder aos dados de forma segura.
+    // Se o resultado for undefined, o valor padrão será um array vazio [].
+    const folders = foldersResult?.data || [];
+    const items = itemsResult?.data || [];
+    const archivedItems = archivedItemsResult?.data || [];
+    const disciplinas = disciplinasResult?.data || [];
     const breadcrumbs = breadcrumbsResult || [];
 
     return (
