@@ -5,7 +5,7 @@
 import React, { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Resource } from '@/lib/types';
-import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Folder, Link as LinkIcon, Youtube, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -37,7 +37,7 @@ function SortableTreeItem({
 }: { 
     item: HierarchicalResource; 
     level: number; 
-    onAddNew: (type: 'folder', parentId: number | null) => void;
+    onAddNew: (parentId: number | null) => void;
     onEdit: (resource: Resource) => void;
     onArchive: (id: number) => void;
     onDelete: (resource: Resource, isPermanent: boolean) => void;
@@ -64,20 +64,16 @@ function SortableTreeItem({
         switch (type) {
             case 'folder': return <Folder className="h-4 w-4 mr-2 text-amber-500 flex-shrink-0" />;
             case 'link': return <LinkIcon className="h-4 w-4 mr-2 text-sky-500 flex-shrink-0" />;
-            case 'pdf': return <FilePdf className="h-4 w-4 mr-2 text-red-500 flex-shrink-0" />;
-            default: return null;
+            case 'video': return <Youtube className="h-4 w-4 mr-2 text-red-500 flex-shrink-0" />;
+            default: return <FileText className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />; // Fallback icon
         }
     };
 
     const handleSelect = () => {
         if (item.type === 'folder') {
             router.push(`/biblioteca?folderId=${item.id}`);
-        } else if (item.type === 'link' && item.url) {
+        } else if (item.url) {
             window.open(item.url, '_blank', 'noopener,noreferrer');
-        } else if (item.type === 'pdf' && item.file_path) {
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-            const publicUrl = `${supabaseUrl}/storage/v1/object/public/resources/${item.file_path}`;
-            window.open(publicUrl, '_blank', 'noopener,noreferrer');
         }
     };
 
@@ -91,7 +87,6 @@ function SortableTreeItem({
                 clickCount.current = 0;
                 return;
             }
-
             if (clickCount.current === 2) {
                 const parent = allResources.find((r: Resource) => r.id === item.parent_id);
                 const grandparentId = parent ? parent.parent_id : null;
@@ -128,7 +123,7 @@ function SortableTreeItem({
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
                              <DropdownMenuItem onClick={() => onEdit(item)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                             {item.type === 'folder' && <DropdownMenuItem onClick={() => onAddNew('folder', item.id)}><Plus className="mr-2 h-4 w-4" /> Nova Subpasta</DropdownMenuItem>}
+                             {item.type === 'folder' && <DropdownMenuItem onClick={() => onAddNew(item.id)}><Plus className="mr-2 h-4 w-4" /> Nova Subpasta</DropdownMenuItem>}
                              <DropdownMenuItem onClick={() => onArchive(item.id)}><Archive className="mr-2 h-4 w-4" /> Arquivar</DropdownMenuItem>
                              <DropdownMenuSeparator />
                              <DropdownMenuItem onClick={() => onDelete(item, true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Apagar</DropdownMenuItem>
@@ -147,7 +142,7 @@ export default function BibliotecaSidebar({
     tree, onAddNew, onEdit, onArchive, onDelete, onMove, selectedFolderId, allResources
 }: { 
     tree: HierarchicalResource[], 
-    onAddNew: (type: 'folder', parentId: number | null) => void;
+    onAddNew: (parentId: number | null) => void;
     onEdit: (resource: Resource) => void;
     onArchive: (id: number) => void;
     onDelete: (resource: Resource, isPermanent: boolean) => void;
@@ -168,7 +163,7 @@ export default function BibliotecaSidebar({
                 ))}
             </div>
             <div className="mt-auto p-2 border-t">
-                 <Button className="w-full" onClick={() => onAddNew('folder', null)}><Plus className="mr-2 h-4 w-4" /> Nova Pasta na Raiz</Button>
+                 <Button className="w-full" onClick={() => onAddNew(null)}><Plus className="mr-2 h-4 w-4" /> Nova Pasta na Raiz</Button>
             </div>
         </div>
     );

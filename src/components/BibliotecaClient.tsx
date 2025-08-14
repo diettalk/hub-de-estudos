@@ -22,7 +22,7 @@ import BibliotecaSidebar, { buildTree } from './BibliotecaSidebar';
 import { FolderModal } from './FolderModal';
 import { ResourceModal } from './ResourceModal';
 
-// [NOVO] Componente para os itens na área de conteúdo principal
+// Componente para os itens na área de conteúdo principal
 function ContentItem({ item }: { item: Resource }) {
     const router = useRouter();
     const getIcon = () => {
@@ -155,7 +155,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveDragItem(resources.find(r => r.id === e.active.id) || null)} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragItem(null)}>
             <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-6 h-[calc(100vh-120px)]">
                 <SortableContext items={flattenedIds} strategy={verticalListSortingStrategy}>
-                    <BibliotecaSidebar tree={tree} onAddNew={(type, parentId) => handleAddNew('folder', parentId)} onEdit={handleEdit} onArchive={handleArchive} onDelete={handleDelete} onMove={handleMoveItem} selectedFolderId={currentFolderId} allResources={resources} />
+                    <BibliotecaSidebar tree={tree} onAddNew={(parentId) => handleAddNew('folder', parentId)} onEdit={handleEdit} onArchive={handleArchive} onDelete={handleDelete} onMove={handleMoveItem} selectedFolderId={currentFolderId} allResources={resources} />
                 </SortableContext>
 
                 <div className="bg-card p-4 rounded-lg flex flex-col">
