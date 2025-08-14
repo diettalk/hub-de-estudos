@@ -94,7 +94,29 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
   const currentFolderId = searchParams.folderId ? Number(searchParams.folderId) : null;
 
   try {
-    // Executa todas as consultas de dados em paralelo para otimizar o carregamento
+    // --- CORREÇÃO APLICADA AQUI ---
+    // A lógica da consulta foi ajustada para usar '.eq()' ou '.is()' conforme o contexto.
+    const createQuery = (type: 'folder' | 'item' | 'archived') => {
+        let query = supabase.from('resources').select('*').eq('user_id', user.id);
+        
+        if (type === 'archived') {
+            return query.eq('status', 'arquivado').order('title');
+        }
+
+        query = query.eq('status', 'ativo');
+        query = type === 'folder' 
+            ? query.eq('type', 'folder') 
+            : query.not('type', 'eq', 'folder');
+
+        if (currentFolderId) {
+            query = query.eq('parent_id', currentFolderId);
+        } else {
+            query = query.is('parent_id', null);
+        }
+        
+        return query.order('ordem');
+    };
+
     const [
         foldersResult, 
         itemsResult, 
@@ -102,15 +124,10 @@ export default async function BibliotecaPage({ searchParams }: { searchParams: {
         disciplinasResult, 
         breadcrumbsResult
     ] = await Promise.all([
-        // Busca pastas ativas na pasta atual
-        supabase.from('resources').select('*').eq('user_id', user.id).eq('status', 'ativo').eq('type', 'folder').is('parent_id', currentFolderId).order('ordem'),
-        // Busca recursos ativos na pasta atual
-        supabase.from('resources').select('*').eq('user_id', user.id).eq('status', 'ativo').not('type', 'eq', 'folder').is('parent_id', currentFolderId).order('ordem'),
-        // Busca todos os recursos arquivados
-        supabase.from('resources').select('*').eq('user_id', user.id).eq('status', 'arquivado').order('title'),
-        // Busca as disciplinas principais para o modal
+        createQuery('folder'),
+        createQuery('item'),
+        createQuery('archived'),
         supabase.from('paginas').select('id, title').eq('user_id', user.id).is('parent_id', null).order('title'),
-        // Busca o caminho de breadcrumbs
         getBreadcrumbs(supabase, currentFolderId)
     ]);
 
