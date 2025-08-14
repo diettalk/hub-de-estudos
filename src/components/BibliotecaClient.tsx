@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createResource, deleteResource, updateResource } from '@/app/actions';
+import { createResource, deleteResource, updateResource, moveResource, updateResourcesOrder, updateResourceStatus } from '@/app/actions';
 import { type Resource, type Disciplina } from '@/lib/types';
 import { toast } from 'sonner';
-import { Folder, Link as LinkIcon, FilePdf, Plus, MoreVertical, Edit, Trash2, Home, ChevronRight } from 'lucide-react';
+import { Folder, Link as LinkIcon, FilePdf, Plus, MoreVertical, Edit, Trash2, Home, ChevronRight, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,14 +13,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-// Componente para um item individual (pasta, link ou pdf)
-function ResourceItem({ resource, onSelect }: { resource: Resource; onSelect: (resource: Resource) => void; }) {
+// Componente para um item individual que pode ser arrastado
+function SortableResourceItem({ resource, onSelect }: { resource: Resource; onSelect: (resource: Resource) => void; }) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: resource.id });
+
+    const style = { transform: CSS.Transform.toString(transform), transition };
 
     const handleDelete = () => {
-        if (confirm(`Tem a certeza de que deseja apagar "${resource.title}"? Pastas serão apagadas com todo o seu conteúdo.`)) {
+        if (confirm(`Tem a certeza de que deseja apagar "${resource.title}"?`)) {
             startTransition(async () => {
                 await deleteResource(resource);
                 toast.success("Recurso apagado.");
@@ -28,34 +34,45 @@ function ResourceItem({ resource, onSelect }: { resource: Resource; onSelect: (r
         }
     };
 
-    const handleItemClick = () => {
+    const handleArchive = () => {
+        startTransition(async () => {
+            await updateResourceStatus(resource.id, 'arquivado');
+            toast.success("Recurso arquivado.");
+        });
+    };
+
+    const handleItemClick = (e: React.MouseEvent) => {
+        // Evita a navegação se o clique foi num botão do menu
+        if ((e.target as HTMLElement).closest('button')) return;
+        
         if (resource.type === 'folder') {
             router.push(`/biblioteca?folderId=${resource.id}`);
-        } else {
-            window.open(resource.url || `/biblioteca`, '_blank');
+        } else if (resource.url) {
+            window.open(resource.url, '_blank');
         }
     };
 
     return (
-        <div className="bg-card p-4 rounded-lg border flex flex-col group relative">
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div ref={setNodeRef} style={style} {...attributes} className="bg-card p-2 rounded-lg border flex flex-col group relative touch-none">
+            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" {...listeners}>
                             <MoreVertical className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => onSelect(resource)}>Editar</DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleDelete} className="text-destructive">Apagar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onSelect(resource)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleArchive}><Archive className="mr-2 h-4 w-4" /> Arquivar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleDelete} className="text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Apagar</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-            <div onClick={handleItemClick} className="cursor-pointer flex-grow flex flex-col items-center justify-center text-center p-4">
-                {resource.type === 'folder' && <Folder className="h-12 w-12 text-primary mb-2" />}
-                {resource.type === 'link' && <LinkIcon className="h-12 w-12 text-blue-500 mb-2" />}
-                {resource.type === 'pdf' && <FilePdf className="h-12 w-12 text-red-500 mb-2" />}
-                <p className="font-semibold text-sm break-all">{resource.title}</p>
+            <div onClick={handleItemClick} className="cursor-pointer flex-grow flex flex-col items-center justify-center text-center p-2">
+                {resource.type === 'folder' && <Folder className="h-10 w-10 text-primary mb-2" />}
+                {resource.type === 'link' && <LinkIcon className="h-10 w-10 text-blue-500 mb-2" />}
+                {resource.type === 'pdf' && <FilePdf className="h-10 w-10 text-red-500 mb-2" />}
+                <p className="font-medium text-xs break-all line-clamp-2">{resource.title}</p>
             </div>
         </div>
     );
