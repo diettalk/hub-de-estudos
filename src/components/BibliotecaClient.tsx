@@ -1,7 +1,6 @@
 'use client';
 
-// 1. CORREÇÃO: Adicionamos 'useMemo' à lista de importações do React.
-import { useState, useTransition, useMemo, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createResource, deleteResource, updateResource, moveResource, updateResourcesOrder, updateResourceStatus } from '@/app/actions';
 import { type Resource, type Disciplina } from '@/lib/types';
@@ -18,6 +17,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEn
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Componente para um item individual que pode ser arrastado
 function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: Resource; onSelect: (res: Resource) => void; onArchive: (id: number) => void; onDelete: (res: Resource) => void; }) {
     const router = useRouter();
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: resource.id });
@@ -27,6 +27,12 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
         if ((e.target as HTMLElement).closest('button')) return;
         if (resource.type === 'folder') router.push(`/biblioteca?folderId=${resource.id}`);
         else if (resource.url) window.open(resource.url, '_blank');
+        else if (resource.file_path) {
+            // Constrói o URL público do ficheiro
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const publicUrl = `${supabaseUrl}/storage/v1/object/public/resources/${resource.file_path}`;
+            window.open(publicUrl, '_blank');
+        }
     };
 
     return (
@@ -51,6 +57,7 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
     );
 }
 
+// Modal para criar/editar recursos
 function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingResource }: { open: boolean; setOpen: (o: boolean) => void; currentFolderId: number | null; disciplinas: Disciplina[]; editingResource: Resource | null; }) {
     const [type, setType] = useState<'link' | 'pdf' | 'folder'>('link');
     const [isPending, startTransition] = useTransition();
@@ -138,6 +145,7 @@ function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingRes
     );
 }
 
+// Componente principal da Biblioteca
 export default function BibliotecaClient({ folders: initialFolders, items: initialItems, archivedItems, disciplinas, breadcrumbs }: { folders: Resource[], items: Resource[], archivedItems: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -151,8 +159,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
     const [editingResource, setEditingResource] = useState<Resource | null>(null);
     const [, startTransition] = useTransition();
 
-    const sensors = useSensors(useSensor(PointerSensor));
-    const allItems = useMemo(() => [...folders, ...items], [folders, items]);
+    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
     const handleEdit = (resource: Resource) => {
         setEditingResource(resource);
@@ -190,18 +197,20 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         const activeIsFolder = folders.some(f => f.id === active.id);
         const overIsFolder = folders.some(f => f.id === over.id);
 
+        // Mover um item para dentro de uma pasta
         if (!activeIsFolder && overIsFolder) {
             startTransition(() => { moveResource(Number(active.id), Number(over.id)); });
-            setItems(prev => prev.filter(item => item.id !== active.id));
+            setItems(prev => prev.filter(item => item.id !== active.id)); // Atualização otimista
             return;
         }
 
+        // Reordenar
         const sourceList = activeIsFolder ? folders : items;
         const setSourceList = activeIsFolder ? setFolders : setItems;
         const oldIndex = sourceList.findIndex(i => i.id === active.id);
         const newIndex = sourceList.findIndex(i => i.id === over.id);
         
-        if (oldIndex !== newIndex) {
+        if (oldIndex !== -1 && newIndex !== -1) {
             const newList = arrayMove(sourceList, oldIndex, newIndex);
             setSourceList(newList);
             const orderedItems = newList.map((item, index) => ({ id: item.id, ordem: index }));
@@ -213,7 +222,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div className="flex items-center text-sm text-muted-foreground">
-                    <Home className="h-4 w-4 mr-2 cursor-pointer" onClick={() => router.push('/biblioteca')} />
+                    <Home className="h-4 w-4 mr-2 cursor-pointer hover:text-primary" onClick={() => router.push('/biblioteca')} />
                     {breadcrumbs.map(b => (
                         <div key={b.id} className="flex items-center">
                             <ChevronRight className="h-4 w-4" />
@@ -234,7 +243,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
             
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 {view === 'active' ? (
-                    <>
+                    <div className="space-y-8">
                         {folders.length > 0 && <h2 className="text-xl font-bold border-b pb-2">Pastas</h2>}
                         <SortableContext items={folders} strategy={rectSortingStrategy}>
                             <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
@@ -242,7 +251,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
                             </div>
                         </SortableContext>
                         
-                        {(folders.length > 0 && items.length > 0) && <h2 className="text-xl font-bold border-b pb-2 mt-8">Recursos</h2>}
+                        {(items.length > 0) && <h2 className="text-xl font-bold border-b pb-2">Recursos</h2>}
                         <SortableContext items={items} strategy={rectSortingStrategy}>
                             <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
                                 {items.map(item => <SortableItem key={item.id} resource={item} onSelect={handleEdit} onArchive={handleArchive} onDelete={handleDelete} />)}
@@ -250,9 +259,9 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
                         </SortableContext>
 
                         {(folders.length === 0 && items.length === 0) && <p className="text-muted-foreground text-center py-12">Esta pasta está vazia.</p>}
-                    </>
+                    </div>
                 ) : (
-                    <>
+                    <div className="space-y-8">
                         <h2 className="text-xl font-bold border-b pb-2">Arquivados</h2>
                         <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-4">
                             {archivedItems.map(item => (
@@ -270,7 +279,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
                             ))}
                         </div>
                         {archivedItems.length === 0 && <p className="text-muted-foreground text-center py-12">Não há itens arquivados.</p>}
-                    </>
+                    </div>
                 )}
             </DndContext>
         </div>
