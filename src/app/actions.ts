@@ -909,7 +909,7 @@ export async function createResource(formData: FormData) {
 
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'folder'; // Simplificado
+  const type = formData.get('type') as 'link' | 'folder';
   const disciplinaIdStr = formData.get('disciplina_id') as string;
   const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
   const url = formData.get('url') as string;
@@ -1013,4 +1013,5 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
     } catch (error) {
         const message = error instanceof Error ? error.message : "Erro desconhecido";
         return { error: `Falha ao salvar a nova ordem: ${message}` };
-    
+    }
+}
