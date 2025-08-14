@@ -2,42 +2,31 @@
 
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { type Resource } from '@/lib/types';
-import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2 } from 'lucide-react';
+import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useDroppable, useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
 export type HierarchicalResource = Resource & { children: HierarchicalResource[] };
 
 // Função para construir a árvore a partir de uma lista plana de recursos
-export function buildTree(resources: Resource[]): HierarchicalResource[] {
-    const resourceMap = new Map<number, HierarchicalResource>();
-    const tree: HierarchicalResource[] = [];
-
-    resources.forEach(resource => {
-        resourceMap.set(resource.id, { ...resource, children: [] });
-    });
-
-    resources.forEach(resource => {
-        const node = resourceMap.get(resource.id);
-        if (node) {
-            if (resource.parent_id && resourceMap.has(resource.parent_id)) {
-                resourceMap.get(resource.parent_id)?.children.push(node);
-            } else {
-                tree.push(node);
-            }
-        }
-    });
-
-    return tree;
+export function buildTree(resources: Resource[], parentId: number | null = null): HierarchicalResource[] {
+    return resources
+        .filter(resource => resource.parent_id === parentId)
+        .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+        .map(resource => ({
+            ...resource,
+            children: buildTree(resources, resource.id)
+        }));
 }
 
-// Componente recursivo para renderizar cada item da árvore com drag-and-drop
-function TreeItem({ 
+// Componente recursivo para renderizar cada item da árvore
+function SortableTreeItem({ 
     item, 
     level, 
     onAddNew,
@@ -56,19 +45,15 @@ function TreeItem({
 }) {
     const router = useRouter();
     const isActive = selectedFolderId === item.id && item.type === 'folder';
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = React.useState(true);
 
-    const { attributes, listeners, setNodeRef: setDraggableNodeRef, transform, isDragging } = useDraggable({
-        id: item.id,
-        data: { type: 'resource', resource: item },
-    });
-    const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
-        id: item.id,
-        data: { type: 'folder', resource: item },
-        disabled: item.type !== 'folder',
-    });
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
-    const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+    };
 
     const getIcon = (type: Resource['type']) => {
         switch (type) {
@@ -88,17 +73,19 @@ function TreeItem({
     };
 
     return (
-        <div ref={setDraggableNodeRef} style={style} className={cn(isDragging && "opacity-50")}>
+        <div ref={setNodeRef} style={style}>
             <div
-                ref={item.type === 'folder' ? setDroppableNodeRef : null}
                 style={{ paddingLeft: `${level * 1.25}rem` }}
                 className={cn(
-                    "flex items-center py-1 pr-2 rounded-md cursor-pointer group hover:bg-accent relative",
-                    isActive && "bg-accent text-accent-foreground",
-                    isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                    "flex items-center py-1 pr-2 rounded-md group hover:bg-accent",
+                    isActive && "bg-accent text-accent-foreground"
                 )}
             >
-                <div {...listeners} {...attributes} className="flex-grow flex items-center" onClick={handleSelect}>
+                <div {...listeners} {...attributes} className="p-1 cursor-grab" title="Mover">
+                    <GripVertical className="h-5 w-5 text-muted-foreground/50 group-hover:text-muted-foreground" />
+                </div>
+                
+                <div className="flex-grow flex items-center cursor-pointer" onClick={handleSelect}>
                     {item.type === 'folder' && (
                         <button
                             onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
@@ -127,7 +114,7 @@ function TreeItem({
                 </div>
             </div>
             {isExpanded && item.children.map(child => (
-                <TreeItem 
+                <SortableTreeItem 
                     key={child.id} 
                     item={child} 
                     level={level + 1} 
@@ -143,14 +130,14 @@ function TreeItem({
 }
 
 export default function BibliotecaSidebar({ 
-    resources, 
+    tree,
     onAddNew,
     onEdit,
     onArchive,
     onDelete,
     selectedFolderId
 }: { 
-    resources: Resource[], 
+    tree: HierarchicalResource[], 
     onAddNew: (type: 'folder' | 'link' | 'pdf', parentId: number | null) => void;
     onEdit: (resource: Resource) => void;
     onArchive: (id: number) => void;
@@ -158,7 +145,6 @@ export default function BibliotecaSidebar({
     selectedFolderId: number | null;
 }) {
     const router = useRouter();
-    const tree = buildTree(resources);
 
     return (
         <div className="h-full bg-muted/40 p-2 rounded-lg flex flex-col">
@@ -169,7 +155,7 @@ export default function BibliotecaSidebar({
             </div>
             <div className="flex-grow overflow-y-auto pr-1">
                 {tree.map(item => (
-                    <TreeItem 
+                    <SortableTreeItem 
                         key={item.id} 
                         item={item} 
                         level={0} 

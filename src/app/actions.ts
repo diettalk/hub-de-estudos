@@ -542,120 +542,8 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
 }
 
 // ==================================================================
-// --- AÇÃO PARA REORDENAR CONCURSOS ---
+// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS, DISCIPLINAS, RECURSOS) ---
 // ==================================================================
-export async function updateConcursosOrdem(orderedIds: number[]) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const updatePromises = orderedIds.map((id, index) =>
-      supabase
-        .from('concursos')
-        .update({ ordem: index }) 
-        .eq('id', id)
-        .eq('user_id', user.id)
-    );
-
-    await Promise.all(updatePromises);
-
-    revalidatePath('/guia-estudos');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao salvar a ordem: ${message}` };
-  }
-}
-
-// ==================================================================
-// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS E DISCIPLINAS) ---
-// ==================================================================
-
-type NewItemData = {
-  title: string;
-  user_id: string;
-  parent_id: number | null;
-  content: JSONContent;
-  emoji?: string;
-};
-
-export async function createItem(table: 'documentos' | 'paginas', parentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  const newItemData: NewItemData = {
-    title: 'Novo Item',
-    user_id: user.id,
-    parent_id: parentId,
-    content: { type: 'doc', content: [{ type: 'paragraph' }] },
-  };
-
-  if (table === 'paginas') {
-    newItemData.emoji = '📄';
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from(table)
-      .insert(newItemData)
-      .select('id')
-      .single();
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
-    return { success: true, newItem: data };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao criar: ${message}` };
-  }
-}
-
-export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const { error } = await supabase
-      .from(table)
-      .update({ title: newTitle })
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao salvar título: ${message}` };
-  }
-}
-
-export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
-
-  try {
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq('id', id)
-      .eq('user_id', user.id);
-
-    if (error) throw error;
-
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
-    return { success: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    return { error: `Falha ao deletar: ${message}` };
-  }
-}
 
 export async function updateItemParent(table: 'documentos' | 'paginas' | 'resources', itemId: number, newParentId: number | null) {
   const supabase = createServerActionClient({ cookies });
@@ -901,7 +789,7 @@ export async function updateStudyGoal(formData: FormData) {
 }
 
 // ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS 4.0 ---
+// --- AÇÕES PARA A BIBLIOTECA (FINAL) ---
 // ==================================================================
 
 export async function getBibliotecaData() {
@@ -926,10 +814,6 @@ export async function getBibliotecaData() {
     };
 }
 
-
-/**
- * [REFINADO] Cria um novo recurso com lógica de disciplina automática aprimorada.
- */
 export async function createResource(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -949,31 +833,17 @@ export async function createResource(formData: FormData) {
     return { error: "Título e tipo são obrigatórios." };
   }
 
-  // [NOVA LÓGICA] A criação de pasta de disciplina tem prioridade.
   if (disciplina_id && type !== 'folder') {
-    // 1. Verifica se já existe uma pasta para esta disciplina.
     const { data: existingFolder, error: folderCheckError } = await supabase
-      .from('resources')
-      .select('id')
-      .eq('disciplina_id', disciplina_id)
-      .eq('type', 'folder')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
+      .from('resources').select('id').eq('disciplina_id', disciplina_id).eq('type', 'folder').eq('user_id', user.id).maybeSingle();
     if (folderCheckError) return { error: "Erro ao verificar pasta da disciplina.", details: folderCheckError.message };
-
     if (existingFolder) {
-      // 2a. Se existe, usa o ID dela como o pai do novo recurso.
       parent_id = existingFolder.id;
     } else {
-      // 2b. Se não existe, cria a pasta da disciplina primeiro.
       const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplina_id).single();
       if (disciplina) {
         const { data: newFolder, error: newFolderError } = await supabase
-          .from('resources')
-          .insert({ user_id: user.id, title: disciplina.title, type: 'folder', disciplina_id: disciplina_id, parent_id: null, status: 'ativo' })
-          .select('id')
-          .single();
+          .from('resources').insert({ user_id: user.id, title: disciplina.title, type: 'folder', disciplina_id, parent_id: null, status: 'ativo' }).select('id').single();
         if (newFolderError) return { error: "Falha ao criar a pasta da disciplina.", details: newFolderError.message };
         parent_id = newFolder.id;
       }
@@ -985,9 +855,7 @@ export async function createResource(formData: FormData) {
   if (type === 'pdf' && file && file.size > 0) {
     const filePath = `${user.id}/${Date.now()}-${file.name}`;
     const { error: uploadError } = await supabase.storage.from('resources').upload(filePath, file);
-    if (uploadError) {
-        return { error: "Falha ao fazer o upload do ficheiro.", details: uploadError.message };
-    }
+    if (uploadError) return { error: "Falha ao fazer o upload do ficheiro.", details: uploadError.message };
     resourceData.file_path = filePath;
     resourceData.file_name = file.name;
   } else if (type === 'link') {
@@ -995,9 +863,7 @@ export async function createResource(formData: FormData) {
   }
 
   const { error } = await supabase.from('resources').insert(resourceData as any);
-  if (error) {
-    return { error: "Falha ao criar o recurso.", details: error.message };
-  }
+  if (error) return { error: "Falha ao criar o recurso.", details: error.message };
 
   revalidatePath('/biblioteca');
   return { success: true };
@@ -1016,10 +882,7 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
     }
 
     const { error } = await supabase.rpc('delete_resource_and_children', { p_resource_id: resourceId });
-    
-    if (error) {
-        return { error: "Falha ao apagar o recurso e seus conteúdos.", details: error.message };
-    }
+    if (error) return { error: "Falha ao apagar o recurso e seus conteúdos.", details: error.message };
 
     revalidatePath('/biblioteca');
     return { success: true };
@@ -1046,12 +909,30 @@ export async function updateResourceStatus(resourceId: number, status: 'ativo' |
     return { success: true };
 }
 
-export async function updateResourcesOrder(items: {id: number, ordem: number}[]) {
+/**
+ * [NOVO] Action para salvar a nova ordem dos recursos após reordenar.
+ */
+export async function updateResourcesOrder(updates: {id: number, ordem: number, parent_id: number | null}[]) {
     const supabase = createServerActionClient({ cookies });
-    const updates = items.map(item => 
-        supabase.from('resources').update({ ordem: item.ordem }).eq('id', item.id)
-    );
-    await Promise.all(updates);
-    revalidatePath('/biblioteca');
-    return { success: true };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    try {
+        const updatePromises = updates.map(item => 
+            supabase.from('resources')
+                .update({ ordem: item.ordem, parent_id: item.parent_id })
+                .eq('id', item.id)
+                .eq('user_id', user.id)
+        );
+        
+        const results = await Promise.all(updatePromises);
+        const firstError = results.find(res => res.error);
+        if (firstError) throw firstError.error;
+
+        revalidatePath('/biblioteca');
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Erro desconhecido";
+        return { error: `Falha ao salvar a nova ordem: ${message}` };
+    }
 }
