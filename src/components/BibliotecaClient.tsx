@@ -21,14 +21,16 @@ import { CSS } from '@dnd-kit/utilities';
 function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: Resource; onSelect: (res: Resource) => void; onArchive: (id: number) => void; onDelete: (res: Resource) => void; }) {
     const router = useRouter();
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: resource.id });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    const style = { 
+        transform: CSS.Transform.toString(transform), 
+        transition: transition || 'transform 250ms ease-in-out',
+    };
 
     const handleItemClick = (e: React.MouseEvent) => {
         if ((e.target as HTMLElement).closest('button')) return;
         if (resource.type === 'folder') router.push(`/biblioteca?folderId=${resource.id}`);
         else if (resource.url) window.open(resource.url, '_blank');
         else if (resource.file_path) {
-            // Constrói o URL público do ficheiro
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
             const publicUrl = `${supabaseUrl}/storage/v1/object/public/resources/${resource.file_path}`;
             window.open(publicUrl, '_blank');
@@ -36,7 +38,12 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
     };
 
     return (
-        <div ref={setNodeRef} style={style} {...attributes} className="bg-card p-2 rounded-lg border flex flex-col group relative touch-none">
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            {...attributes} 
+            className="bg-card p-2 rounded-lg border flex flex-col group relative touch-none transition-transform duration-200 hover:scale-105 hover:shadow-lg"
+        >
             <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6" {...listeners}><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -202,7 +209,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         // Mover um item para dentro de uma pasta
         if (!activeIsFolder && overIsFolder) {
             startTransition(() => { moveResource(Number(active.id), Number(over.id)); });
-            setItems(prev => prev.filter(item => item.id !== active.id)); // Atualização otimista
+            setItems(prev => prev.filter(item => item.id !== active.id));
             return;
         }
 
@@ -279,7 +286,8 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
                                 {archivedItems.map(item => (
                                     <div key={item.id} className="bg-card p-2 rounded-lg border flex flex-col group relative">
                                         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnarchive(item.id)}><ArchiveRestore className="h-4 w-4" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnarchive(item.id)}><ArchiveRestore className="mr-2 h-4 w-4" />Restaurar</Button>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(item)}><Trash2 className="mr-2 h-4 w-4" />Apagar</Button>
                                         </div>
                                         <div className="flex-grow flex flex-col items-center justify-center text-center p-2 opacity-60">
                                             {item.type === 'folder' && <Folder className="h-10 w-10 text-muted-foreground mb-2" />}
