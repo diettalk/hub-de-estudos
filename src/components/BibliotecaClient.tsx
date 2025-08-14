@@ -17,7 +17,6 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Componente para um item individual que pode ser arrastado
 function SortableResourceItem({ resource, onSelect }: { resource: Resource; onSelect: (resource: Resource) => void; }) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -77,7 +76,6 @@ function SortableResourceItem({ resource, onSelect }: { resource: Resource; onSe
     );
 }
 
-// Componente para o modal de criação/edição
 function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingResource }: { open: boolean, setOpen: (open: boolean) => void, currentFolderId: number | null, disciplinas: Disciplina[], editingResource: Resource | null }) {
     const [type, setType] = useState<'link' | 'pdf' | 'folder'>('link');
     const [isPending, startTransition] = useTransition();
@@ -102,7 +100,6 @@ function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingRes
         });
     };
     
-    // Atualiza o tipo se estiver a editar
     useState(() => {
         if (editingResource) setType(editingResource.type);
     });
@@ -174,8 +171,8 @@ function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingRes
     );
 }
 
-// Componente principal da Biblioteca
-export default function BibliotecaClient({ resources, disciplinas, breadcrumbs }: { resources: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
+// CORREÇÃO: Usamos 'export default' para garantir que o componente seja encontrado corretamente.
+export default function BibliotecaClient({ folders, items, disciplinas, breadcrumbs }: { folders: Resource[], items: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const currentFolderId = Number(searchParams.get('folderId')) || null;
@@ -213,13 +210,16 @@ export default function BibliotecaClient({ resources, disciplinas, breadcrumbs }
             
             {/* Grelha de Recursos */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {resources.length === 0 && (
-                    <p className="text-muted-foreground col-span-full text-center py-12">Esta pasta está vazia.</p>
-                )}
-                {resources.map(resource => (
-                    <ResourceItem key={resource.id} resource={resource} onSelect={handleEdit} />
+                {folders.map(folder => (
+                    <SortableResourceItem key={folder.id} resource={folder} onSelect={handleEdit} />
+                ))}
+                {items.map(item => (
+                    <SortableResourceItem key={item.id} resource={item} onSelect={handleEdit} />
                 ))}
             </div>
+             {(folders.length === 0 && items.length === 0) && (
+                <p className="text-muted-foreground col-span-full text-center py-12">Esta pasta está vazia.</p>
+            )}
         </div>
     );
 }
