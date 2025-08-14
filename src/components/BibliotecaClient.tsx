@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+// 1. CORREÇÃO: Adicionamos 'useMemo' à lista de importações do React.
+import { useState, useTransition, useMemo, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createResource, deleteResource, updateResource, moveResource, updateResourcesOrder, updateResourceStatus } from '@/app/actions';
 import { type Resource, type Disciplina } from '@/lib/types';
@@ -13,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent } from '@dnd-kit/core';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -189,14 +190,12 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         const activeIsFolder = folders.some(f => f.id === active.id);
         const overIsFolder = folders.some(f => f.id === over.id);
 
-        // Mover um item para dentro de uma pasta
         if (!activeIsFolder && overIsFolder) {
             startTransition(() => { moveResource(Number(active.id), Number(over.id)); });
             setItems(prev => prev.filter(item => item.id !== active.id));
             return;
         }
 
-        // Reordenar
         const sourceList = activeIsFolder ? folders : items;
         const setSourceList = activeIsFolder ? setFolders : setItems;
         const oldIndex = sourceList.findIndex(i => i.id === active.id);
