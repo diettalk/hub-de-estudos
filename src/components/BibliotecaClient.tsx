@@ -28,6 +28,7 @@ function SortableItem({ resource, onSelect, onArchive, onDelete }: { resource: R
         if (resource.type === 'folder') router.push(`/biblioteca?folderId=${resource.id}`);
         else if (resource.url) window.open(resource.url, '_blank');
         else if (resource.file_path) {
+            // Constrói o URL público do ficheiro
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
             const publicUrl = `${supabaseUrl}/storage/v1/object/public/resources/${resource.file_path}`;
             window.open(publicUrl, '_blank');
@@ -201,7 +202,7 @@ export default function BibliotecaClient({ folders: initialFolders, items: initi
         // Mover um item para dentro de uma pasta
         if (!activeIsFolder && overIsFolder) {
             startTransition(() => { moveResource(Number(active.id), Number(over.id)); });
-            setItems(prev => prev.filter(item => item.id !== active.id));
+            setItems(prev => prev.filter(item => item.id !== active.id)); // Atualização otimista
             return;
         }
 
