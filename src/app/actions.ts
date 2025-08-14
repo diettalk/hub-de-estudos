@@ -789,7 +789,7 @@ export async function updateStudyGoal(formData: FormData) {
 }
 
 // ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA (FINAL V2) ---
+// --- AÇÕES PARA A BIBLIOTECA (VERSÃO ESTÁVEL E SIMPLIFICADA) ---
 // ==================================================================
 
 export async function getBibliotecaData() {
@@ -850,7 +850,7 @@ export async function createResource(formData: FormData) {
 
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'video' | 'folder';
+  const type = formData.get('type') as 'link' | 'folder'; // Simplificado
   const disciplinaIdStr = formData.get('disciplina_id') as string;
   const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
   const url = formData.get('url') as string;
@@ -866,7 +866,7 @@ export async function createResource(formData: FormData) {
 
   let resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
 
-  if (type === 'link' || type === 'video') {
+  if (type === 'link') {
     resourceData.url = url;
   }
 
@@ -906,6 +906,7 @@ export async function updateResource(formData: FormData) {
     return { success: true };
 }
 
+// ... (outras actions como delete, updateStatus, etc. permanecem as mesmas)
 export async function deleteResource(resourceId: number, isPermanent: boolean) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();

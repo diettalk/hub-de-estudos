@@ -5,7 +5,7 @@
 import React, { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { type Resource } from '@/lib/types';
-import { Plus, Folder, Link as LinkIcon, Youtube, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical, FileText } from 'lucide-react';
+import { Plus, Folder, Link as LinkIcon, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2, GripVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
@@ -64,8 +64,7 @@ function SortableTreeItem({
         switch (type) {
             case 'folder': return <Folder className="h-4 w-4 mr-2 text-amber-500 flex-shrink-0" />;
             case 'link': return <LinkIcon className="h-4 w-4 mr-2 text-sky-500 flex-shrink-0" />;
-            case 'video': return <Youtube className="h-4 w-4 mr-2 text-red-500 flex-shrink-0" />;
-            default: return <FileText className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />; // Fallback icon
+            default: return <FileText className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />;
         }
     };
 
