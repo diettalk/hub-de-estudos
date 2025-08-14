@@ -42,7 +42,6 @@ function SortableResourceItem({ resource, onSelect }: { resource: Resource; onSe
     };
 
     const handleItemClick = (e: React.MouseEvent) => {
-        // Evita a navegação se o clique foi num botão do menu
         if ((e.target as HTMLElement).closest('button')) return;
         
         if (resource.type === 'folder') {
@@ -176,7 +175,7 @@ function ResourceModal({ open, setOpen, currentFolderId, disciplinas, editingRes
 }
 
 // Componente principal da Biblioteca
-export function BibliotecaClient({ resources, disciplinas, breadcrumbs }: { resources: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
+export default function BibliotecaClient({ resources, disciplinas, breadcrumbs }: { resources: Resource[], disciplinas: Disciplina[], breadcrumbs: Resource[] }) {
     const searchParams = useSearchParams();
     const router = useRouter();
     const currentFolderId = Number(searchParams.get('folderId')) || null;

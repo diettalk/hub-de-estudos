@@ -1,7 +1,9 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { BibliotecaClient } from '@/components/BibliotecaClient';
+// --- CORREÇÃO APLICADA AQUI ---
+// Mudamos de 'import { BibliotecaClient }' para 'import BibliotecaClient' para usar a exportação padrão.
+import BibliotecaClient from '@/components/BibliotecaClient';
 import { type Resource, type Disciplina } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +25,7 @@ async function getBreadcrumbs(supabase: any, folderId: number | null): Promise<R
 }
 
 export default async function BibliotecaPage({ searchParams }: { searchParams: { folderId?: string } }) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
