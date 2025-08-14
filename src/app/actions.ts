@@ -83,21 +83,17 @@ export async function createPagina(parentId: number | null, title: string, emoji
   return { data };
 }
 
-export async function updatePagina(formData: FormData) {
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const emoji = formData.get('emoji') as string;
-  const content = formData.get('content') as string;
-
-  if (isNaN(id)) return;
-
-  const supabase = createServerActionClient({ cookies });
-  await supabase
-    .from('paginas')
-    .update({ title, emoji, content: content ? JSON.parse(content) : null })
-    .eq('id', id);
-
-  revalidatePath('/disciplinas');
+// [FUNÇÃO ADICIONADA] Salva o conteúdo do editor para uma disciplina
+export async function updatePaginaContent(id: number, content: JSONContent) {
+    if (isNaN(id)) return { error: "ID da página inválido." };
+    const supabase = createServerActionClient({ cookies });
+    const { error } = await supabase.from('paginas').update({ content }).eq('id', id);
+    if (error) {
+        console.error("Erro ao salvar conteúdo da página:", error);
+        return { error: error.message };
+    }
+    revalidatePath(`/disciplinas`);
+    return { success: true };
 }
 
 export async function deletePagina(id: number) {

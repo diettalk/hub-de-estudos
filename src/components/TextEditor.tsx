@@ -1,3 +1,5 @@
+// src/components/TextEditor.tsx
+
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -5,8 +7,6 @@ import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
 import { 
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, Underline, Palette
 } from 'lucide-react';
-
-// Imports de Extensões do Tiptap
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -16,10 +16,10 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import { useDebouncedCallback } from 'use-debounce';
 
 import './TextEditor.css';
 
-// Criamos uma extensão customizada para a célula da tabela que permite colorir o fundo
 const CustomTableCell = TableCell.extend({
   addAttributes() {
     return {
@@ -41,7 +41,6 @@ const CustomTableCell = TableCell.extend({
   },
 });
 
-// 1. CORREÇÃO: Criamos uma extensão customizada também para a CÉLULA DO CABEÇALHO
 const CustomTableHeader = TableHeader.extend({
   addAttributes() {
     return {
@@ -92,7 +91,6 @@ const MenuBar = ({ editor, isTableActive }: { editor: Editor | null; isTableActi
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-col gap-2">
-            {/* Barra de Ferramentas Principal */}
             <div className="flex flex-wrap gap-2 items-center">
                 <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={editor.isActive('bold') ? 'bg-primary text-primary-foreground p-2 rounded' : 'bg-secondary p-2 rounded'} title="Negrito"><Bold className="w-4 h-4" /></button>
                 <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={editor.isActive('italic') ? 'bg-primary text-primary-foreground p-2 rounded' : 'bg-secondary p-2 rounded'} title="Itálico"><Italic className="w-4 h-4" /></button>
@@ -137,22 +135,21 @@ const MenuBar = ({ editor, isTableActive }: { editor: Editor | null; isTableActi
 
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
-  onSave: (newContent: JSONContent) => Promise<void>;
+  onSave: (newContent: JSONContent) => Promise<any>;
 }
 
 function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const [isTableActive, setIsTableActive] = useState(false);
 
+    // [OTIMIZAÇÃO] Debounce para salvar apenas 1 segundo após o usuário parar de digitar
+    const debouncedSave = useDebouncedCallback((editor) => {
+        onSave(editor.getJSON());
+    }, 1000);
+
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-              link: {
-                openOnClick: true,
-                autolink: true,
-                HTMLAttributes: {
-                  class: 'cursor-pointer',
-                },
-              },
+              link: { openOnClick: true, autolink: true },
             }),
             Highlight.configure({ multicolor: true }),
             TextStyle,
@@ -160,7 +157,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             YoutubeExtension.configure({ nocookie: true }),
             Table.configure({ resizable: true }),
             TableRow,
-            CustomTableHeader, // 2. CORREÇÃO: Usamos o cabeçalho customizado
+            CustomTableHeader,
             CustomTableCell,
         ],
         content: initialContent || '',
@@ -170,7 +167,7 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             },
         },
         onUpdate: ({ editor }) => {
-            onSave(editor.getJSON());
+            debouncedSave(editor);
             setIsTableActive(editor.isActive('table'));
         },
         onSelectionUpdate: ({ editor }) => {

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import TextEditor from '@/components/TextEditor';
 import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
 import { updateDocumentoContent } from '@/app/actions';
+import { type JSONContent } from '@tiptap/react';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +67,6 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
   }
   
   return (
-    // CORREÇÃO: Removido o espaçamento para um layout mais integrado
     <div className="grid grid-cols-1 md:grid-cols-4 h-full">
       <div className="md:col-span-1 h-full p-4">
         <HierarchicalSidebar 
@@ -81,9 +81,10 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
                 <TextEditor
                     key={selectedDocument.id}
                     initialContent={selectedDocument.content}
-                    onSave={async (newContent: any) => {
-                      'use server';
-                      await updateDocumentoContent(selectedDocument!.id, newContent);
+                    onSave={async (newContent: JSONContent) => {
+                        'use server';
+                        // [CORREÇÃO] A chamada agora passa os argumentos corretos para a função correta
+                        await updateDocumentoContent(selectedDocument!.id, newContent);
                     }}
                 />
             </div>
