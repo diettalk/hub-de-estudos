@@ -2,8 +2,8 @@
 
 'use client';
 
-import React, { useState, useTransition, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useTransition, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { 
     createResource, 
     deleteResource, 
@@ -29,6 +29,7 @@ import BibliotecaSidebar, { buildTree, HierarchicalResource } from './Biblioteca
 
 // Modal para criar/editar recursos
 function ResourceModal({ open, setOpen, allFolders, disciplinas, editingResource, preselectedParentId }: { open: boolean; setOpen: (o: boolean) => void; allFolders: Resource[]; disciplinas: Disciplina[]; editingResource: Resource | null; preselectedParentId: number | null; }) {
+    const router = useRouter();
     const [type, setType] = useState('link');
     const [isPending, startTransition] = useTransition();
     const formAction = editingResource ? updateResource : createResource;
@@ -43,13 +44,17 @@ function ResourceModal({ open, setOpen, allFolders, disciplinas, editingResource
     const handleSubmit = (formData: FormData) => {
         if (editingResource) formData.append('id', String(editingResource.id));
         
-        startTransition(async () => {
-            const result = await formAction(formData);
-            if (result?.error) toast.error(result.error, { description: result.details });
-            else {
-                toast.success(`Recurso ${editingResource ? 'atualizado' : 'criado'} com sucesso!`);
-                setOpen(false);
-            }
+        startTransition(() => {
+            toast.promise(formAction(formData), {
+                loading: editingResource ? 'A atualizar recurso...' : 'A criar recurso...',
+                success: (res) => {
+                    if (res?.error) throw new Error(res.error);
+                    setOpen(false);
+                    router.refresh(); // Atualiza os dados da página
+                    return `Recurso ${editingResource ? 'atualizado' : 'criado'} com sucesso!`;
+                },
+                error: (err) => `Erro: ${err.message}`
+            });
         });
     };
 
@@ -91,34 +96,15 @@ function ResourceModal({ open, setOpen, allFolders, disciplinas, editingResource
     );
 }
 
-// [NOVO] Helper para remover um nó e todos os seus filhos de uma lista
-const removeNodeAndChildrenFromList = (nodes: Resource[], nodeId: number): Resource[] => {
-    const nodeMap = new Map(nodes.map(node => [node.id, node]));
-    const childrenMap = new Map<number | null, number[]>();
-    nodes.forEach(node => {
-        if (!childrenMap.has(node.parent_id)) childrenMap.set(node.parent_id, []);
-        childrenMap.get(node.parent_id)!.push(node.id);
-    });
-
-    const idsToRemove = new Set<number>();
-    const queue = [nodeId];
-    while (queue.length > 0) {
-        const currentId = queue.shift()!;
-        idsToRemove.add(currentId);
-        const children = childrenMap.get(currentId) || [];
-        queue.push(...children);
-    }
-
-    return nodes.filter(node => !idsToRemove.has(node.id));
-};
-
-
 export default function BibliotecaClient({ initialData }: { initialData: Awaited<ReturnType<typeof import('../app/actions').getBibliotecaData>> }) {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const currentFolderId = useMemo(() => Number(searchParams.get('folderId')) || null, [searchParams]);
 
-    const [activeResources, setActiveResources] = useState(initialData.activeResources);
-    const [archivedItems, setArchivedItems] = useState(initialData.archivedItems);
+    // O estado agora serve apenas para a renderização inicial e para o drag-and-drop
+    const [resources, setResources] = useState(initialData.activeResources);
+    const [archivedItems] = useState(initialData.archivedItems);
+    
     const [view, setView] = useState<'active' | 'archived'>('active');
     const [activeDragItem, setActiveDragItem] = useState<Resource | null>(null);
     
@@ -129,30 +115,30 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
     
     const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState>({ isOpen: false, title: '', description: '', onConfirm: () => {} });
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
+    
+    // Sincroniza o estado local se os dados do servidor mudarem
     useEffect(() => {
-        setActiveResources(initialData.activeResources);
-        setArchivedItems(initialData.archivedItems);
-        // Hack para disponibilizar o estado atual para a função de clique
-        (window as any).__activeResources = initialData.activeResources;
-    }, [initialData]);
+        setResources(initialData.activeResources);
+    }, [initialData.activeResources]);
 
-    const tree = useMemo(() => buildTree(activeResources), [activeResources]);
-    const flattenedIds = useMemo(() => activeResources.map(r => r.id), [activeResources]);
-    const currentFolder = useMemo(() => activeResources.find(r => r.id === currentFolderId), [activeResources, currentFolderId]);
-    const itemsInCurrentFolder = useMemo(() => activeResources.filter(r => r.parent_id === currentFolderId), [activeResources, currentFolderId]);
-    const allFolders = useMemo(() => activeResources.filter(r => r.type === 'folder'), [activeResources]);
+    const tree = useMemo(() => buildTree(resources), [resources]);
+    const flattenedIds = useMemo(() => resources.map(r => r.id), [resources]);
+    const currentFolder = useMemo(() => resources.find(r => r.id === currentFolderId), [resources, currentFolderId]);
+    const itemsInCurrentFolder = useMemo(() => resources.filter(r => r.parent_id === currentFolderId), [resources, currentFolderId]);
+    const allFolders = useMemo(() => resources.filter(r => r.type === 'folder'), [resources]);
 
-    const handleAddNew = (type: 'folder' | 'link' | 'pdf', parentId: number | null) => {
-        setEditingResource(null);
-        setPreselectedParentId(parentId);
-        setModalOpen(true);
-    };
-
-    const handleEdit = (resource: Resource) => {
-        setEditingResource(resource);
-        setPreselectedParentId(resource.parent_id);
-        setModalOpen(true);
+    const handleAction = (actionPromise: Promise<any>, loading: string, success: string) => {
+        startTransition(() => {
+            toast.promise(actionPromise, {
+                loading,
+                success: (res) => {
+                    if (res?.error) throw new Error(res.error);
+                    router.refresh(); // A MÁGICA ACONTECE AQUI
+                    return success;
+                },
+                error: (err) => `Erro: ${err.message}`
+            });
+        });
     };
 
     const handleDelete = (resource: Resource, isPermanent: boolean) => {
@@ -160,45 +146,24 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
             isOpen: true,
             title: `Apagar "${resource.title}"?`,
             description: isPermanent ? "Ação irreversível. O item e todos os seus conteúdos serão apagados permanentemente." : "O item será movido para o arquivo.",
-            onConfirm: () => {
-                // [CORREÇÃO DEFINITIVA] Usa a função recursiva para limpar o estado
-                setActiveResources(prev => removeNodeAndChildrenFromList(prev, resource.id));
-                if (view === 'archived') setArchivedItems(prev => prev.filter(r => r.id !== resource.id));
-                
-                startTransition(async () => {
-                    const result = await deleteResource(resource.id, isPermanent);
-                    if (result.error) toast.error(result.error, { description: result.details });
-                    else toast.success(`Recurso ${isPermanent ? 'apagado' : 'arquivado'}.`);
-                });
-            }
+            onConfirm: () => handleAction(
+                deleteResource(resource.id, isPermanent),
+                'A apagar recurso...',
+                `Recurso ${isPermanent ? 'apagado' : 'arquivado'}.`
+            )
         });
     };
     
     const handleArchive = (id: number) => {
-        const itemToArchive = activeResources.find(r => r.id === id);
-        if (itemToArchive) {
-            setActiveResources(prev => removeNodeAndChildrenFromList(prev, id));
-            setArchivedItems(prev => [...prev, { ...itemToArchive, status: 'arquivado' }]);
-        }
-        startTransition(async () => {
-            await updateResourceStatus(id, 'arquivado').then(res => res.error ? toast.error(res.error) : toast.success("Recurso arquivado."));
-        });
+        handleAction(updateResourceStatus(id, 'arquivado'), 'A arquivar...', 'Recurso arquivado.');
     };
     
     const handleUnarchive = (id: number) => {
-        const itemToUnarchive = archivedItems.find(r => r.id === id);
-        if(itemToUnarchive) {
-            setArchivedItems(prev => prev.filter(r => r.id !== id));
-            setActiveResources(prev => [...prev, { ...itemToUnarchive, status: 'ativo' }]);
-        }
-        startTransition(async () => {
-            await updateResourceStatus(id, 'ativo').then(res => res.error ? toast.error(res.error) : toast.success("Recurso restaurado."));
-        });
+        handleAction(updateResourceStatus(id, 'ativo'), 'A restaurar...', 'Recurso restaurado.');
     };
 
     const handleMoveItem = (itemId: number, newParentId: number | null) => {
-        setActiveResources(prev => prev.map(r => r.id === itemId ? { ...r, parent_id: newParentId } : r));
-        startTransition(() => updateItemParent('resources', itemId, newParentId));
+        handleAction(updateItemParent('resources', itemId, newParentId), 'A mover item...', 'Item movido com sucesso.');
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -209,24 +174,22 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
         const activeId = Number(active.id);
         const overId = Number(over.id);
 
-        const activeItem = activeResources.find(r => r.id === activeId);
-        const overItem = activeResources.find(r => r.id === overId);
+        const activeItem = resources.find(r => r.id === activeId);
+        const overItem = resources.find(r => r.id === overId);
         if (!activeItem || !overItem) return;
 
         const isOverFolder = overItem.type === 'folder';
         
-        // Cenário 1: Mover para dentro de uma pasta
         if (isOverFolder && activeItem.parent_id !== overId) {
             handleMoveItem(activeId, overId);
             return;
         }
 
-        // Cenário 2: Reordenar no mesmo nível
         if (activeItem.parent_id === overItem.parent_id) {
-            const activeIndex = activeResources.findIndex(r => r.id === activeId);
-            const overIndex = activeResources.findIndex(r => r.id === overId);
-            const newItems = arrayMove(activeResources, activeIndex, overIndex);
-            setActiveResources(newItems);
+            const activeIndex = resources.findIndex(r => r.id === activeId);
+            const overIndex = resources.findIndex(r => r.id === overId);
+            const newItems = arrayMove(resources, activeIndex, overIndex);
+            setResources(newItems); // Atualização otimista apenas para a ordem visual
 
             const parentId = activeItem.parent_id;
             const itemsInLevel = newItems.filter(item => item.parent_id === parentId);
@@ -236,7 +199,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                 parent_id: item.parent_id
             }));
 
-            startTransition(() => updateResourcesOrder(updates));
+            handleAction(updateResourcesOrder(updates), 'A guardar nova ordem...', 'Ordem guardada.');
         }
     };
 
@@ -244,7 +207,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
         <DndContext 
             sensors={sensors} 
             collisionDetection={closestCenter}
-            onDragStart={(e) => setActiveDragItem(activeResources.find(r => r.id === e.active.id) || null)}
+            onDragStart={(e) => setActiveDragItem(resources.find(r => r.id === e.active.id) || null)}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setActiveDragItem(null)}
         >
@@ -252,8 +215,8 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                 <SortableContext items={flattenedIds} strategy={verticalListSortingStrategy}>
                     <BibliotecaSidebar 
                         tree={tree}
-                        onAddNew={handleAddNew}
-                        onEdit={handleEdit}
+                        onAddNew={(type, parentId) => { setEditingResource(null); setPreselectedParentId(parentId); setModalOpen(true); }}
+                        onEdit={(resource) => { setEditingResource(resource); setPreselectedParentId(resource.parent_id); setModalOpen(true); }}
                         onArchive={handleArchive}
                         onDelete={handleDelete}
                         onMove={handleMoveItem}
@@ -269,7 +232,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                                 {view === 'active' ? <Archive className="mr-2 h-4 w-4" /> : <ArchiveRestore className="mr-2 h-4 w-4" />}
                                 {view === 'active' ? `Arquivados (${archivedItems.length})` : 'Ativos'}
                             </Button>
-                            <Button onClick={() => handleAddNew('link', currentFolderId)}><Plus className="mr-2 h-4 w-4" /> Adicionar Recurso</Button>
+                            <Button onClick={() => { setEditingResource(null); setPreselectedParentId(currentFolderId); setModalOpen(true); }}><Plus className="mr-2 h-4 w-4" /> Adicionar Recurso</Button>
                         </div>
                     </div>
 
