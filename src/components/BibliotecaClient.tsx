@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useTransition, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useTransition, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
     createResource, 
@@ -25,7 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent, closestCenter, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { createPortal } from 'react-dom';
-import BibliotecaSidebar, { buildTree, HierarchicalResource } from './BibliotecaSidebar';
+import BibliotecaSidebar, { buildTree } from './BibliotecaSidebar';
 
 // Modal para criar/editar recursos
 function ResourceModal({ open, setOpen, allFolders, disciplinas, editingResource, preselectedParentId }: { open: boolean; setOpen: (o: boolean) => void; allFolders: Resource[]; disciplinas: Disciplina[]; editingResource: Resource | null; preselectedParentId: number | null; }) {
@@ -127,6 +127,7 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
     const itemsInCurrentFolder = useMemo(() => resources.filter(r => r.parent_id === currentFolderId), [resources, currentFolderId]);
     const allFolders = useMemo(() => resources.filter(r => r.type === 'folder'), [resources]);
 
+    // [NOVA LÓGICA CENTRALIZADA]
     const handleAction = (actionPromise: Promise<any>, loading: string, success: string) => {
         startTransition(() => {
             toast.promise(actionPromise, {
@@ -198,8 +199,15 @@ export default function BibliotecaClient({ initialData }: { initialData: Awaited
                 ordem: index,
                 parent_id: item.parent_id
             }));
-
-            handleAction(updateResourcesOrder(updates), 'A guardar nova ordem...', 'Ordem guardada.');
+            
+            // Não usamos o handleAction aqui porque a reordenação é menos crítica
+            startTransition(() => {
+                toast.promise(updateResourcesOrder(updates), {
+                    loading: 'A guardar nova ordem...',
+                    success: 'Ordem guardada.',
+                    error: 'Falha ao guardar a ordem.'
+                });
+            });
         }
     };
 
