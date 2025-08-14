@@ -799,7 +799,7 @@ export async function getBibliotecaData() {
 
     const [allResourcesResult, disciplinasResult] = await Promise.all([
         supabase.from('resources').select('*').eq('user_id', user.id).order('ordem'),
-        supabase.from('paginas').select('id, title').eq('user_id', user.id).order('title'), // Busca todas as disciplinas
+        supabase.from('paginas').select('id, title').eq('user_id', user.id).order('title'),
     ]);
 
     if (allResourcesResult.error) throw allResourcesResult.error;
@@ -906,8 +906,6 @@ export async function updateResource(formData: FormData) {
     return { success: true };
 }
 
-
-// ... (deleteResource, updateResourceStatus, updateResourcesOrder, etc. permanecem iguais)
 export async function deleteResource(resourceId: number, isPermanent: boolean) {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
