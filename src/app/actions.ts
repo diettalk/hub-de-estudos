@@ -900,47 +900,36 @@ export async function updateStudyGoal(formData: FormData) {
 }
 
 // ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS 2.0 ---
+// --- AÇÕES PARA A BIBLIOTECA DE RECURSOS 3.0 ---
 // ==================================================================
 
 /**
- * [NOVO E OTIMIZADO] Busca todos os dados necessários para a página da biblioteca de uma só vez.
- * Inclui uma busca recursiva e eficiente para os breadcrumbs.
+ * [REVISADO] Busca todos os dados necessários para a página da biblioteca.
+ * Agora busca TODOS os recursos ativos para construir a árvore no cliente.
  */
-export async function getBibliotecaData(currentFolderId: number | null) {
+export async function getBibliotecaData() {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Utilizador não autenticado.");
 
-    // Query otimizada para buscar breadcrumbs de forma recursiva em uma única chamada
-    const getBreadcrumbs = async (folderId: number | null): Promise<Resource[]> => {
-        if (!folderId) return [];
-        const { data, error } = await supabase.rpc('get_resource_breadcrumbs', { start_id: folderId });
-        if (error) {
-            console.error("Erro ao buscar breadcrumbs:", error);
-            return [];
-        }
-        return data as Resource[];
-    };
-
-    const [allResourcesResult, disciplinasResult, breadcrumbs] = await Promise.all([
+    const [allResourcesResult, disciplinasResult] = await Promise.all([
+        // Busca todos os recursos do usuário, ativos e arquivados
         supabase.from('resources').select('*').eq('user_id', user.id).order('ordem'),
+        // Busca as disciplinas para o modal de criação
         supabase.from('paginas').select('id, title').eq('user_id', user.id).is('parent_id', null).order('title'),
-        getBreadcrumbs(currentFolderId)
     ]);
 
     if (allResourcesResult.error) throw allResourcesResult.error;
     if (disciplinasResult.error) throw disciplinasResult.error;
 
     const allResources = allResourcesResult.data as Resource[];
-    const activeResources = allResources.filter(r => r.status === 'ativo');
     
     return {
-        folders: activeResources.filter(r => r.type === 'folder' && r.parent_id === currentFolderId),
-        items: activeResources.filter(r => r.type !== 'folder' && r.parent_id === currentFolderId),
+        // Filtra apenas os ativos para a árvore principal
+        activeResources: allResources.filter(r => r.status === 'ativo'),
+        // Filtra os arquivados para a vista de arquivados
         archivedItems: allResources.filter(r => r.status === 'arquivado'),
         disciplinas: (disciplinasResult.data || []) as Disciplina[],
-        breadcrumbs,
     };
 }
 
@@ -959,14 +948,14 @@ export async function createResource(formData: FormData) {
   const url = formData.get('url') as string;
   const file = formData.get('file') as File;
   const parentIdStr = formData.get('parent_id') as string;
-  let parent_id = parentIdStr ? Number(parentIdStr) : null;
+  let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
 
   if (!title || !type) {
     return { error: "Título e tipo são obrigatórios." };
   }
 
   // Lógica de pasta de disciplina automática
-  if (disciplina_id && type !== 'folder') {
+  if (disciplina_id && type !== 'folder' && !parent_id) {
     const { data: existingFolder } = await supabase.from('resources').select('id').eq('disciplina_id', disciplina_id).eq('type', 'folder').single();
     if (existingFolder) {
       parent_id = existingFolder.id;
@@ -974,7 +963,7 @@ export async function createResource(formData: FormData) {
       const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplina_id).single();
       if (disciplina) {
         const { data: newFolder, error: newFolderError } = await supabase.from('resources').insert({ user_id: user.id, title: disciplina.title, type: 'folder', disciplina_id: disciplina_id, parent_id: null }).select('id').single();
-        if (newFolderError) throw new Error("Falha ao criar a pasta da disciplina.");
+        if (newFolderError) return { error: "Falha ao criar a pasta da disciplina.", details: newFolderError.message };
         parent_id = newFolder.id;
       }
     }
@@ -984,9 +973,11 @@ export async function createResource(formData: FormData) {
 
   if (type === 'pdf' && file && file.size > 0) {
     const filePath = `${user.id}/${Date.now()}-${file.name}`;
-    // A IMPLEMENTAÇÃO DO UPLOAD VIRÁ NA PRÓXIMA ETAPA
-    // const { error: uploadError } = await supabase.storage.from('resources').upload(filePath, file);
-    // if (uploadError) return { error: "Falha ao fazer o upload do ficheiro." };
+    const { error: uploadError } = await supabase.storage.from('resources').upload(filePath, file);
+    if (uploadError) {
+        console.error("Erro no upload para o Supabase Storage:", uploadError);
+        return { error: "Falha ao fazer o upload do ficheiro.", details: uploadError.message };
+    }
     resourceData.file_path = filePath;
     resourceData.file_name = file.name;
   } else if (type === 'link') {
@@ -995,8 +986,8 @@ export async function createResource(formData: FormData) {
 
   const { error } = await supabase.from('resources').insert(resourceData as any);
   if (error) {
-    console.error("Erro ao criar recurso:", error);
-    return { error: "Falha ao criar o recurso." };
+    console.error("Erro ao criar recurso no banco de dados:", error);
+    return { error: "Falha ao criar o recurso.", details: error.message };
   }
 
   revalidatePath('/biblioteca');
@@ -1009,7 +1000,6 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Utilizador não autenticado." };
 
-    // Se não for permanente, apenas arquivamos.
     if (!isPermanent) {
         const { error } = await supabase.from('resources').update({ status: 'arquivado' }).eq('id', resourceId);
         if (error) return { error: "Falha ao arquivar o recurso." };
@@ -1017,7 +1007,6 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
         return { success: true };
     }
 
-    // Lógica para apagar permanentemente (usando RPC para deleção em cascata)
     const { error } = await supabase.rpc('delete_resource_and_children', { p_resource_id: resourceId });
     
     if (error) {
