@@ -3,16 +3,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { type Resource } from '@/lib/types';
-import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Folder, Link as LinkIcon, FilePdf, ChevronDown, ChevronRight, MoreVertical, Edit, Archive, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useDroppable, useDraggable } from '@dnd-kit/core';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 
-type HierarchicalResource = Resource & { children: HierarchicalResource[] };
+export type HierarchicalResource = Resource & { children: HierarchicalResource[] };
 
 // Função para construir a árvore a partir de uma lista plana de recursos
-function buildTree(resources: Resource[]): HierarchicalResource[] {
+export function buildTree(resources: Resource[]): HierarchicalResource[] {
     const resourceMap = new Map<number, HierarchicalResource>();
     const tree: HierarchicalResource[] = [];
 
@@ -34,13 +36,39 @@ function buildTree(resources: Resource[]): HierarchicalResource[] {
     return tree;
 }
 
-// Componente recursivo para renderizar cada item da árvore
-function TreeItem({ item, level, onAddNew }: { item: HierarchicalResource; level: number; onAddNew: (type: 'folder' | 'link' | 'pdf', parentId: number | null) => void; }) {
+// Componente recursivo para renderizar cada item da árvore com drag-and-drop
+function TreeItem({ 
+    item, 
+    level, 
+    onAddNew,
+    onEdit,
+    onArchive,
+    onDelete,
+    selectedFolderId 
+}: { 
+    item: HierarchicalResource; 
+    level: number; 
+    onAddNew: (type: 'folder' | 'link' | 'pdf', parentId: number | null) => void;
+    onEdit: (resource: Resource) => void;
+    onArchive: (id: number) => void;
+    onDelete: (resource: Resource, isPermanent: boolean) => void;
+    selectedFolderId: number | null;
+}) {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const currentFolderId = Number(searchParams.get('folderId')) || null;
-    const isActive = currentFolderId === item.id;
+    const isActive = selectedFolderId === item.id && item.type === 'folder';
     const [isExpanded, setIsExpanded] = useState(true);
+
+    const { attributes, listeners, setNodeRef: setDraggableNodeRef, transform, isDragging } = useDraggable({
+        id: item.id,
+        data: { type: 'resource', resource: item },
+    });
+    const { setNodeRef: setDroppableNodeRef, isOver } = useDroppable({
+        id: item.id,
+        data: { type: 'folder', resource: item },
+        disabled: item.type !== 'folder',
+    });
+
+    const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
 
     const getIcon = (type: Resource['type']) => {
         switch (type) {
@@ -55,47 +83,80 @@ function TreeItem({ item, level, onAddNew }: { item: HierarchicalResource; level
         if (item.type === 'folder') {
             router.push(`/biblioteca?folderId=${item.id}`);
         } else {
-            // Se for um ficheiro, seleciona a pasta pai
             router.push(item.parent_id ? `/biblioteca?folderId=${item.parent_id}` : '/biblioteca');
         }
     };
 
     return (
-        <div>
+        <div ref={setDraggableNodeRef} style={style} className={cn(isDragging && "opacity-50")}>
             <div
-                onClick={handleSelect}
+                ref={item.type === 'folder' ? setDroppableNodeRef : null}
                 style={{ paddingLeft: `${level * 1.25}rem` }}
                 className={cn(
-                    "flex items-center py-1.5 pr-2 rounded-md cursor-pointer group hover:bg-accent",
-                    isActive && "bg-accent text-accent-foreground"
+                    "flex items-center py-1 pr-2 rounded-md cursor-pointer group hover:bg-accent relative",
+                    isActive && "bg-accent text-accent-foreground",
+                    isOver && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                 )}
             >
-                {item.type === 'folder' && item.children.length > 0 && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                        className="p-0.5 rounded-sm hover:bg-muted-foreground/20"
-                    >
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                )}
-                {getIcon(item.type)}
-                <span className="flex-grow text-sm truncate">{item.title}</span>
-                <button
-                    onClick={(e) => { e.stopPropagation(); onAddNew('folder', item.id); }}
-                    className="opacity-0 group-hover:opacity-100 ml-auto"
-                >
-                    <Plus className="h-4 w-4" />
-                </button>
+                <div {...listeners} {...attributes} className="flex-grow flex items-center" onClick={handleSelect}>
+                    {item.type === 'folder' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                            className="p-0.5 rounded-sm hover:bg-muted-foreground/20 -ml-1 mr-1"
+                        >
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                    )}
+                    {getIcon(item.type)}
+                    <span className="flex-grow text-sm truncate">{item.title}</span>
+                </div>
+                
+                <div className="opacity-0 group-hover:opacity-100 ml-auto">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                             <DropdownMenuItem onClick={() => onEdit(item)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
+                             {item.type === 'folder' && <DropdownMenuItem onClick={() => onAddNew('folder', item.id)}><Plus className="mr-2 h-4 w-4" /> Nova Subpasta</DropdownMenuItem>}
+                             <DropdownMenuItem onClick={() => onArchive(item.id)}><Archive className="mr-2 h-4 w-4" /> Arquivar</DropdownMenuItem>
+                             <DropdownMenuSeparator />
+                             <DropdownMenuItem onClick={() => onDelete(item, true)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" /> Apagar</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
             {isExpanded && item.children.map(child => (
-                <TreeItem key={child.id} item={child} level={level + 1} onAddNew={onAddNew} />
+                <TreeItem 
+                    key={child.id} 
+                    item={child} 
+                    level={level + 1} 
+                    onAddNew={onAddNew}
+                    onEdit={onEdit}
+                    onArchive={onArchive}
+                    onDelete={onDelete}
+                    selectedFolderId={selectedFolderId}
+                />
             ))}
         </div>
     );
 }
 
-
-export default function BibliotecaSidebar({ resources, onAddNew }: { resources: Resource[], onAddNew: (type: 'folder' | 'link' | 'pdf', parentId: number | null) => void; }) {
+export default function BibliotecaSidebar({ 
+    resources, 
+    onAddNew,
+    onEdit,
+    onArchive,
+    onDelete,
+    selectedFolderId
+}: { 
+    resources: Resource[], 
+    onAddNew: (type: 'folder' | 'link' | 'pdf', parentId: number | null) => void;
+    onEdit: (resource: Resource) => void;
+    onArchive: (id: number) => void;
+    onDelete: (resource: Resource, isPermanent: boolean) => void;
+    selectedFolderId: number | null;
+}) {
     const router = useRouter();
     const tree = buildTree(resources);
 
@@ -108,7 +169,16 @@ export default function BibliotecaSidebar({ resources, onAddNew }: { resources: 
             </div>
             <div className="flex-grow overflow-y-auto pr-1">
                 {tree.map(item => (
-                    <TreeItem key={item.id} item={item} level={0} onAddNew={onAddNew}/>
+                    <TreeItem 
+                        key={item.id} 
+                        item={item} 
+                        level={0} 
+                        onAddNew={onAddNew}
+                        onEdit={onEdit}
+                        onArchive={onArchive}
+                        onDelete={onDelete}
+                        selectedFolderId={selectedFolderId}
+                    />
                 ))}
             </div>
             <div className="mt-auto p-2 border-t">
