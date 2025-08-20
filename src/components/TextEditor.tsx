@@ -141,7 +141,6 @@ interface TextEditorProps {
 function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const [isTableActive, setIsTableActive] = useState(false);
 
-    // [OTIMIZAÇÃO] Debounce para salvar apenas 1 segundo após o usuário parar de digitar
     const debouncedSave = useDebouncedCallback((editor) => {
         onSave(editor.getJSON());
     }, 1000);
@@ -149,6 +148,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
+              // Desativa o 'history' para gerirmos o estado de forma mais controlada
+              history: false,
               link: { openOnClick: true, autolink: true },
             }),
             Highlight.configure({ multicolor: true }),
@@ -160,7 +161,8 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             CustomTableHeader,
             CustomTableCell,
         ],
-        content: initialContent || '',
+        // O conteúdo é definido fora, no useEffect, para evitar re-criações desnecessárias
+        content: '',
         editorProps: {
             attributes: {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none min-h-[calc(100vh-20rem)] bg-card text-card-foreground rounded-b-lg',
@@ -175,14 +177,17 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         },
     });
 
+    // [LÓGICA CORRIGIDA]
+    // Este useEffect agora é responsável apenas por carregar o conteúdo inicial
+    // quando o editor é criado pela primeira vez ou quando o documento/página muda.
     useEffect(() => {
         if (editor && initialContent) {
-            const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);
-            if (!isSame) {
-                editor.commands.setContent(initialContent, false);
-            }
+            // Define o conteúdo inicial e reseta o histórico de "desfazer"
+            editor.commands.setContent(initialContent, false);
+            editor.commands.setHistory();
         }
     }, [initialContent, editor]);
+
 
     return (
         <div className="h-full flex flex-col border rounded-lg">

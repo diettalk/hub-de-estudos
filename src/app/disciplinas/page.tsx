@@ -60,6 +60,13 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     selectedPage = pageData as Node | null;
   }
   
+  // [CORREÇÃO] A função onSave é definida aqui e passada como prop
+  const handleSave = async (newContent: JSONContent) => {
+    'use server';
+    if (!selectedId) return;
+    await updatePaginaContent(selectedId, newContent);
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
       <div className="md:col-span-1 h-full">
@@ -74,11 +81,7 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
             <TextEditor
                 key={selectedPage.id}
                 initialContent={selectedPage.content}
-                onSave={async (newContent: JSONContent) => {
-                    'use server';
-                    // [CORREÇÃO] A chamada agora passa os argumentos corretos para a função correta
-                    await updatePaginaContent(selectedPage!.id, newContent);
-                }}
+                onSave={handleSave}
             />
         ) : (
             <div className="flex items-center justify-center h-full bg-card border rounded-lg">
