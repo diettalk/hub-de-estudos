@@ -148,8 +148,6 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-              // [CORREÇÃO] A extensão de histórico é necessária para o comando setHistory.
-              // O comportamento padrão (true) é o correto.
               history: true, 
               link: { openOnClick: true, autolink: true },
             }),
@@ -179,9 +177,9 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
 
     useEffect(() => {
         if (editor && initialContent) {
+            // [CORREÇÃO] Apenas define o conteúdo. A extensão de histórico lida com o resto.
+            // A linha `editor.commands.setHistory()` foi removida.
             editor.commands.setContent(initialContent, false);
-            // [CORREÇÃO] Este comando agora funcionará porque a extensão de histórico está ativa.
-            editor.commands.setHistory();
         }
     }, [initialContent, editor]);
 
