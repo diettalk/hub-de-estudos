@@ -148,8 +148,9 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-              // Desativa o 'history' para gerirmos o estado de forma mais controlada
-              history: false,
+              // [CORREÇÃO] A extensão de histórico é necessária para o comando setHistory.
+              // O comportamento padrão (true) é o correto.
+              history: true, 
               link: { openOnClick: true, autolink: true },
             }),
             Highlight.configure({ multicolor: true }),
@@ -161,7 +162,6 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
             CustomTableHeader,
             CustomTableCell,
         ],
-        // O conteúdo é definido fora, no useEffect, para evitar re-criações desnecessárias
         content: '',
         editorProps: {
             attributes: {
@@ -177,13 +177,10 @@ function TextEditor({ initialContent, onSave }: TextEditorProps) {
         },
     });
 
-    // [LÓGICA CORRIGIDA]
-    // Este useEffect agora é responsável apenas por carregar o conteúdo inicial
-    // quando o editor é criado pela primeira vez ou quando o documento/página muda.
     useEffect(() => {
         if (editor && initialContent) {
-            // Define o conteúdo inicial e reseta o histórico de "desfazer"
             editor.commands.setContent(initialContent, false);
+            // [CORREÇÃO] Este comando agora funcionará porque a extensão de histórico está ativa.
             editor.commands.setHistory();
         }
     }, [initialContent, editor]);
