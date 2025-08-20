@@ -7,6 +7,8 @@ import TextEditor from '@/components/TextEditor';
 import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
 import { updatePaginaContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +41,49 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     redirect('/login');
   }
 
+  const selectedId = searchParams.page ? Number(searchParams.page) : null;
+
+  // Modo de Foco (Tela Cheia)
+  if (selectedId) {
+    const { data: selectedPage } = await supabase
+      .from('paginas')
+      .select('*')
+      .eq('id', selectedId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (!selectedPage) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+            <p className="text-lg text-muted-foreground">Disciplina não encontrada.</p>
+            <Button asChild variant="link"><Link href="/disciplinas">Voltar para Disciplinas</Link></Button>
+        </div>
+      );
+    }
+      
+    const handleSave = async (newContent: JSONContent) => {
+      'use server';
+      await updatePaginaContent(selectedId, newContent);
+    };
+
+    const handleClose = async () => {
+        'use server';
+        redirect('/disciplinas');
+    };
+
+    return (
+        <div className="h-full w-full p-4">
+            <TextEditor
+                key={selectedPage.id}
+                initialContent={selectedPage.content}
+                onSave={handleSave}
+                onClose={() => handleClose()}
+            />
+        </div>
+    );
+  }
+  
+  // Visualização Padrão
   const { data: allPaginas } = await supabase
     .from('paginas')
     .select('id, parent_id, title, emoji')
@@ -47,26 +92,6 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
 
   const paginaTree = buildTree((allPaginas as Node[]) || []);
   
-  const selectedId = searchParams.page ? Number(searchParams.page) : null;
-  let selectedPage: Node | null = null;
-
-  if (selectedId) {
-    const { data: pageData } = await supabase
-      .from('paginas')
-      .select('*')
-      .eq('id', selectedId)
-      .eq('user_id', user.id)
-      .single();
-    selectedPage = pageData as Node | null;
-  }
-  
-  // [CORREÇÃO] A função onSave é definida aqui e passada como prop
-  const handleSave = async (newContent: JSONContent) => {
-    'use server';
-    if (!selectedId) return;
-    await updatePaginaContent(selectedId, newContent);
-  };
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
       <div className="md:col-span-1 h-full">
@@ -77,17 +102,9 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
         />
       </div>
       <div className="md:col-span-3 h-full">
-        {selectedPage ? (
-            <TextEditor
-                key={selectedPage.id}
-                initialContent={selectedPage.content}
-                onSave={handleSave}
-            />
-        ) : (
-            <div className="flex items-center justify-center h-full bg-card border rounded-lg">
-                <p className="text-muted-foreground">Selecione ou crie uma disciplina para começar.</p>
-            </div>
-        )}
+        <div className="flex items-center justify-center h-full bg-card border rounded-lg">
+            <p className="text-muted-foreground">Selecione ou crie uma disciplina para começar.</p>
+        </div>
       </div>
     </div>
   );

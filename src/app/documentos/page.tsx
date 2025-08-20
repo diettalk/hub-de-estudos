@@ -6,6 +6,8 @@ import TextEditor from '@/components/TextEditor';
 import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
 import { updateDocumentoContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +47,49 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     redirect('/login');
   }
 
+  const selectedId = searchParams.id ? Number(searchParams.id) : null;
+
+  // Se um documento estiver selecionado, entramos no modo de tela cheia
+  if (selectedId) {
+    const { data: selectedDocument } = await supabase
+      .from('documentos')
+      .select('id, title, content')
+      .eq('id', selectedId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (!selectedDocument) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+                <p className="text-lg text-muted-foreground">Documento não encontrado.</p>
+                <Button asChild variant="link"><Link href="/documentos">Voltar para Documentos</Link></Button>
+            </div>
+        );
+    }
+
+    const handleSave = async (newContent: JSONContent) => {
+      'use server';
+      await updateDocumentoContent(selectedId, newContent);
+    };
+
+    const handleClose = async () => {
+        'use server';
+        redirect('/documentos');
+    };
+
+    return (
+        <div className="h-full w-full p-4">
+             <TextEditor
+                key={selectedDocument.id}
+                initialContent={selectedDocument.content}
+                onSave={handleSave}
+                onClose={() => handleClose()}
+            />
+        </div>
+    );
+  }
+
+  // Visualização padrão com a barra lateral
   const { data: allDocuments } = await supabase
     .from('documentos')
     .select('id, parent_id, title')
@@ -52,27 +97,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     .order('created_at', { ascending: true });
 
   const documentTree = buildTree(allDocuments || []);
-
-  const selectedId = searchParams.id ? Number(searchParams.id) : null;
-  let selectedDocument: DocumentoFromDB | null = null;
   
-  if (selectedId) {
-    const { data: docData } = await supabase
-      .from('documentos')
-      .select('id, title, content')
-      .eq('id', selectedId)
-      .eq('user_id', user.id)
-      .single();
-    selectedDocument = docData;
-  }
-  
-  // [CORREÇÃO] A função onSave é definida aqui e passada como prop
-  const handleSave = async (newContent: JSONContent) => {
-    'use server';
-    if (!selectedId) return;
-    await updateDocumentoContent(selectedId, newContent);
-  };
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 h-full">
       <div className="md:col-span-1 h-full p-4">
@@ -83,19 +108,9 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
         />
       </div>
       <div className="md:col-span-3 h-full flex flex-col p-4">
-        {selectedDocument ? (
-            <div className="bg-card border rounded-lg h-full flex flex-col">
-                <TextEditor
-                    key={selectedDocument.id}
-                    initialContent={selectedDocument.content}
-                    onSave={handleSave}
-                />
-            </div>
-        ) : (
-            <div className="flex items-center justify-center h-full bg-card border rounded-lg">
-                <p className="text-muted-foreground">Selecione ou crie um documento para começar.</p>
-            </div>
-        )}
+        <div className="flex items-center justify-center h-full bg-card border rounded-lg">
+            <p className="text-muted-foreground">Selecione ou crie um documento para começar.</p>
+        </div>
       </div>
     </div>
   );
