@@ -34,6 +34,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         await updatePaginaContent(selectedPage.id, newContent);
     };
 
+    // Se uma disciplina estiver selecionada, mostra o editor em tela cheia
     if (selectedPage) {
         return (
             <div className="h-full w-full p-4">
@@ -47,20 +48,14 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         );
     }
 
+    // [NOVO LAYOUT] Se nenhuma disciplina estiver selecionada, mostra apenas a sidebar
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-full p-4">
-            <div className="md:col-span-1 h-full">
-                <HierarchicalSidebar 
-                    tree={paginaTree} 
-                    table="paginas"
-                    title="DISCIPLINAS"
-                />
-            </div>
-            <div className="md:col-span-3 h-full">
-                <div className="flex items-center justify-center h-full bg-card border rounded-lg">
-                    <p className="text-muted-foreground">Selecione ou crie uma disciplina para começar.</p>
-                </div>
-            </div>
+        <div className="h-full p-4">
+            <HierarchicalSidebar 
+                tree={paginaTree} 
+                table="paginas"
+                title="DISCIPLINAS"
+            />
         </div>
     );
 }
