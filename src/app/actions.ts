@@ -539,28 +539,43 @@ export async function deleteTarefa(id: number) {
 }
 
 // --- AÇÕES DE ANOTAÇÕES RÁPIDAS (DASHBOARD) ---
-export async function addAnotacao(formData: FormData) {
-  const content = formData.get('content') as string;
-  if (!content || content.trim() === '') return;
+export async function addAnotacao(content: string) {
+  if (!content || content.trim() === '') return { error: 'O conteúdo está vazio.' };
 
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: 'Utilizador não autenticado.' };
 
-  await supabase.from('anotacoes').insert({ content, user_id: user.id });
+  const { data, error } = await supabase
+    .from('anotacoes')
+    .insert({ content, user_id: user.id })
+    .select('id, content') // Retorna o novo ID e conteúdo
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
   revalidatePath('/');
+  return { success: true, newAnotacao: data }; // Retorna a anotação completa
 }
 
-export async function updateAnotacao(formData: FormData) {
-  const id = Number(formData.get('id'));
-  const content = formData.get('content') as string;
-  if (isNaN(id) || !content || content.trim() === '') return;
+export async function updateAnotacao(id: number, content: string) {
+  if (isNaN(id)) return { error: 'ID inválido.' };
 
   const supabase = createServerActionClient({ cookies });
-  await supabase.from('anotacoes').update({ content }).eq('id', id);
+  const { error } = await supabase.from('anotacoes').update({ content }).eq('id', id);
+  
+  if (error) {
+      return { error: error.message };
+  }
+
   revalidatePath('/');
+  return { success: true };
 }
 
+// A função deleteAnotacao pode ser removida se não estiver a ser usada,
+// ou mantida como está se planeia adicionar um botão de apagar.
 export async function deleteAnotacao(formData: FormData) {
   const id = Number(formData.get('id'));
   if (isNaN(id)) return;

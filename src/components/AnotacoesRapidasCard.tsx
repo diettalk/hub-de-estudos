@@ -1,59 +1,64 @@
 // src/components/AnotacoesRapidasCard.tsx
 'use client';
 
-// A sua action não foi enviada, então usei um nome genérico. 
-// Se o nome for diferente, por favor, ajuste a importação.
-import { updateAnotacao } from '@/app/actions'; 
-import { useEffect, useState, useTransition } from 'react';
+import { addAnotacao, updateAnotacao } from '@/app/actions'; 
+import { useEffect, useState, useTransition, useRef } from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { Activity, ListChecks, CalendarCheck, CheckCircle } from 'lucide-react'; // Ícones do seu DashboardClient para consistência
+import { ListChecks } from 'lucide-react';
+import { useDebouncedCallback } from 'use-debounce';
+import { toast } from 'sonner';
 
+type Anotacao = { id: number, content: string };
 
-// O componente recebe o array de anotações
-export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: { id: number, content: string }[] }) {
-  // Assumimos que há apenas UMA anotação rápida por usuário por enquanto
-  const anotacaoAtual = anotacoes[0];
-  const [content, setContent] = useState(anotacaoAtual?.content || '');
+export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
+  // Usamos uma ref para guardar o ID da anotação. Isto evita problemas de re-renderização.
+  const anotacaoId = useRef<number | null>(anotacoes[0]?.id || null);
+  const [content, setContent] = useState(anotacoes[0]?.content || '');
   const [isPending, startTransition] = useTransition();
 
+  // Este efeito garante que se os dados do servidor mudarem, o nosso componente atualiza.
   useEffect(() => {
-    // Para evitar salvar um valor inicial vazio desnecessariamente
-    if (content === (anotacaoAtual?.content || '')) {
-      return;
-    }
+    setContent(anotacoes[0]?.content || '');
+    anotacaoId.current = anotacoes[0]?.id || null;
+  }, [anotacoes]);
 
-    const handler = setTimeout(() => {
-      startTransition(() => {
-        // A action precisa do ID para saber qual anotação atualizar
-        updateAnotacao({
-            id: anotacaoAtual.id,
-            content: content
-        } as unknown as FormData); // Adaptação para a sua action que espera FormData
-      });
-    }, 1500); // Salva 1.5s depois de parar de digitar
-
-    return () => { clearTimeout(handler); };
-  }, [content, anotacaoAtual]);
+  // Função de salvamento otimizada (só salva 1.5s depois de parar de digitar)
+  const debouncedSave = useDebouncedCallback((currentContent: string) => {
+    startTransition(async () => {
+      if (anotacaoId.current) {
+        // Se já temos um ID, apenas atualizamos a anotação existente.
+        await updateAnotacao(anotacaoId.current, currentContent);
+      } else if (currentContent.trim() !== '') {
+        // Se não temos um ID e o utilizador escreveu algo, criamos uma nova anotação.
+        const result = await addAnotacao(currentContent);
+        if (result.success && result.newAnotacao) {
+          // Após criar, guardamos o novo ID para as próximas atualizações.
+          anotacaoId.current = result.newAnotacao.id;
+        } else if (result.error) {
+            toast.error("Falha ao criar anotação", { description: result.error });
+        }
+      }
+    });
+  }, 1500);
 
   return (
-    // REMOVIDO: bg-gray-800 e p-6. Essas propriedades virão do DashboardCard.
     <>
       <div className="flex items-center gap-3 mb-4">
-          {/* Adicionei o título e ícone aqui para manter o padrão dos outros cards */}
-          <ListChecks className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Anotações Rápidas</h2>
+        <ListChecks className="w-5 h-5 text-muted-foreground" />
+        <h2 className="text-lg font-semibold">Anotações Rápidas</h2>
       </div>
       <Textarea
         value={content}
-        onChange={(e) => setContent(e.target.value)}
-        // REMOVIDO: bg-gray-700, text-white, border-gray-600.
-        // O Textarea do shadcn já se adapta ao tema.
+        onChange={(e) => {
+            setContent(e.target.value);
+            debouncedSave(e.target.value);
+        }}
         className="w-full rounded-md h-24"
         placeholder="Anote seus insights e eles serão salvos automaticamente..."
       />
-       <div className="text-right text-xs text-muted-foreground h-4 mt-1">
-            {isPending ? <span>Salvando...</span> : <span>&nbsp;</span>}
-       </div>
+      <div className="text-right text-xs text-muted-foreground h-4 mt-1">
+        {isPending ? <span>Salvando...</span> : <span>&nbsp;</span>}
+      </div>
     </>
   );
 }
