@@ -1,43 +1,34 @@
 // src/components/AnotacoesRapidasCard.tsx
 'use client';
 
-import { addAnotacao, updateAnotacao } from '@/app/actions'; 
-import { useEffect, useState, useTransition, useRef } from 'react';
+import { updateAnotacao } from '@/app/actions'; 
+import { useEffect, useState, useTransition } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { ListChecks } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
-import { toast } from 'sonner';
 
 type Anotacao = { id: number, content: string };
 
 export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
-  // Usamos uma ref para guardar o ID da anotação. Isto evita problemas de re-renderização.
-  const anotacaoId = useRef<number | null>(anotacoes[0]?.id || null);
-  const [content, setContent] = useState(anotacoes[0]?.content || '');
+  // Com a nova lógica na página, anotacoes[0] sempre deve existir.
+  const anotacaoAtual = anotacoes[0];
+  const [content, setContent] = useState(anotacaoAtual?.content || '');
   const [isPending, startTransition] = useTransition();
 
-  // Este efeito garante que se os dados do servidor mudarem, o nosso componente atualiza.
+  // Atualiza o conteúdo se a prop mudar (ex: navegação ou primeira criação)
   useEffect(() => {
-    setContent(anotacoes[0]?.content || '');
-    anotacaoId.current = anotacoes[0]?.id || null;
-  }, [anotacoes]);
+    setContent(anotacaoAtual?.content || '');
+  }, [anotacaoAtual]);
 
-  // Função de salvamento otimizada (só salva 1.5s depois de parar de digitar)
+  // Salva 1.5s depois de parar de digitar
   const debouncedSave = useDebouncedCallback((currentContent: string) => {
+    // Se por algum motivo não houver anotação (ex: erro na criação), não faz nada.
+    if (!anotacaoAtual?.id) {
+      return;
+    }
+    
     startTransition(async () => {
-      if (anotacaoId.current) {
-        // Se já temos um ID, apenas atualizamos a anotação existente.
-        await updateAnotacao(anotacaoId.current, currentContent);
-      } else if (currentContent.trim() !== '') {
-        // Se não temos um ID e o utilizador escreveu algo, criamos uma nova anotação.
-        const result = await addAnotacao(currentContent);
-        if (result.success && result.newAnotacao) {
-          // Após criar, guardamos o novo ID para as próximas atualizações.
-          anotacaoId.current = result.newAnotacao.id;
-        } else if (result.error) {
-            toast.error("Falha ao criar anotação", { description: result.error });
-        }
-      }
+      await updateAnotacao(anotacaoAtual.id, currentContent);
     });
   }, 1500);
 
@@ -55,6 +46,8 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
         }}
         className="w-full rounded-md h-24"
         placeholder="Anote seus insights e eles serão salvos automaticamente..."
+        // Desabilita o textarea se não houver anotação para evitar qualquer erro
+        disabled={!anotacaoAtual}
       />
       <div className="text-right text-xs text-muted-foreground h-4 mt-1">
         {isPending ? <span>Salvando...</span> : <span>&nbsp;</span>}

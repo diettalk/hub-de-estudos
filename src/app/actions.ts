@@ -549,7 +549,7 @@ export async function addAnotacao(content: string) {
   const { data, error } = await supabase
     .from('anotacoes')
     .insert({ content, user_id: user.id })
-    .select('id, content') // Retorna o novo ID e conteúdo
+    .select('id, content')
     .single();
 
   if (error) {
@@ -557,7 +557,7 @@ export async function addAnotacao(content: string) {
   }
 
   revalidatePath('/');
-  return { success: true, newAnotacao: data }; // Retorna a anotação completa
+  return { success: true, newAnotacao: data };
 }
 
 export async function updateAnotacao(id: number, content: string) {
@@ -572,6 +572,15 @@ export async function updateAnotacao(id: number, content: string) {
 
   revalidatePath('/');
   return { success: true };
+}
+
+export async function deleteAnotacao(formData: FormData) {
+  const id = Number(formData.get('id'));
+  if (isNaN(id)) return;
+
+  const supabase = createServerActionClient({ cookies });
+  await supabase.from('anotacoes').delete().eq('id', id);
+  revalidatePath('/');
 }
 
 // A função deleteAnotacao pode ser removida se não estiver a ser usada,

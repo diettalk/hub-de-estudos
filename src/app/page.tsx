@@ -1,3 +1,5 @@
+// src/app/page.tsx
+
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -11,14 +13,36 @@ export default async function DashboardPage() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login');
 
-  // Buscas de dados existentes
-  const { data: sessoes } = await supabase.from('ciclo_sessoes').select('*').eq('user_id', session.user.id);
-  const { data: tarefas } = await supabase.from('tarefas').select('*').eq('user_id', session.user.id);
-  const { data: anotacoes } = await supabase.from('anotacoes').select('*').eq('user_id', session.user.id);
-  const { data: revisoes } = await supabase.from('revisoes').select('*').eq('user_id', session.user.id);
-  
-  // --- NOVA BUSCA DE DADOS AQUI ---
-  const { data: studyGoals } = await supabase.from('study_goals').select('*').eq('user_id', session.user.id);
+  // Buscas de dados
+  const sessoesPromise = supabase.from('ciclo_sessoes').select('*').eq('user_id', session.user.id);
+  const tarefasPromise = supabase.from('tarefas').select('*').eq('user_id', session.user.id);
+  const revisoesPromise = supabase.from('revisoes').select('*').eq('user_id', session.user.id);
+  const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', session.user.id);
+  let anotacoesPromise = supabase.from('anotacoes').select('*').eq('user_id', session.user.id).limit(1);
+
+  let [
+    { data: sessoes },
+    { data: tarefas },
+    { data: revisoes },
+    { data: studyGoals },
+    { data: anotacoes }
+  ] = await Promise.all([sessoesPromise, tarefasPromise, revisoesPromise, studyGoalsPromise, anotacoesPromise]);
+
+  // [LÓGICA DE CORREÇÃO] Garante que sempre existe uma anotação para o utilizador
+  if (!anotacoes || anotacoes.length === 0) {
+      const { data: newAnotacao, error } = await supabase
+        .from('anotacoes')
+        .insert({ content: '', user_id: session.user.id })
+        .select('*')
+        .single();
+      
+      if (error) {
+          console.error("Erro ao criar anotação inicial:", error);
+          anotacoes = []; // Em caso de erro, passa um array vazio para não quebrar o cliente
+      } else {
+          anotacoes = [newAnotacao];
+      }
+  }
 
   const hoje = startOfToday();
   const sessoesDeHoje = sessoes?.filter(s => s.data_estudo && isToday(parseISO(s.data_estudo))) || [];
@@ -31,7 +55,7 @@ export default async function DashboardPage() {
     sessoesDeHoje,
     sessoesConcluidasTotal: sessoes?.filter(s => s.concluida).length || 0,
     revisoesDeHoje,
-    studyGoals: studyGoals || [], // Adiciona as metas aos dados
+    studyGoals: studyGoals || [],
   };
 
   return (
