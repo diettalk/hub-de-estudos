@@ -83,7 +83,6 @@ export async function createPagina(parentId: number | null, title: string, emoji
   return { data };
 }
 
-// [FUNÇÃO ADICIONADA] Salva o conteúdo do editor para uma disciplina
 export async function updatePaginaContent(id: number, content: JSONContent) {
     if (isNaN(id)) return { error: "ID da página inválido." };
     const supabase = createServerActionClient({ cookies });
@@ -583,20 +582,8 @@ export async function deleteAnotacao(formData: FormData) {
   revalidatePath('/');
 }
 
-// A função deleteAnotacao pode ser removida se não estiver a ser usada,
-// ou mantida como está se planeia adicionar um botão de apagar.
-export async function deleteAnotacao(formData: FormData) {
-  const id = Number(formData.get('id'));
-  if (isNaN(id)) return;
-
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('anotacoes').delete().eq('id', id);
-  revalidatePath('/');
-}
-
 // ==================================================================
 // --- AÇÕES DE PERFIL ---
-// ==================================================================
 export async function updateProfile({ id, fullName, avatarUrl }: { id: string, fullName: string, avatarUrl: string | null }) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -622,8 +609,6 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
 
 // ==================================================================
 // --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS, DISCIPLINAS, RECURSOS) ---
-// ==================================================================
-
 export async function updateItemParent(table: 'documentos' | 'paginas' | 'resources', itemId: number, newParentId: number | null) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -649,7 +634,6 @@ export async function updateItemParent(table: 'documentos' | 'paginas' | 'resour
 
 // ==================================================================
 // --- AÇÕES PARA GERADOR DE ANKI ---
-// ==================================================================
 export async function generateAnkiCards(formData: FormData) {
   const sourceText = formData.get('sourceText') as string;
   const numCards = Number(formData.get('numCards'));
@@ -765,8 +749,6 @@ export async function updateTarefaStatus(
 
 // ==================================================================
 // --- AÇÕES PARA METAS DE ESTUDO ---
-// ==================================================================
-
 export async function addStudyGoal(formData: FormData) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -869,8 +851,6 @@ export async function updateStudyGoal(formData: FormData) {
 
 // ==================================================================
 // --- AÇÕES PARA A BIBLIOTECA (VERSÃO ESTÁVEL E SIMPLIFICADA) ---
-// ==================================================================
-
 export async function getBibliotecaData() {
     const supabase = createServerActionClient({ cookies });
     const { data: { user } } = await supabase.auth.getUser();
