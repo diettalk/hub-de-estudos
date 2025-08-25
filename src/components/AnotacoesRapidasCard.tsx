@@ -1,34 +1,54 @@
 // src/components/AnotacoesRapidasCard.tsx
 'use client';
 
-import { updateAnotacao } from '@/app/actions'; 
-import { useEffect, useState, useTransition } from 'react';
+import { addAnotacao, updateAnotacao } from '@/app/actions'; 
+import { useEffect, useState, useTransition, useRef } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { ListChecks } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
+import { toast } from 'sonner';
 
 type Anotacao = { id: number, content: string };
 
 export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
-  // Com a nova lógica na página, anotacoes[0] sempre deve existir.
+  // Com a lógica na página do servidor, anotacoes[0] deve sempre existir.
   const anotacaoAtual = anotacoes[0];
+  
+  // Usamos uma ref para o ID para evitar problemas de re-renderização.
+  const anotacaoId = useRef<number | null>(anotacaoAtual?.id || null);
   const [content, setContent] = useState(anotacaoAtual?.content || '');
   const [isPending, startTransition] = useTransition();
 
-  // Atualiza o conteúdo se a prop mudar (ex: navegação ou primeira criação)
+  // Garante que o estado local é atualizado se a prop do servidor mudar.
   useEffect(() => {
     setContent(anotacaoAtual?.content || '');
+    anotacaoId.current = anotacaoAtual?.id || null;
   }, [anotacaoAtual]);
 
-  // Salva 1.5s depois de parar de digitar
+  // Salva 1.5s depois de o utilizador parar de digitar.
   const debouncedSave = useDebouncedCallback((currentContent: string) => {
-    // Se por algum motivo não houver anotação (ex: erro na criação), não faz nada.
-    if (!anotacaoAtual?.id) {
-      return;
-    }
-    
     startTransition(async () => {
-      await updateAnotacao(anotacaoAtual.id, currentContent);
+      // Se não houver conteúdo e não houver anotação, não faz nada.
+      if (!anotacaoId.current && currentContent.trim() === '') {
+        return;
+      }
+
+      if (anotacaoId.current) {
+        // [CORREÇÃO] Se já temos um ID, atualizamos e VERIFICAMOS o resultado.
+        const result = await updateAnotacao(anotacaoId.current, currentContent);
+        if (result?.error) {
+          toast.error("Falha ao salvar anotação", { description: result.error });
+        }
+      } else {
+        // Se não temos um ID, criamos uma nova anotação.
+        const result = await addAnotacao(currentContent);
+        if (result.success && result.newAnotacao) {
+          // Após criar, guardamos o novo ID para as próximas atualizações.
+          anotacaoId.current = result.newAnotacao.id;
+        } else if (result.error) {
+            toast.error("Falha ao criar anotação", { description: result.error });
+        }
+      }
     });
   }, 1500);
 
@@ -46,8 +66,7 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
         }}
         className="w-full rounded-md h-24"
         placeholder="Anote seus insights e eles serão salvos automaticamente..."
-        // Desabilita o textarea se não houver anotação para evitar qualquer erro
-        disabled={!anotacaoAtual}
+        disabled={!anotacaoAtual} // Desabilita se, por algum motivo, não houver anotação
       />
       <div className="text-right text-xs text-muted-foreground h-4 mt-1">
         {isPending ? <span>Salvando...</span> : <span>&nbsp;</span>}
