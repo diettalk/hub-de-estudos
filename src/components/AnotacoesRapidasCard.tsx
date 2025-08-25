@@ -3,6 +3,7 @@
 
 import { addAnotacao, updateAnotacao } from '@/app/actions'; 
 import { useEffect, useState, useTransition, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { ListChecks } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
@@ -11,44 +12,51 @@ import { toast } from 'sonner';
 type Anotacao = { id: number, content: string };
 
 export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
-  // Com a lógica na página do servidor, anotacoes[0] deve sempre existir.
+  const router = useRouter();
   const anotacaoAtual = anotacoes[0];
   
-  // Usamos uma ref para o ID para evitar problemas de re-renderização.
   const anotacaoId = useRef<number | null>(anotacaoAtual?.id || null);
   const [content, setContent] = useState(anotacaoAtual?.content || '');
-  const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const [, startTransition] = useTransition();
 
-  // Garante que o estado local é atualizado se a prop do servidor mudar.
   useEffect(() => {
     setContent(anotacaoAtual?.content || '');
     anotacaoId.current = anotacaoAtual?.id || null;
   }, [anotacaoAtual]);
 
-  // Salva 1.5s depois de o utilizador parar de digitar.
-  const debouncedSave = useDebouncedCallback((currentContent: string) => {
-    startTransition(async () => {
-      // Se não houver conteúdo e não houver anotação, não faz nada.
-      if (!anotacaoId.current && currentContent.trim() === '') {
+  const handleSave = useDebouncedCallback((currentContent: string) => {
+    // Não salva se o conteúdo não mudou
+    if (currentContent === (anotacaoAtual?.content || '')) {
+        setIsSaving(false);
         return;
-      }
+    }
 
-      if (anotacaoId.current) {
-        // [CORREÇÃO] Se já temos um ID, atualizamos e VERIFICAMOS o resultado.
-        const result = await updateAnotacao(anotacaoId.current, currentContent);
-        if (result?.error) {
-          toast.error("Falha ao salvar anotação", { description: result.error });
+    setIsSaving(true);
+    startTransition(() => {
+        let actionPromise;
+        if (anotacaoId.current) {
+            actionPromise = updateAnotacao(anotacaoId.current, currentContent);
+        } else {
+            actionPromise = addAnotacao(currentContent);
         }
-      } else {
-        // Se não temos um ID, criamos uma nova anotação.
-        const result = await addAnotacao(currentContent);
-        if (result.success && result.newAnotacao) {
-          // Após criar, guardamos o novo ID para as próximas atualizações.
-          anotacaoId.current = result.newAnotacao.id;
-        } else if (result.error) {
-            toast.error("Falha ao criar anotação", { description: result.error });
-        }
-      }
+
+        toast.promise(actionPromise, {
+            loading: 'Salvando anotação...',
+            success: (result) => {
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                // Se foi uma nova anotação, o refresh vai buscar o novo ID
+                router.refresh(); 
+                setIsSaving(false);
+                return 'Anotação salva!';
+            },
+            error: (err) => {
+                setIsSaving(false);
+                return `Falha ao salvar: ${err.message}`;
+            },
+        });
     });
   }, 1500);
 
@@ -62,14 +70,14 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
         value={content}
         onChange={(e) => {
             setContent(e.target.value);
-            debouncedSave(e.target.value);
+            handleSave(e.target.value);
         }}
         className="w-full rounded-md h-24"
         placeholder="Anote seus insights e eles serão salvos automaticamente..."
-        disabled={!anotacaoAtual} // Desabilita se, por algum motivo, não houver anotação
+        disabled={!anotacaoAtual}
       />
       <div className="text-right text-xs text-muted-foreground h-4 mt-1">
-        {isPending ? <span>Salvando...</span> : <span>&nbsp;</span>}
+        {isSaving ? <span>Salvando...</span> : <span>&nbsp;</span>}
       </div>
     </>
   );
