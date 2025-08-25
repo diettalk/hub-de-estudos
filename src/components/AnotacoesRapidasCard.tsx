@@ -2,7 +2,7 @@
 'use client';
 
 import { addAnotacao, updateAnotacao } from '@/app/actions'; 
-import { useEffect, useState, useTransition, useRef } from 'react';
+import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { ListChecks } from 'lucide-react';
@@ -16,17 +16,15 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
   const anotacaoAtual = anotacoes[0];
   
   const anotacaoId = useRef<number | null>(anotacaoAtual?.id || null);
+  // O estado é inicializado apenas uma vez com os dados do servidor.
   const [content, setContent] = useState(anotacaoAtual?.content || '');
   const [isSaving, setIsSaving] = useState(false);
   const [, startTransition] = useTransition();
 
-  useEffect(() => {
-    setContent(anotacaoAtual?.content || '');
-    anotacaoId.current = anotacaoAtual?.id || null;
-  }, [anotacaoAtual]);
+  // [CORREÇÃO] O useEffect que causava o reset do texto foi removido.
 
   const handleSave = useDebouncedCallback((currentContent: string) => {
-    // Não salva se o conteúdo não mudou
+    // Não salva se o conteúdo não mudou desde a última vez que foi carregado.
     if (currentContent === (anotacaoAtual?.content || '')) {
         setIsSaving(false);
         return;
@@ -47,7 +45,7 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
                 if (result.error) {
                     throw new Error(result.error);
                 }
-                // Se foi uma nova anotação, o refresh vai buscar o novo ID
+                // O refresh agora buscará os dados corretos sem causar um reset na UI.
                 router.refresh(); 
                 setIsSaving(false);
                 return 'Anotação salva!';
@@ -69,7 +67,9 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
       <Textarea
         value={content}
         onChange={(e) => {
+            // A UI é atualizada imediatamente com o que o utilizador digita.
             setContent(e.target.value);
+            // A função de salvamento é chamada em segundo plano.
             handleSave(e.target.value);
         }}
         className="w-full rounded-md h-24"
