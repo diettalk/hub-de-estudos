@@ -3,6 +3,7 @@
 
 import { addAnotacao, updateAnotacao } from '@/app/actions'; 
 import { useState, useTransition, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Textarea } from '@/components/ui/textarea';
 import { ListChecks } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
@@ -11,23 +12,21 @@ import { toast } from 'sonner';
 type Anotacao = { id: number, content: string };
 
 export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
+  const router = useRouter();
   const anotacaoAtual = anotacoes[0];
   
   const anotacaoId = useRef<number | null>(anotacaoAtual?.id || null);
+  // O estado é inicializado apenas uma vez com os dados do servidor.
   const [content, setContent] = useState(anotacaoAtual?.content || '');
   const [isSaving, setIsSaving] = useState(false);
   const [, startTransition] = useTransition();
 
-  // Garante que o estado local é atualizado se a prop do servidor mudar (ex: primeira criação)
-  useEffect(() => {
-    setContent(anotacaoAtual?.content || '');
-    anotacaoId.current = anotacaoAtual?.id || null;
-  }, [anotacaoAtual]);
+  // [CORREÇÃO] O useEffect problemático foi removido. O estado do 'content'
+  // agora é controlado exclusivamente pela interação do utilizador.
 
   const handleSave = useDebouncedCallback((currentContent: string) => {
-    // Não salva se o conteúdo não mudou
-    if (currentContent === (anotacaoAtual?.content || '')) {
-        setIsSaving(false);
+    // Não faz nada se o conteúdo não mudou.
+    if (currentContent === (anotacaoAtual?.content || '') && anotacaoId.current) {
         return;
     }
 
@@ -46,10 +45,12 @@ export function AnotacoesRapidasCard({ anotacoes }: { anotacoes: Anotacao[] }) {
                 if (result.error) {
                     throw new Error(result.error);
                 }
-                // [CORREÇÃO] router.refresh() foi removido para evitar a condição de corrida.
-                // A revalidação agora é gerida apenas pelo revalidatePath('/') na server action.
+                
+                // Se uma nova anotação foi criada, atualizamos o ID localmente
+                // e fazemos um refresh para garantir que a próxima navegação terá os dados corretos.
                 if (result.newAnotacao) {
                     anotacaoId.current = result.newAnotacao.id;
+                    router.refresh(); 
                 }
                 setIsSaving(false);
                 return 'Anotação salva!';
