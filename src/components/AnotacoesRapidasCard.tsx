@@ -1,4 +1,4 @@
-// src/components/AnotacoesRapidasCard.tsx
+// oisrc/components/AnotacoesRapidasCard.tsx
 'use client';
 
 import { updateAnotacao } from '@/app/actions'; 
