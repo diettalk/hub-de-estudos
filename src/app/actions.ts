@@ -63,6 +63,28 @@ export async function deleteConcurso(id: number) {
   revalidatePath('/guia-estudos');
 }
 
+export async function updateConcursosOrdem(orderedIds: number[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  try {
+    const updates = orderedIds.map((id, index) => 
+      supabase.from('concursos').update({ ordem: index }).match({ id: id, user_id: user.id })
+    );
+    
+    const results = await Promise.all(updates);
+    const firstError = results.find(res => res.error);
+    if (firstError) throw firstError.error;
+
+    revalidatePath('/guia-estudos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    return { error: `Falha ao salvar a nova ordem: ${message}` };
+  }
+}
+
 // --- AÇÕES DE DISCIPLINAS ---
 export async function createPagina(parentId: number | null, title: string, emoji: string) {
   const supabase = createServerActionClient({ cookies });
@@ -661,6 +683,26 @@ export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
   return { success: true, newDeckId: data.id };
 }
 
+export async function updateAnkiDeck(deckId: number, cards: Flashcard[]) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Utilizador não autenticado." };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .update({ cards: cards })
+    .match({ id: deckId, user_id: user.id });
+
+  if (error) {
+    console.error("Erro ao atualizar o deck:", error);
+    return { error: "Falha ao guardar as alterações no deck." };
+  }
+
+  revalidatePath(`/anki/${deckId}`);
+  revalidatePath('/anki');
+  return { success: true };
+}
+
 export async function deleteAnkiDeck(deckId: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
@@ -966,4 +1008,5 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
     } catch (error) {
         const message = error instanceof Error ? error.message : "Erro desconhecido";
         return { error: `Falha ao salvar a nova ordem: ${message}` };
-    
+    }
+}
