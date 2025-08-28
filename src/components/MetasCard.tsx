@@ -76,96 +76,98 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* CABEÇALHO OTIMIZADO */}
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <Target className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Minhas Metas</h2>
-        </div>
-        <Dialog open={isNewGoalDialogOpen} onOpenChange={setIsNewGoalDialogOpen}>
+    <Dialog open={isNewGoalDialogOpen} onOpenChange={setIsNewGoalDialogOpen}>
+      <div className="flex flex-col h-full">
+        {/* CABEÇALHO OTIMIZADO */}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <Target className="w-5 h-5 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Minhas Metas</h2>
+          </div>
           <DialogTrigger asChild>
             <Button variant="ghost" size="sm" onClick={() => setOpenGoal(null)}>
               <PlusCircle className="w-4 h-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{openGoal ? 'Editar Meta' : 'Nova Meta de Estudo'}</DialogTitle>
-            </DialogHeader>
-            <form action={handleFormSubmit} className="space-y-4">
-              <input type="hidden" name="id" value={openGoal?.id} />
-              <div>
-                <Label htmlFor="title">Título</Label>
-                <Input id="title" name="title" required defaultValue={openGoal?.title} />
-              </div>
-              <div>
-                <Label htmlFor="description">Descrição (Opcional)</Label>
-                <Textarea id="description" name="description" defaultValue={openGoal?.description || ''} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="current_value">Progresso Atual</Label>
-                  <Input id="current_value" name="current_value" type="number" defaultValue={openGoal?.current_value || 0} required />
-                </div>
-                <div>
-                  <Label htmlFor="target_value">Meta Final</Label>
-                  <Input id="target_value" name="target_value" type="number" defaultValue={openGoal?.target_value || 100} required />
-                </div>
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancelar</Button>
-                </DialogClose>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? 'Salvando...' : 'Salvar Meta'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+        </div>
 
-      {/* LISTA DE METAS */}
-      <div className="flex-grow space-y-4 overflow-y-auto pr-2">
-        {goals.length > 0 ? (
-          goals.map((goal) => {
-            const percentage = goal.target_value > 0 ? (goal.current_value / goal.target_value) * 100 : 0;
-            return (
-              <div key={goal.id} className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-medium truncate pr-2">{goal.title}</span>
-                  <span className="text-muted-foreground flex-shrink-0">
-                    {goal.current_value} / {goal.target_value}
-                  </span>
-                </div>
-                <Progress value={percentage} />
-                {/* BOTÕES DE AÇÃO SEMPRE VISÍVEIS */}
-                <div className="flex justify-end items-center gap-2">
-                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, -1)} disabled={isPending}>
-                      <Minus className="h-4 w-4" />
-                   </Button>
-                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, 1)} disabled={isPending}>
-                      <Plus className="h-4 w-4" />
-                   </Button>
-                   <DialogTrigger asChild>
-                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setOpenGoal(goal); setIsNewGoalDialogOpen(true); }}>
-                        <Edit className="h-4 w-4" />
+        {/* LISTA DE METAS */}
+        <div className="flex-grow space-y-4 overflow-y-auto pr-2">
+          {goals.length > 0 ? (
+            goals.map((goal) => {
+              const percentage = goal.target_value > 0 ? (goal.current_value / goal.target_value) * 100 : 0;
+              return (
+                <div key={goal.id} className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium truncate pr-2">{goal.title}</span>
+                    <span className="text-muted-foreground flex-shrink-0">
+                      {goal.current_value} / {goal.target_value}
+                    </span>
+                  </div>
+                  <Progress value={percentage} />
+                  {/* BOTÕES DE AÇÃO SEMPRE VISÍVEIS */}
+                  <div className="flex justify-end items-center gap-2">
+                     <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, -1)} disabled={isPending}>
+                        <Minus className="h-4 w-4" />
                      </Button>
-                   </DialogTrigger>
-                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(goal.id)} disabled={isPending}>
-                      <Trash2 className="h-4 w-4" />
-                   </Button>
+                     <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, 1)} disabled={isPending}>
+                        <Plus className="h-4 w-4" />
+                     </Button>
+                     <DialogTrigger asChild>
+                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setOpenGoal(goal); setIsNewGoalDialogOpen(true); }}>
+                          <Edit className="h-4 w-4" />
+                       </Button>
+                     </DialogTrigger>
+                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(goal.id)} disabled={isPending}>
+                        <Trash2 className="h-4 w-4" />
+                     </Button>
+                  </div>
                 </div>
-              </div>
-            );
-          })
-        ) : (
-          <p className="text-sm text-muted-foreground text-center pt-8">
-            Nenhuma meta definida. Clique em '+' para adicionar uma.
-          </p>
-        )}
+              );
+            })
+          ) : (
+            <p className="text-sm text-muted-foreground text-center pt-8">
+              Nenhuma meta definida. Clique em '+' para adicionar uma.
+            </p>
+          )}
+        </div>
       </div>
-    </div>
+      
+      {/* CONTEÚDO DO POP-UP (AGORA FORA DO FLUXO PRINCIPAL) */}
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{openGoal ? 'Editar Meta' : 'Nova Meta de Estudo'}</DialogTitle>
+        </DialogHeader>
+        <form action={handleFormSubmit} className="space-y-4">
+          <input type="hidden" name="id" value={openGoal?.id || ''} />
+          <div>
+            <Label htmlFor="title">Título</Label>
+            <Input id="title" name="title" required defaultValue={openGoal?.title || ''} />
+          </div>
+          <div>
+            <Label htmlFor="description">Descrição (Opcional)</Label>
+            <Textarea id="description" name="description" defaultValue={openGoal?.description || ''} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="current_value">Progresso Atual</Label>
+              <Input id="current_value" name="current_value" type="number" defaultValue={openGoal?.current_value || 0} required />
+            </div>
+            <div>
+              <Label htmlFor="target_value">Meta Final</Label>
+              <Input id="target_value" name="target_value" type="number" defaultValue={openGoal?.target_value || 100} required />
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Salvando...' : 'Salvar Meta'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
