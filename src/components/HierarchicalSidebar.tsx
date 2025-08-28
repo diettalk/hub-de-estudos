@@ -12,7 +12,7 @@ import { type Node } from '@/lib/types';
 import { toast } from 'sonner';
 
 // --- Tipos e Contexto ---
-type DropIndicator = { overId: number; isFolder: boolean; };
+type DropIndicator = { overId: number; isFolder: boolean; depth: number; };
 const SidebarContext = createContext<{ 
     tree: Node[]; 
     openFolders: Set<number>;
@@ -28,6 +28,10 @@ function findNode(nodes: Node[], id: number): Node | null {
     if (found) return found;
   }
   return null;
+}
+
+function getAllChildIds(node: Node): number[] {
+    return [node.id, ...node.children.flatMap(getAllChildIds)];
 }
 
 function flattenTree(nodes: Node[]): Node[] {
@@ -61,7 +65,6 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    paddingLeft: `${depth * 1.5}rem`
   };
 
   const handleSaveTitle = () => {
@@ -96,9 +99,9 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
   const href = table === 'documentos' ? `/documentos?id=${node.id}` : `/disciplinas?page=${node.id}`;
 
   return (
-    <div ref={setNodeRef} style={style} className="relative">
-      {isDropTarget && !isFolderDropTarget && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 z-10" />}
-      <div className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${isFolderDropTarget ? 'bg-blue-500/20' : ''}`}>
+    <div ref={setNodeRef} style={style} className="relative" data-depth={depth}>
+      {isDropTarget && !isFolderDropTarget && <div className="absolute top-0 h-0.5 bg-blue-500 z-10" style={{ left: `${depth * 1.5}rem`, right: 0 }} />}
+      <div className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${isFolderDropTarget ? 'bg-blue-500/20' : ''}`} style={{ paddingLeft: `${depth * 1.5}rem` }}>
         <button {...listeners} {...attributes} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing">
           <GripVertical className="w-4 h-4"/>
         </button>
@@ -123,7 +126,7 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
         </div>
       </div>
       {isOpen && node.children?.map(child => <SortableItem key={child.id} node={child} depth={depth + 1} table={table} />)}
-      {isDropTarget && !isFolderDropTarget && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 z-10" style={{top: '100%'}} />}
+      {isDropTarget && !isFolderDropTarget && <div className="absolute bottom-0 h-0.5 bg-blue-500 z-10" style={{top: '100%', left: `${depth * 1.5}rem`, right: 0}} />}
     </div>
   );
 }
@@ -145,7 +148,6 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
 
     useEffect(() => { setIsMounted(true); }, []);
     
-    // Inicia todas as pastas como abertas por padrão
     useEffect(() => {
         setOpenFolders(new Set<number>(flattenTree(tree).filter(n => n.children.length > 0).map(n => n.id)));
     }, [tree]);
@@ -170,20 +172,25 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
     const handleDragOver = (event: DragOverEvent) => {
         if (openFolderTimeout.current) clearTimeout(openFolderTimeout.current);
         const { over } = event;
-        if (!over) return;
+        const overId = over ? Number(over.id) : null;
 
-        const overId = Number(over.id);
+        if (!overId) {
+            setDropIndicator(null);
+            return;
+        }
+
         const overNode = findNode(tree, overId);
         if (!overNode) return;
 
-        // Lógica para abrir pastas ao arrastar sobre elas
         if (overNode.children.length > 0 && !openFolders.has(overId)) {
             openFolderTimeout.current = setTimeout(() => {
                 setOpenFolders(prev => new Set(prev).add(overId));
             }, 500);
         }
-        // Define o indicador visual para nidificação (soltar dentro da pasta)
-        setDropIndicator({ overId, isFolder: overNode.children.length > 0 });
+        
+        const overElement = over.data.current?.sortable.containerNode;
+        const depth = overElement ? Number(overElement.dataset.depth) : 0;
+        setDropIndicator({ overId, isFolder: overNode.children.length > 0, depth });
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
@@ -197,12 +204,21 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
         const activeNode = findNode(tree, Number(active.id));
         const overNode = findNode(tree, Number(over.id));
         if (!activeNode || !overNode) return;
+        
+        // --- LÓGICA DE SEGURANÇA ---
+        // Impede que uma pasta seja movida para dentro de si mesma ou de seus filhos
+        const descendantIds = getAllChildIds(activeNode);
+        if (descendantIds.includes(overNode.id)) {
+            toast.error("Não é possível mover uma pasta para dentro de si mesma.");
+            return;
+        }
 
-        // Determina o novo pai com base no indicador
-        const newParentId = (overNode.children.length > 0) ? overNode.id : overNode.parent_id;
+        // --- LÓGICA DE REORDENAÇÃO ---
+        const isOverFolder = overNode.children.length > 0;
+        const newParentId = isOverFolder ? overNode.id : overNode.parent_id;
 
-        if (activeNode.parent_id !== newParentId) {
-            startTransition(() => { 
+        if (activeNode.parent_id !== newParentId || activeNode.id !== overNode.id) {
+             startTransition(() => { 
                 updateItemParent(table, activeNode.id, newParentId).then(result => {
                     if (result.error) toast.error(result.error);
                 });
