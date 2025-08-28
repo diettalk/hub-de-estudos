@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect } from 'react';
+import { useState, useTransition } from 'react';
+import { type StudyGoal } from '@/lib/types';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,188 +11,161 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-} from '@/components/ui/dialog';
+  DialogClose,
+} from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { addStudyGoal, updateStudyGoal, updateStudyGoalValue, deleteStudyGoal } from '@/app/actions';
-import { type StudyGoal } from '@/lib/types';
+import { Textarea } from '@/components/ui/textarea';
+import { addStudyGoal, updateStudyGoal, deleteStudyGoal, updateStudyGoalValue } from '@/app/actions';
 import { toast } from 'sonner';
-// 1. CORREÇÃO: Importar os ícones que vamos usar
-import { Target, Trash2, Plus, Edit, Minus, Check } from 'lucide-react';
-import { Progress } from "@/components/ui/progress";
+import { Target, PlusCircle, Trash2, Edit, Plus, Minus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
-// Sub-componente para o formulário, reutilizável para criar e editar
-function GoalFormModal({ goal, onActionComplete }: { goal?: StudyGoal | null, onActionComplete: () => void }) {
-  const [open, setOpen] = useState(false);
+export function MetasCard({ goals }: { goals: StudyGoal[] }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const isEditMode = !!goal;
+  const [openGoal, setOpenGoal] = useState<StudyGoal | null>(null);
+  const [isNewGoalDialogOpen, setIsNewGoalDialogOpen] = useState(false);
 
-  const handleSubmit = (formData: FormData) => {
-    if (isEditMode) {
-      formData.append('id', String(goal.id));
-    }
-    
-    const type = formData.get('type') as string;
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    let endDate = '';
-
-    if (type === 'weekly_hours') {
-      const endOfWeek = new Date(today);
-      endOfWeek.setDate(today.getDate() + (7 - (today.getDay() === 0 ? 7 : today.getDay())));
-      endDate = endOfWeek.toISOString().split('T')[0];
-    } else if (type === 'monthly_questions') {
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      endDate = endOfMonth.toISOString().split('T')[0];
-    }
-    
-    formData.append('start_date', startDate);
-    formData.append('end_date', endDate);
-
-    const action = isEditMode ? updateStudyGoal : addStudyGoal;
-
+  // Função para lidar com o envio do formulário de criação/edição
+  const handleFormSubmit = (formData: FormData) => {
     startTransition(async () => {
-      const result = await action(formData);
-      if (result?.error) {
+      const title = formData.get('title') as string;
+      const description = formData.get('description') as string;
+      const target_value = Number(formData.get('target_value'));
+      const current_value = Number(formData.get('current_value'));
+
+      const dataToSave = {
+        id: openGoal?.id,
+        title,
+        description,
+        target_value,
+        current_value,
+      };
+
+      const result = await (openGoal?.id ? updateStudyGoal(dataToSave) : addStudyGoal(dataToSave));
+
+      if (result.error) {
         toast.error(result.error);
       } else {
-        toast.success(isEditMode ? "Meta atualizada!" : "Nova meta adicionada!");
-        onActionComplete();
-        setOpen(false);
+        toast.success(`Meta ${openGoal?.id ? 'atualizada' : 'criada'} com sucesso!`);
+        setOpenGoal(null);
+        setIsNewGoalDialogOpen(false);
+        router.refresh();
       }
     });
   };
 
+  // Função para apagar uma meta
+  const handleDelete = (id: number) => {
+    startTransition(async () => {
+      await deleteStudyGoal(id);
+      toast.success('Meta apagada com sucesso!');
+      router.refresh();
+    });
+  };
+
+  // Função para incrementar/decrementar o progresso
+  const handleProgressChange = (goal: StudyGoal, amount: number) => {
+    startTransition(async () => {
+        const newValue = goal.current_value + amount;
+        if (newValue < 0 || newValue > goal.target_value) return; // Impede valores inválidos
+        await updateStudyGoalValue(goal.id, newValue);
+        router.refresh(); // Atualiza a UI para refletir a mudança
+    });
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {isEditMode ? (
-          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" title="Editar Meta">
-            <Edit className="h-3 w-3" />
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon" className="h-6 w-6" title="Adicionar Nova Meta">
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{isEditMode ? 'Editar Meta' : 'Criar Nova Meta'}</DialogTitle></DialogHeader>
-        <form action={handleSubmit}>
-          <div className="py-4 space-y-4">
-            <div>
-              <Label htmlFor="title">Título da Meta</Label>
-              <Input id="title" name="title" defaultValue={goal?.title || ''} placeholder="Ex: Questões de Direito Constitucional" required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="type">Tipo</Label>
-                <Select name="type" defaultValue={goal?.type} required>
-                  <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="weekly_hours">Horas Semanais</SelectItem>
-                    <SelectItem value="monthly_questions">Questões no Mês</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="target_value">Valor Alvo</Label>
-                <Input id="target_value" name="target_value" type="number" defaultValue={goal?.target_value} placeholder="Ex: 20" required />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={isPending}>{isPending ? 'A salvar...' : 'Salvar'}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Sub-componente para cada meta individual, agora com mais interatividade
-function GoalItem({ goal }: { goal: StudyGoal }) {
-    const [, startTransition] = useTransition();
-
-    const handleDelete = () => {
-        if (confirm("Tem a certeza de que deseja apagar esta meta?")) {
-            startTransition(() => { deleteStudyGoal(goal.id).then(() => toast.success("Meta apagada.")); });
-        }
-    };
-
-    const handleIncrement = () => {
-        const newValue = goal.current_value + 1;
-        startTransition(() => { updateStudyGoalValue(goal.id, newValue); });
-    };
-
-    const handleDecrement = () => {
-        const newValue = Math.max(0, goal.current_value - 1); // Garante que não fica negativo
-        startTransition(() => { updateStudyGoalValue(goal.id, newValue); });
-    };
-
-    const handleComplete = () => {
-        startTransition(() => { 
-            updateStudyGoalValue(goal.id, goal.target_value).then(() => toast.success("Meta concluída!"));
-        });
-    };
-
-    const percentage = goal.target_value > 0 ? Math.round((goal.current_value / goal.target_value) * 100) : 0;
-
-    return (
-        <div className="group">
-            <div className="flex justify-between items-center mb-1">
-                <p className="text-sm font-medium truncate">{goal.title}</p>
-                <div className="flex items-center">
-                    <p className="text-sm text-muted-foreground mr-2">
-                        {goal.current_value} / {goal.target_value}
-                    </p>
-                    {/* 2. CORREÇÃO: Botões de ação visíveis no hover */}
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Decrementar (-1)" onClick={handleDecrement}>
-                            <Minus className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Incrementar (+1)" onClick={handleIncrement}>
-                            <Plus className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Concluir Meta" onClick={handleComplete}>
-                            <Check className="h-4 w-4 text-green-500" />
-                        </Button>
-                        <GoalFormModal goal={goal} onActionComplete={() => {}} />
-                        <Button variant="ghost" size="icon" className="h-6 w-6" title="Apagar Meta" onClick={handleDelete}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                    </div>
-                </div>
-            </div>
-            <Progress value={percentage} />
-        </div>
-    );
-}
-
-// Componente principal do Card de Metas
-export function MetasCard({ goals }: { goals: StudyGoal[] }) {
-  return (
-    <>
-      <div className="flex items-center justify-between mb-4">
+    <div className="flex flex-col h-full">
+      {/* CABEÇALHO OTIMIZADO */}
+      <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <Target className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Metas de Estudo</h2>
+          <h2 className="text-lg font-semibold">Minhas Metas</h2>
         </div>
-        <GoalFormModal onActionComplete={() => {}} />
+        <Dialog open={isNewGoalDialogOpen} onOpenChange={setIsNewGoalDialogOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" onClick={() => setOpenGoal(null)}>
+              <PlusCircle className="w-4 h-4" />
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{openGoal ? 'Editar Meta' : 'Nova Meta de Estudo'}</DialogTitle>
+            </DialogHeader>
+            <form action={handleFormSubmit} className="space-y-4">
+              <input type="hidden" name="id" value={openGoal?.id} />
+              <div>
+                <Label htmlFor="title">Título</Label>
+                <Input id="title" name="title" required defaultValue={openGoal?.title} />
+              </div>
+              <div>
+                <Label htmlFor="description">Descrição (Opcional)</Label>
+                <Textarea id="description" name="description" defaultValue={openGoal?.description || ''} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="current_value">Progresso Atual</Label>
+                  <Input id="current_value" name="current_value" type="number" defaultValue={openGoal?.current_value || 0} required />
+                </div>
+                <div>
+                  <Label htmlFor="target_value">Meta Final</Label>
+                  <Input id="target_value" name="target_value" type="number" defaultValue={openGoal?.target_value || 100} required />
+                </div>
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancelar</Button>
+                </DialogClose>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? 'Salvando...' : 'Salvar Meta'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
-      <div className="flex-grow space-y-4 overflow-y-auto">
-        {goals.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center pt-4">Nenhuma meta definida. Clique em '+' para criar uma.</p>
+
+      {/* LISTA DE METAS */}
+      <div className="flex-grow space-y-4 overflow-y-auto pr-2">
+        {goals.length > 0 ? (
+          goals.map((goal) => {
+            const percentage = goal.target_value > 0 ? (goal.current_value / goal.target_value) * 100 : 0;
+            return (
+              <div key={goal.id} className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-medium truncate pr-2">{goal.title}</span>
+                  <span className="text-muted-foreground flex-shrink-0">
+                    {goal.current_value} / {goal.target_value}
+                  </span>
+                </div>
+                <Progress value={percentage} />
+                {/* BOTÕES DE AÇÃO SEMPRE VISÍVEIS */}
+                <div className="flex justify-end items-center gap-2">
+                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, -1)} disabled={isPending}>
+                      <Minus className="h-4 w-4" />
+                   </Button>
+                   <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleProgressChange(goal, 1)} disabled={isPending}>
+                      <Plus className="h-4 w-4" />
+                   </Button>
+                   <DialogTrigger asChild>
+                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setOpenGoal(goal); setIsNewGoalDialogOpen(true); }}>
+                        <Edit className="h-4 w-4" />
+                     </Button>
+                   </DialogTrigger>
+                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(goal.id)} disabled={isPending}>
+                      <Trash2 className="h-4 w-4" />
+                   </Button>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-sm text-muted-foreground text-center pt-8">
+            Nenhuma meta definida. Clique em '+' para adicionar uma.
+          </p>
         )}
-        {goals.map(goal => <GoalItem key={goal.id} goal={goal} />)}
       </div>
-    </>
+    </div>
   );
 }
