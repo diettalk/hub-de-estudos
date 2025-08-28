@@ -30,6 +30,15 @@ function findNode(nodes: Node[], id: number): Node | null {
   return null;
 }
 
+function findNodeParent(nodes: Node[], nodeId: number): Node | null {
+  for (const node of nodes) {
+    if (node.children.some(child => child.id === nodeId)) return node;
+    const parent = findNodeParent(node.children, nodeId);
+    if (parent) return parent;
+  }
+  return null;
+}
+
 function getAllChildIds(node: Node): number[] {
     return [node.id, ...node.children.flatMap(getAllChildIds)];
 }
@@ -51,11 +60,14 @@ function ItemOverlay({ node, table }: { node: Node; table: 'documentos' | 'pagin
 }
 
 function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; table: 'documentos' | 'paginas' }) {
-  const { openFolders, toggleFolder, dropIndicator } = useContext(SidebarContext);
+  const { tree, openFolders, toggleFolder, dropIndicator } = useContext(SidebarContext);
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.title);
   const [, startTransition] = useTransition();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
+
+  const clickTimeout = useRef<NodeJS.Timeout | null>(null);
+  const clickCount = useRef(0);
 
   const isOpen = openFolders.has(node.id);
   const isDropTarget = dropIndicator?.overId === node.id;
@@ -65,6 +77,29 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+  };
+  
+  const handleClicks = () => {
+    clickCount.current += 1;
+    if (clickTimeout.current) clearTimeout(clickTimeout.current);
+    
+    clickTimeout.current = setTimeout(() => {
+        if (node.parent_id === null) { // Se já está na raiz, não faz nada
+            clickCount.current = 0;
+            return;
+        }
+
+        if (clickCount.current === 2) { // Duplo clique: sobe um nível
+            const parent = findNodeParent(tree, node.id);
+            const grandparentId = parent ? parent.parent_id : null;
+            startTransition(() => { updateItemParent(table, node.id, grandparentId); });
+            toast.info(`"${node.title}" subiu um nível.`);
+        } else if (clickCount.current >= 3) { // Triplo clique: move para a raiz
+            startTransition(() => { updateItemParent(table, node.id, null); });
+            toast.info(`"${node.title}" movido para a raiz.`);
+        }
+        clickCount.current = 0;
+    }, 250); // Espera 250ms para diferenciar os cliques
   };
 
   const handleSaveTitle = () => {
@@ -102,7 +137,7 @@ function SortableItem({ node, depth = 0, table }: { node: Node; depth?: number; 
     <div ref={setNodeRef} style={style} className="relative" data-depth={depth}>
       {isDropTarget && !isFolderDropTarget && <div className="absolute top-0 h-0.5 bg-blue-500 z-10" style={{ left: `${depth * 1.5}rem`, right: 0 }} />}
       <div className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${isFolderDropTarget ? 'bg-blue-500/20' : ''}`} style={{ paddingLeft: `${depth * 1.5}rem` }}>
-        <button {...listeners} {...attributes} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing">
+        <button {...listeners} {...attributes} onClick={handleClicks} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Arrastar ou clicar 2x/3x para mover">
           <GripVertical className="w-4 h-4"/>
         </button>
         
@@ -205,19 +240,16 @@ export function HierarchicalSidebar({ tree = [], table, title }: HierarchicalSid
         const overNode = findNode(tree, Number(over.id));
         if (!activeNode || !overNode) return;
         
-        // --- LÓGICA DE SEGURANÇA ---
-        // Impede que uma pasta seja movida para dentro de si mesma ou de seus filhos
         const descendantIds = getAllChildIds(activeNode);
         if (descendantIds.includes(overNode.id)) {
             toast.error("Não é possível mover uma pasta para dentro de si mesma.");
             return;
         }
 
-        // --- LÓGICA DE REORDENAÇÃO ---
         const isOverFolder = overNode.children.length > 0;
         const newParentId = isOverFolder ? overNode.id : overNode.parent_id;
 
-        if (activeNode.parent_id !== newParentId || activeNode.id !== overNode.id) {
+        if (activeNode.parent_id !== newParentId) {
              startTransition(() => { 
                 updateItemParent(table, activeNode.id, newParentId).then(result => {
                     if (result.error) toast.error(result.error);
