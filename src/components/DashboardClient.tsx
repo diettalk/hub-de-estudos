@@ -11,22 +11,25 @@ import { DashboardListItem } from '@/components/ui/DashboardListItem';
 import { Activity, ListChecks, CalendarCheck, CheckCircle } from 'lucide-react';
 import { updateRevisaoStatus, toggleTarefa } from '@/app/actions';
 import Link from 'next/link';
-import { type SessaoEstudo, type Tarefa, type Revisao, type StudyGoal } from '@/lib/types';
+import { type SessaoEstudo, type Tarefa, type Revisao, type StudyGoal, type Lembrete } from '@/lib/types';
 import { MetasCard } from './MetasCard';
+import { CalendarioDashboardCard } from './CalendarioDashboardCard'; // Importa o novo componente
 
-// Tipos de dados simplificados, sem anotações ou lembretes
+// Tipos de dados atualizados para incluir dados do calendário
 type DashboardData = {
   todasSessoes: SessaoEstudo[];
   tarefasPendentes: Tarefa[];
+  revisoes: Revisao[];
+  lembretes: Lembrete[];
   sessoesDeHoje: SessaoEstudo[];
   sessoesConcluidasTotal: number;
   revisoesDeHoje: Revisao[];
   studyGoals: StudyGoal[];
 };
 
-// Layout padrão sem 'anotacoes' e sem 'calendario'
+// Layout padrão atualizado com o 'calendario'
 const DEFAULT_LAYOUT = {
-    main: ['sessoes', 'revisoes', 'tarefas'],
+    main: ['sessoes', 'revisoes', 'tarefas', 'calendario'],
     side: ['metas', 'concluidas', 'progresso', 'pomodoro'] 
 };
 
@@ -47,12 +50,10 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       try {
         const parsedLayout = JSON.parse(savedLayout);
         
-        // Filtra quaisquer cartões "fantasma" (ex: 'anotacoes') que possam existir no layout salvo
         const filteredMain = (parsedLayout.main || []).filter((id: string) => allValidCardIds.includes(id));
         const filteredSide = (parsedLayout.side || []).filter((id: string) => allValidCardIds.includes(id));
         const allSavedValidKeys = new Set([...filteredMain, ...filteredSide]);
         
-        // Verifica se o layout salvo contém todos os cartões que deveriam existir. Se não, reseta.
         const isLayoutCompleteAndValid = allValidCardIds.length === allSavedValidKeys.size && allValidCardIds.every(id => allSavedValidKeys.has(id));
 
         if (isLayoutCompleteAndValid) {
@@ -121,18 +122,18 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     localStorage.setItem('dashboardLayout', JSON.stringify({ main: newMainItems, side: newSideItems }));
   };
 
-  // Mapa de componentes de card simplificado
+  // Mapa de componentes atualizado com o 'calendario'
   const cardComponents: { [key: string]: React.ReactNode } = {
     sessoes: (<DashboardCard id="sessoes"><div><div className="flex items-center gap-3 mb-4"><Activity className="w-5 h-5 text-muted-foreground" /><h2 className="text-lg font-semibold">Sessões de Hoje</h2></div><p className="text-5xl font-bold text-primary mb-2">{data.sessoesDeHoje.length}</p><div className="flex-grow space-y-1 overflow-y-auto">{data.sessoesDeHoje.map(s => <Link key={s.id} href="/ciclo" className="flex items-center p-2 -mx-2 rounded-md hover:bg-secondary group"><span className="text-sm text-muted-foreground truncate"> • {s.materia_nome}</span></Link>)}</div></div></DashboardCard>),
     revisoes: (<DashboardCard id="revisoes"><div><div className="flex items-center gap-3 mb-4"><CalendarCheck className="w-5 h-5 text-muted-foreground" /><h2 className="text-lg font-semibold">Revisões para Hoje</h2></div><p className="text-5xl font-bold text-primary mb-2">{data.revisoesDeHoje.length}</p><div className="flex-grow space-y-1 overflow-y-auto">{data.revisoesDeHoje.map(r => <DashboardListItem key={r.id} id={r.id} href="/revisoes" type="revisao" action={updateRevisaoStatus}>{r.materia_nome}</DashboardListItem>)}</div></div></DashboardCard>),
-    tarefas: <DashboardCard id="tarefas"><div><div className="flex items-center gap-3 mb-4"><ListChecks className="w-5 h-5 text-muted-foreground" /><h2 className="text-lg font-semibold">Tarefas Pendentes</h2></div><div className="flex-grow space-y-1 overflow-y-auto">{data.tarefasPendentes.map(t => <DashboardListItem key={t.id} id={t.id} href="/tarefas" type="tarefa" action={(id, status) => toggleTarefa(id, status)}>{t.title}</DashboardListItem>)}</div></div></DashboardCard>,
+    tarefas: <DashboardCard id="tarefas"><div><div className="flex items-center gap-3 mb-4"><ListChecks className="w-5 h-5 text-muted-foreground" /><h2 className="text-lg font-semibold">Tarefas Pendentes</h2></div><div className="flex-grow space-y-1 overflow-y-auto">{data.tarefasPendentes.map(t => <DashboardListItem key={t.id} id={t.id} href="/tarefas" type="tarefa" action={(id, status) => toggleTarefa(id, status)}>{t.title}</DashboardListItem>)}</div></div></DashboardCard>),
+    calendario: <DashboardCard id="calendario"><CalendarioDashboardCard lembretes={data.lembretes} revisoes={data.revisoes} /></DashboardCard>,
     concluidas: (<DashboardCard id="concluidas"><div><div className="flex items-center gap-3 mb-4"><CheckCircle className="w-5 h-5 text-muted-foreground" /><h2 className="text-lg font-semibold">Sessões Concluídas (Total)</h2></div><p className="text-5xl font-bold">{data.sessoesConcluidasTotal}</p></div></DashboardCard>),
     progresso: <DashboardCard id="progresso"><ProgressoCicloCard sessoes={data.todasSessoes} /></DashboardCard>,
     pomodoro: <DashboardCard id="pomodoro"><PomodoroTimer /></DashboardCard>,
     metas: <DashboardCard id="metas"><MetasCard goals={data.studyGoals} /></DashboardCard>,
   };
   
-  // Função de renderização segura que ignora IDs de cards que não existem
   const renderColumn = (items: string[]) => {
     return items
       .filter(id => cardComponents[id]) 

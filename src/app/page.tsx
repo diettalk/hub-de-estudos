@@ -13,22 +13,25 @@ export default async function DashboardPage() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) redirect('/login');
 
-  // Busca apenas os dados necessários para os cards existentes
+  // Voltamos a buscar todos os dados, incluindo lembretes e todas as revisões para o calendário
   const sessoesPromise = supabase.from('ciclo_sessoes').select('*').eq('user_id', session.user.id);
   const tarefasPromise = supabase.from('tarefas').select('*').eq('user_id', session.user.id);
   const revisoesPromise = supabase.from('revisoes').select('*').eq('user_id', session.user.id);
   const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', session.user.id);
+  const lembretesPromise = supabase.from('lembretes').select('*').eq('user_id', session.user.id);
 
   let [
     { data: sessoes },
     { data: tarefas },
     { data: revisoes },
     { data: studyGoals },
+    { data: lembretes },
   ] = await Promise.all([
     sessoesPromise, 
     tarefasPromise, 
     revisoesPromise, 
-    studyGoalsPromise,
+    studyGoalsPromise, 
+    lembretesPromise
   ]);
 
   const hoje = startOfToday();
@@ -38,6 +41,8 @@ export default async function DashboardPage() {
   const dashboardData = {
     todasSessoes: sessoes || [],
     tarefasPendentes: tarefas?.filter(t => !t.completed) || [],
+    revisoes: revisoes || [], // Passa TODAS as revisões
+    lembretes: lembretes || [], // Passa TODOS os lembretes
     sessoesDeHoje,
     sessoesConcluidasTotal: sessoes?.filter(s => s.concluida).length || 0,
     revisoesDeHoje,
