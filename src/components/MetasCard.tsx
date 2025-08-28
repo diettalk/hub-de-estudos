@@ -80,15 +80,16 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
       <div className="flex flex-col h-full">
         {/* CABEÇALHO OTIMIZADO */}
         <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Target className="w-5 h-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Minhas Metas</h2>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpenGoal(null)}>
+                <PlusCircle className="w-4 h-4" />
+              </Button>
+            </DialogTrigger>
           </div>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" onClick={() => setOpenGoal(null)}>
-              <PlusCircle className="w-4 h-4" />
-            </Button>
-          </DialogTrigger>
+          {/* Espaço vazio à direita para a alça de arrastar */}
         </div>
 
         {/* LISTA DE METAS */}
