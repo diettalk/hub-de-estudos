@@ -9,44 +9,48 @@ import { startOfToday, isToday, parseISO } from 'date-fns';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const supabase = createServerComponentClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect('/login');
+  const supabase = createServerComponentClient({ cookies });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect('/login');
 
-  // [REMOVIDO] A busca por 'anotacoes' foi removida.
-  const sessoesPromise = supabase.from('ciclo_sessoes').select('*').eq('user_id', session.user.id);
-  const tarefasPromise = supabase.from('tarefas').select('*').eq('user_id', session.user.id);
-  const revisoesPromise = supabase.from('revisoes').select('*').eq('user_id', session.user.id);
-  const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', session.user.id);
+  // Busca apenas os dados necessários para os cards existentes
+  const sessoesPromise = supabase.from('ciclo_sessoes').select('*').eq('user_id', session.user.id);
+  const tarefasPromise = supabase.from('tarefas').select('*').eq('user_id', session.user.id);
+  const revisoesPromise = supabase.from('revisoes').select('*').eq('user_id', session.user.id);
+  const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', session.user.id);
 
-  let [
-    { data: sessoes },
-    { data: tarefas },
-    { data: revisoes },
-    { data: studyGoals },
-  ] = await Promise.all([sessoesPromise, tarefasPromise, revisoesPromise, studyGoalsPromise]);
+  let [
+    { data: sessoes },
+    { data: tarefas },
+    { data: revisoes },
+    { data: studyGoals },
+  ] = await Promise.all([
+    sessoesPromise, 
+    tarefasPromise, 
+    revisoesPromise, 
+    studyGoalsPromise,
+  ]);
 
-  const hoje = startOfToday();
-  const sessoesDeHoje = sessoes?.filter(s => s.data_estudo && isToday(parseISO(s.data_estudo))) || [];
-  const revisoesDeHoje = revisoes?.filter(r => isToday(parseISO(r.data_revisao))) || [];
-  
-  const dashboardData = {
-    todasSessoes: sessoes || [],
-    tarefasPendentes: tarefas?.filter(t => !t.completed) || [],
-    // [REMOVIDO] A propriedade 'anotacoes' foi removida.
-    sessoesDeHoje,
-    sessoesConcluidasTotal: sessoes?.filter(s => s.concluida).length || 0,
-    revisoesDeHoje,
-    studyGoals: studyGoals || [],
-  };
+  const hoje = startOfToday();
+  const sessoesDeHoje = sessoes?.filter(s => s.data_estudo && isToday(parseISO(s.data_estudo))) || [];
+  const revisoesDeHoje = revisoes?.filter(r => r.data_revisao && isToday(parseISO(r.data_revisao))) || [];
+  
+  const dashboardData = {
+    todasSessoes: sessoes || [],
+    tarefasPendentes: tarefas?.filter(t => !t.completed) || [],
+    sessoesDeHoje,
+    sessoesConcluidasTotal: sessoes?.filter(s => s.concluida).length || 0,
+    revisoesDeHoje,
+    studyGoals: studyGoals || [],
+  };
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Bem-vindo(a) de volta! Aqui está um resumo do seu progresso.</p>
-      </header>
-      <DashboardClient data={dashboardData} />
-    </div>
-  );
+  return (
+    <div className="p-4 sm:p-6 lg:p-8">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">Bem-vindo(a) de volta! Aqui está um resumo do seu progresso.</p>
+      </header>
+      <DashboardClient data={dashboardData} />
+    </div>
+  );
 }
