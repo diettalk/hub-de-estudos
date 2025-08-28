@@ -67,12 +67,12 @@ export function CalendarioDashboardCard({ lembretes, revisoes }: { lembretes: Le
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-muted-foreground" />
                 <h2 className="text-lg font-semibold">Calendário</h2>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingLembrete(null)}>
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
               </div>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" onClick={() => setEditingLembrete(null)}>
-                  <PlusCircle className="w-4 h-4" />
-                </Button>
-              </DialogTrigger>
           </div>
           <DayPicker
               mode="single"
@@ -81,7 +81,7 @@ export function CalendarioDashboardCard({ lembretes, revisoes }: { lembretes: Le
               locale={ptBR}
               modifiers={{ event: eventDays }}
               modifiersStyles={{ event: { color: 'hsl(var(--destructive))', fontWeight: 'bold' } }}
-              className="w-full" // <-- AQUI A CORREÇÃO DE LAYOUT
+              className="w-full"
           />
           <div className="border-t mt-4 pt-4 flex-grow flex flex-col min-h-0">
               <h3 className="font-semibold text-center mb-2">
@@ -100,7 +100,7 @@ export function CalendarioDashboardCard({ lembretes, revisoes }: { lembretes: Le
                               {event.eventType === 'lembrete' && (
                                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                   <DialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingLembrete(event)}>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingLembrete(event as Lembrete)}>
                                       <Edit className="h-3 w-3" />
                                     </Button>
                                   </DialogTrigger>
