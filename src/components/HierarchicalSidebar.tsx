@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useTransition, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation'; // Importar o router
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
@@ -14,7 +15,13 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.data.title);
   const [, startTransition] = useTransition();
-  const table = node.data.table; // 'documentos' ou 'paginas'
+  const router = useRouter();
+  const table = node.data.table;
+
+  const refreshView = () => {
+    router.refresh();
+    // A API da árvore não tem um método refresh, a atualização virá do Next.js
+  };
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== node.data.title) {
@@ -22,7 +29,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         updateItemTitle(table, node.data.id, title).then(result => {
           if (result.error) toast.error(result.error);
           setIsEditing(false);
-          node.tree.refresh();
+          refreshView();
         });
       });
     } else {
@@ -34,7 +41,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const handleCreateChild = () => startTransition(() => {
     createItem(table, node.data.id).then(() => {
       if (!node.isOpen) node.toggle();
-      node.tree.refresh();
+      refreshView();
     });
   });
 
@@ -42,7 +49,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     deleteItem(table, node.data.id).then(res => {
       if (res.error) toast.error(res.error);
       else toast.success(`"${node.data.title}" foi excluído.`);
-      node.tree.refresh();
+      refreshView();
     });
   });
 
@@ -56,12 +63,10 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       ref={dragHandle}
       className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${node.state.isDragging ? 'opacity-50' : ''} ${node.state.isSelected ? 'bg-primary/20' : ''}`}
     >
-      {/* Ícone de Arrastar */}
       <span className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing">
         <GripVertical className="w-4 h-4" />
       </span>
 
-      {/* Ícone de Pasta/Ficheiro */}
       {node.isLeaf ? (
         <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
       ) : (
@@ -71,7 +76,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         />
       )}
 
-      {/* Título ou Input de Edição */}
       {isEditing ? (
         <input
           type="text"
@@ -86,7 +90,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
       )}
 
-      {/* Botões de Ação */}
       <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => setIsEditing(true)} title="Renomear" className="p-2 text-muted-foreground hover:text-foreground rounded"><Edit2 className="w-4 h-4" /></button>
         {!node.isLeaf && <button onClick={handleCreateChild} title="Criar Sub-item" className="p-2 text-muted-foreground hover:text-foreground rounded"><Plus className="w-4 h-4" /></button>}
@@ -99,16 +102,15 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
 
 // --- Componente Principal da Barra Lateral ---
 interface HierarchicalSidebarProps {
-  treeData: any[]; // Usamos any[] por enquanto para flexibilidade
+  treeData: any[];
   table: 'documentos' | 'paginas';
   title: string;
 }
 
 export function HierarchicalSidebar({ treeData = [], table, title }: HierarchicalSidebarProps) {
   const [, startTransition] = useTransition();
-  const treeRef = useRef<any>(null); // Referência para a API da árvore
+  const router = useRouter();
 
-  // Adiciona o tipo de tabela a cada nó, pois o componente Node precisa dele.
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
         return nodes.map(n => ({ ...n, table, children: addTable(n.children) }))
@@ -116,18 +118,14 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
     return addTable(treeData);
   }, [treeData, table]);
 
-
   const handleMove = ({ dragIds, parentId }: { dragIds: string[], parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
     const newParentId = parentId ? Number(parentId) : null;
 
     startTransition(() => {
       updateItemParent(table, movedItemId, newParentId).then(result => {
-        if (result.error) {
-            toast.error(result.error);
-            // Se houver um erro, é crucial recarregar os dados para evitar estado inconsistente.
-            treeRef.current?.refresh();
-        }
+        if (result.error) toast.error(result.error);
+        router.refresh();
       });
     });
   };
@@ -136,7 +134,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
     startTransition(() => {
       createItem(table, null).then(result => {
         if (result?.error) toast.error(result.error);
-        else treeRef.current?.refresh(); // Recarrega os dados após criar um item
+        else router.refresh();
       });
     });
   };
@@ -155,17 +153,23 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
       </div>
 
       <div className="flex-grow overflow-y-auto -mr-2 pr-2">
-        <Tree
-          ref={treeRef}
-          data={processedData} // <-- A CORREÇÃO ESTÁ AQUI: 'initialData' foi renomeado para 'data'
-          onMove={handleMove}
-          width="100%"
-          height={1000} // Altura grande para evitar scroll interno da biblioteca
-          rowHeight={40}
-          indent={24}
-        >
-          {Node}
-        </Tree>
+        {processedData.length > 0 ? (
+          <Tree
+            data={processedData}
+            onMove={handleMove}
+            width="100%"
+            rowHeight={40}
+            indent={24}
+          >
+            {Node}
+          </Tree>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground text-sm">
+                  Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda.
+              </p>
+          </div>
+        )}
       </div>
     </div>
   );
