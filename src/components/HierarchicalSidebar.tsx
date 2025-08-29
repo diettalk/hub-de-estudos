@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useEffect, useRef, useMemo } from 'react'; // <-- CORREÇÃO ESTÁ AQUI
+import React, { useState, useTransition, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
@@ -157,7 +157,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
       <div className="flex-grow overflow-y-auto -mr-2 pr-2">
         <Tree
           ref={treeRef}
-          initialData={processedData}
+          data={processedData} // <-- A CORREÇÃO ESTÁ AQUI: 'initialData' foi renomeado para 'data'
           onMove={handleMove}
           width="100%"
           height={1000} // Altura grande para evitar scroll interno da biblioteca
