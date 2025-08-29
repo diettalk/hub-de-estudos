@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation'; // Importar o router
+import React, { useState, useTransition, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
@@ -18,10 +18,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const router = useRouter();
   const table = node.data.table;
 
-  const refreshView = () => {
-    router.refresh();
-    // A API da árvore não tem um método refresh, a atualização virá do Next.js
-  };
+  const refreshView = () => router.refresh();
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== node.data.title) {
@@ -155,6 +152,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
       <div className="flex-grow overflow-y-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree
+            key={JSON.stringify(processedData)} // <-- A CORREÇÃO CRÍTICA ESTÁ AQUI
             data={processedData}
             onMove={handleMove}
             width="100%"
@@ -166,7 +164,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
         ) : (
           <div className="flex items-center justify-center h-full">
               <p className="text-muted-foreground text-sm">
-                  Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda.
+                  Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
               </p>
           </div>
         )}
