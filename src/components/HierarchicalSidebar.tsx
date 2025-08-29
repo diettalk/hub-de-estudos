@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useEffect, useRef } from 'react';
+import React, { useState, useTransition, useEffect, useRef, useMemo } from 'react'; // <-- CORREÇÃO ESTÁ AQUI
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
@@ -170,3 +170,4 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
     </div>
   );
 }
+
