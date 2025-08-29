@@ -1,27 +1,23 @@
-// src/components/DocumentosClient.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { HierarchicalSidebar, Node } from '@/components/HierarchicalSidebar';
+import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
 import { updateDocumentoContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
+import { type Node } from '@/lib/types';
 
 interface DocumentosClientProps {
     documentTree: Node[];
-    initialDocument: (Node & { content: any }) | null;
+    initialDocument: Node | null;
 }
 
 export default function DocumentosClient({ documentTree, initialDocument }: DocumentosClientProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    
-    // Este estado controla se o editor está visível (modo de foco)
     const [selectedDocument, setSelectedDocument] = useState(initialDocument);
 
-    // Sincroniza o estado com o URL, garantindo que a navegação funcione
     useEffect(() => {
         const id = searchParams.get('id');
         if (id && initialDocument && Number(id) === initialDocument.id) {
@@ -36,7 +32,6 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         await updateDocumentoContent(selectedDocument.id, newContent);
     };
 
-    // Se um documento estiver selecionado, mostra o editor em tela cheia
     if (selectedDocument) {
         return (
             <div className="h-full w-full p-4">
@@ -44,20 +39,20 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
                     key={selectedDocument.id}
                     initialContent={selectedDocument.content}
                     onSave={handleSave}
-                    onClose={() => router.push('/documentos')} // Limpa o URL para voltar à sidebar
+                    onClose={() => router.push('/documentos')}
                 />
             </div>
         );
     }
 
-    // [NOVO LAYOUT] Se nenhum documento estiver selecionado, mostra apenas a sidebar
     return (
         <div className="h-full p-4">
             <HierarchicalSidebar 
-                tree={documentTree} 
+                treeData={documentTree} 
                 table="documentos"
                 title="DOCUMENTOS"
             />
         </div>
     );
 }
+

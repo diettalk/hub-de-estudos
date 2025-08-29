@@ -9,8 +9,6 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
-// --- Componente para Renderizar cada Nó da Árvore ---
-
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.data.title);
@@ -64,10 +62,12 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         <GripVertical className="w-4 h-4" />
       </span>
 
-      {node.isLeaf ? (
+      {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
+      
+      {node.isLeaf && !node.data.emoji ? (
         <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
       ) : (
-        <ChevronDown
+        !node.isLeaf && <ChevronDown
           onClick={() => node.toggle()}
           className={`w-4 h-4 mx-2 cursor-pointer transition-transform ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
         />
@@ -96,10 +96,8 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   );
 }
 
-
-// --- Componente Principal da Barra Lateral ---
 interface HierarchicalSidebarProps {
-  treeData: any[];
+  treeData: NodeType[];
   table: 'documentos' | 'paginas';
   title: string;
 }
@@ -152,7 +150,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
       <div className="flex-grow overflow-y-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree
-            key={JSON.stringify(processedData)} // <-- A CORREÇÃO CRÍTICA ESTÁ AQUI
+            key={JSON.stringify(processedData)}
             data={processedData}
             onMove={handleMove}
             width="100%"

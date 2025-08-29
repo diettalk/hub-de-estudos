@@ -1,41 +1,16 @@
-// src/app/disciplinas/page.tsx
-
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Node } from '@/components/HierarchicalSidebar';
-import DisciplinasClient from '@/components/DisciplinasClient'; // Importa o novo componente
+import { buildTree } from '@/lib/utils';
+import DisciplinasClient from '@/components/DisciplinasClient';
+import { type Node } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-
-const buildTree = (paginas: Node[]): Node[] => {
-    const map = new Map<number, Node>();
-    const roots: Node[] = [];
-    
-    paginas.forEach(p => {
-        map.set(p.id, { ...p, children: [] });
-    });
-
-    paginas.forEach(p => {
-        const node = map.get(p.id);
-        if (node) {
-            if (p.parent_id && map.has(p.parent_id)) {
-                const parent = map.get(p.parent_id)!;
-                parent.children.push(node);
-            } else {
-                roots.push(node);
-            }
-        }
-    });
-    return roots;
-};
 
 export default async function DisciplinasPage({ searchParams }: { searchParams: { page?: string } }) {
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    redirect('/login');
-  }
+  if (!user) redirect('/login');
 
   const { data: allPaginas } = await supabase
     .from('paginas')
@@ -43,10 +18,10 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     .eq('user_id', user.id)
     .order('title', { ascending: true });
 
-  const paginaTree = buildTree((allPaginas as Node[]) || []);
+  const paginaTree = buildTree(allPaginas || []);
   
   const selectedId = searchParams.page ? Number(searchParams.page) : null;
-  let initialPage: (Node & { content: any }) | null = null;
+  let initialPage: Node | null = null;
 
   if (selectedId) {
     const { data: pageData } = await supabase
@@ -55,7 +30,7 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
       .eq('id', selectedId)
       .eq('user_id', user.id)
       .single();
-    initialPage = pageData as (Node & { content: any }) | null;
+    initialPage = pageData as Node | null;
   }
   
   return (
@@ -65,3 +40,4 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     />
   );
 }
+
