@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useMemo, useRef } from 'react';
+import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
@@ -9,6 +9,7 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
+// ... (O componente 'Node' continua exatamente igual, não precisa de o alterar)
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.data.title);
@@ -27,7 +28,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
 
     clickTimeout.current = setTimeout(() => {
       if (clickCount.current === 2) {
-        // Dois cliques: mover para o "avô" (um nível acima)
         const parent = node.parent;
         const grandparentId = parent?.parent?.id ?? null;
         if (node.data.parent_id !== grandparentId) {
@@ -36,7 +36,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
             });
         }
       } else if (clickCount.current >= 3) {
-        // Três cliques: mover para a raiz
         if (node.data.parent_id !== null) {
             startTransition(() => {
                 updateItemParent(table, node.data.id, null).then(refreshView);
@@ -44,9 +43,8 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         }
       }
       clickCount.current = 0;
-    }, 250); // Tempo para detetar múltiplos cliques
+    }, 250);
   };
-
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== node.data.title) {
@@ -88,7 +86,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       ref={dragHandle}
       className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${node.state.isDragging ? 'opacity-50' : ''} ${node.state.isSelected ? 'bg-primary/20' : ''}`}
     >
-      <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
+      <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
         <GripVertical className="w-4 h-4" />
       </span>
 
@@ -126,15 +124,15 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   );
 }
 
-interface HierarchicalSidebarProps {
-  treeData: NodeType[];
-  table: 'documentos' | 'paginas';
-  title: string;
-}
 
-export function HierarchicalSidebar({ treeData = [], table, title }: HierarchicalSidebarProps) {
+export function HierarchicalSidebar({ treeData = [], table, title }: { treeData: NodeType[], table: 'documentos' | 'paginas', title: string }) {
   const [, startTransition] = useTransition();
   const router = useRouter();
+  
+  // Refs para as barras de rolagem e o conteúdo
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
+  const contentWidthRef = useRef<HTMLDivElement>(null);
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
@@ -143,10 +141,53 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
     return addTable(treeData);
   }, [treeData, table]);
 
+  // Efeito para sincronizar as duas barras de rolagem
+  useEffect(() => {
+    const topDiv = topScrollRef.current;
+    const mainDiv = mainScrollRef.current;
+    if (!topDiv || !mainDiv) return;
+
+    let isSyncing = false;
+    const handleTopScroll = () => {
+      if (isSyncing) return;
+      isSyncing = true;
+      mainDiv.scrollLeft = topDiv.scrollLeft;
+      isSyncing = false;
+    };
+    const handleMainScroll = () => {
+      if (isSyncing) return;
+      isSyncing = true;
+      topDiv.scrollLeft = mainDiv.scrollLeft;
+      isSyncing = false;
+    };
+
+    topDiv.addEventListener('scroll', handleTopScroll);
+    mainDiv.addEventListener('scroll', handleMainScroll);
+
+    // Mede a largura do conteúdo e ajusta o elemento "fantasma"
+    const measureContent = () => {
+        if (mainDiv.firstElementChild && contentWidthRef.current) {
+            contentWidthRef.current.style.width = `${mainDiv.firstElementChild.scrollWidth}px`;
+        }
+    };
+
+    // Usa ResizeObserver para detetar mudanças de largura (ex: abrir/fechar pastas)
+    const resizeObserver = new ResizeObserver(measureContent);
+    if (mainDiv.firstElementChild) {
+        resizeObserver.observe(mainDiv.firstElementChild);
+    }
+    measureContent(); // Medida inicial
+
+    return () => {
+      topDiv.removeEventListener('scroll', handleTopScroll);
+      mainDiv.removeEventListener('scroll', handleMainScroll);
+      resizeObserver.disconnect();
+    };
+  }, [processedData]); // Re-executa se os dados mudarem
+
   const handleMove = ({ dragIds, parentId }: { dragIds: string[], parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
     const newParentId = parentId ? Number(parentId) : null;
-
     startTransition(() => {
       updateItemParent(table, movedItemId, newParentId).then(result => {
         if (result.error) toast.error(result.error);
@@ -177,7 +218,12 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
         </button>
       </div>
 
-      <div className="flex-grow overflow-y-auto -mr-2 pr-2">
+      {/* A NOSSA NOVA BARRA DE ROLAGEM SUPERIOR */}
+      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
+        <div ref={contentWidthRef} style={{ height: '1px' }}></div>
+      </div>
+
+      <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree
             key={JSON.stringify(processedData)}
@@ -191,9 +237,9 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
           </Tree>
         ) : (
           <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground text-sm">
-                  Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
-              </p>
+            <p className="text-muted-foreground text-sm">
+                Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
+            </p>
           </div>
         )}
       </div>
