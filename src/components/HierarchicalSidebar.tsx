@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useMemo } from 'react';
+import React, { useState, useTransition, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps } from 'react-arborist';
@@ -16,7 +16,37 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const router = useRouter();
   const table = node.data.table;
 
+  const clickTimeout = useRef<NodeJS.Timeout | null>(null);
+  const clickCount = useRef(0);
+
   const refreshView = () => router.refresh();
+
+  const handleMultiClick = () => {
+    clickCount.current += 1;
+    if (clickTimeout.current) clearTimeout(clickTimeout.current);
+
+    clickTimeout.current = setTimeout(() => {
+      if (clickCount.current === 2) {
+        // Dois cliques: mover para o "avô" (um nível acima)
+        const parent = node.parent;
+        const grandparentId = parent?.parent?.id ?? null;
+        if (node.data.parent_id !== grandparentId) {
+            startTransition(() => {
+                updateItemParent(table, node.data.id, grandparentId).then(refreshView);
+            });
+        }
+      } else if (clickCount.current >= 3) {
+        // Três cliques: mover para a raiz
+        if (node.data.parent_id !== null) {
+            startTransition(() => {
+                updateItemParent(table, node.data.id, null).then(refreshView);
+            });
+        }
+      }
+      clickCount.current = 0;
+    }, 250); // Tempo para detetar múltiplos cliques
+  };
+
 
   const handleSaveTitle = () => {
     if (title.trim() && title !== node.data.title) {
@@ -58,7 +88,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       ref={dragHandle}
       className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${node.state.isDragging ? 'opacity-50' : ''} ${node.state.isSelected ? 'bg-primary/20' : ''}`}
     >
-      <span className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing">
+      <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
         <GripVertical className="w-4 h-4" />
       </span>
 
@@ -170,4 +200,3 @@ export function HierarchicalSidebar({ treeData = [], table, title }: Hierarchica
     </div>
   );
 }
-
