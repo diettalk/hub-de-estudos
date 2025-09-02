@@ -5,133 +5,100 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
 import { 
-    Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, Underline, Palette, X, Pilcrow, Heading1, Heading2, Heading3, List, ListOrdered, Blockquote, CaseSensitive
+    Italic, Bold, Link as LinkIcon, Highlighter, Table as TableIcon, Underline, X, Pilcrow, Heading1, Heading2, Heading3, List, ListOrdered, Blockquote, CaseSensitive, Palette
 } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import YoutubeExtension from '@tiptap/extension-youtube';
-import { Table } from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
 import Typography from '@tiptap/extension-typography';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
+import { FontSize } from '@/lib/FontSize';
 
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// import { FontSize } from '@/lib/FontSize'; // Desativado para o teste
+// ============================================================================
+// --- Componente MenuBar (Reconstruído do Zero) ---
+// Este componente agora é "burro". Ele apenas recebe o estado e as funções
+// como propriedades, sem nunca interagir diretamente com o editor do Tiptap.
+// ============================================================================
 
+interface MenuBarProps {
+  activeStates: {
+    bold: boolean; italic: boolean; underline: boolean;
+    bulletList: boolean; orderedList: boolean; blockquote: boolean;
+    link: boolean; highlight: boolean;
+    headingLevel: string; fontSize: string;
+  };
+  handlers: {
+    toggleBold: () => void; toggleItalic: () => void; toggleUnderline: () => void;
+    toggleBulletList: () => void; toggleOrderedList: () => void; toggleBlockquote: () => void;
+    setLink: () => void; toggleHighlight: () => void;
+    handleHeadingChange: (value: string) => void;
+    handleFontSizeChange: (value: string) => void;
+    insertTable: () => void;
+    setColor: (color: string) => void;
+  };
+  highlightColor: string;
+  setHighlightColor: (color: string) => void;
+  currentColor: string;
+  onClose: () => void;
+}
 
-const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => void; }) => {
-    const [highlightColor, setHighlightColor] = useState('#ffcc00');
-    const [activeStates, setActiveStates] = useState({
-        bold: false, italic: false, underline: false,
-        bulletList: false, orderedList: false, blockquote: false,
-        link: false, highlight: false,
-        headingLevel: '0', fontSize: 'default'
-    });
-
-    useEffect(() => {
-        if (editor) {
-            const updateStates = () => {
-                setActiveStates({
-                    bold: editor.isActive('bold'),
-                    italic: editor.isActive('italic'),
-                    underline: editor.isActive('underline'),
-                    bulletList: editor.isActive('bulletList'),
-                    orderedList: editor.isActive('orderedList'),
-                    blockquote: editor.isActive('blockquote'),
-                    link: editor.isActive('link'),
-                    highlight: editor.isActive('highlight'),
-                    headingLevel: editor.isActive('heading', { level: 1 }) ? '1' : editor.isActive('heading', { level: 2 }) ? '2' : editor.isActive('heading', { level: 3 }) ? '3' : '0',
-                    fontSize: editor.getAttributes('textStyle').fontSize || 'default'
-                });
-            };
-            
-            editor.on('transaction', updateStates);
-            editor.on('selectionUpdate', updateStates);
-            updateStates();
-
-            return () => {
-                editor.off('transaction', updateStates);
-                editor.off('selectionUpdate', updateStates);
-            };
-        }
-    }, [editor]);
-
-    const setLink = useCallback(() => {
-        if (!editor) return;
-        if (editor.isActive('link')) {
-            return editor.chain().focus().unsetLink().run();
-        }
-        const previousUrl = editor.getAttributes('link').href;
-        const url = window.prompt('URL', previousUrl);
-        if (url === null || url === '') return;
-        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-    }, [editor]);
-
-    if (!editor) return null;
-
-    const handleHeadingChange = (value: string) => {
-        const level = parseInt(value);
-        if (level > 0) editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
-        else editor.chain().focus().setParagraph().run();
-    }
-    
-    // O handler de tamanho de fonte permanece, mas não será usado
-    const handleFontSizeChange = (value: string) => {
-        // if (value === 'default') editor.chain().focus().unsetFontSize().run();
-        // else editor.chain().focus().setFontSize(value).run();
-    }
+const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
+    // Usamos botões HTML puros para garantir estabilidade máxima.
+    const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50";
+    const activeClass = "bg-accent text-accent-foreground";
+    const selectTriggerClass = "flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-[130px]";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <Select value={activeStates.headingLevel} onValueChange={handleHeadingChange}>
-                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Estilo" /></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="0"><div className="flex items-center gap-2"><Pilcrow className="w-4 h-4" />Parágrafo</div></SelectItem>
-                    <SelectItem value="1"><div className="flex items-center gap-2"><Heading1 className="w-4 h-4" />Título 1</div></SelectItem>
-                    <SelectItem value="2"><div className="flex items-center gap-2"><Heading2 className="w-4 h-4" />Título 2</div></SelectItem>
-                    <SelectItem value="3"><div className="flex items-center gap-2"><Heading3 className="w-4 h-4" />Título 3</div></SelectItem>
-                </SelectContent>
-            </Select>
+            {/* GRUPO: ESTILO E TAMANHO */}
+            <select value={activeStates.headingLevel} onChange={(e) => handlers.handleHeadingChange(e.target.value)} className={selectTriggerClass}>
+                <option value="0">Parágrafo</option>
+                <option value="1">Título 1</option>
+                <option value="2">Título 2</option>
+                <option value="3">Título 3</option>
+            </select>
+            <select value={activeStates.fontSize} onChange={(e) => handlers.handleFontSizeChange(e.target.value)} className={selectTriggerClass}>
+                <option value="default">Normal</option>
+                <option value="0.75rem">Pequeno</option>
+                <option value="1.25rem">Grande</option>
+                <option value="1.5rem">Extra Grande</option>
+            </select>
 
-            {/* O seletor de tamanho de fonte está temporariamente desativado */}
-
+            {/* GRUPO: ESTILOS BÁSICOS */}
             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(activeStates.bold ? 'bg-accent text-accent-foreground' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(activeStates.italic ? 'bg-accent text-accent-foreground' : '')} title="Itálico"><Italic className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(activeStates.underline ? 'bg-accent text-accent-foreground' : '')} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
+                <button onClick={handlers.toggleBold} className={cn(buttonClass, activeStates.bold && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></button>
+                <button onClick={handlers.toggleItalic} className={cn(buttonClass, activeStates.italic && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></button>
+                <button onClick={handlers.toggleUnderline} className={cn(buttonClass, activeStates.underline && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></button>
             </div>
 
-             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(activeStates.bulletList ? 'bg-accent text-accent-foreground' : '')} title="Lista"><List className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(activeStates.orderedList ? 'bg-accent text-accent-foreground' : '')} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={cn(activeStates.blockquote ? 'bg-accent text-accent-foreground' : '')} title="Citação"><Blockquote className="w-4 h-4" /></Button>
+            {/* GRUPO: LISTAS E BLOCOS */}
+            <div className="flex items-center gap-1">
+                <button onClick={handlers.toggleBulletList} className={cn(buttonClass, activeStates.bulletList && activeClass)} title="Lista"><List className="w-4 h-4" /></button>
+                <button onClick={handlers.toggleOrderedList} className={cn(buttonClass, activeStates.orderedList && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></button>
+                <button onClick={handlers.toggleBlockquote} className={cn(buttonClass, activeStates.blockquote && activeClass)} title="Citação"><Blockquote className="w-4 h-4" /></button>
             </div>
 
+            {/* GRUPO: CORES E INSERÇÃO */}
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={setLink} className={cn(activeStates.link ? 'bg-accent text-accent-foreground' : '')} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Button>
-                <div className="flex items-center rounded bg-transparent border">
-                     <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(activeStates.highlight ? 'bg-accent text-accent-foreground' : '')} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button>
-                     <input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer" title="Escolher Cor do Marca-Texto"/>
-                </div>
-                <div className="flex items-center rounded bg-transparent border">
-                    <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
-                    <input type="color" onInput={event => editor.chain().focus().setColor((event.target as HTMLInputElement).value).run()} value={editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000')} className="w-6 h-6 p-0 border-none bg-transparent rounded cursor-pointer" title="Cor da Fonte" />
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
+                <button onClick={handlers.setLink} className={cn(buttonClass, activeStates.link && activeClass)} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></button>
+                <div className="flex items-center rounded border"><button onClick={handlers.toggleHighlight} className={cn(buttonClass, activeStates.highlight && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
+                <div className="flex items-center rounded border"><Palette className="w-4 h-4 mx-1 text-muted-foreground" /><input type="color" onInput={(e) => handlers.setColor((e.target as HTMLInputElement).value)} value={currentColor} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
+                <button onClick={handlers.insertTable} className={buttonClass} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
             </div>
 
             <div className="flex-grow"></div>
-            <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor"><X className="w-5 h-5" /></Button>
+            <button onClick={onClose} className={buttonClass} title="Fechar Editor"><X className="w-5 h-5" /></button>
         </div>
     );
 };
 
+
+// ============================================================================
+// --- Componente TextEditor (O Cérebro) ---
+// Agora ele gere o estado e passa props simples para a MenuBar.
+// ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
   onSave: (newContent: JSONContent) => Promise<any>;
@@ -139,6 +106,13 @@ interface TextEditorProps {
 }
 
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
+    const [activeStates, setActiveStates] = useState({
+        bold: false, italic: false, underline: false, bulletList: false, orderedList: false, 
+        blockquote: false, link: false, highlight: false, headingLevel: '0', fontSize: 'default'
+    });
+    const [highlightColor, setHighlightColor] = useState('#ffcc00');
+    const [currentColor, setCurrentColor] = useState('#000000');
+
     const debouncedSave = useDebouncedCallback((editor) => {
         onSave(editor.getJSON());
     }, 1000);
@@ -146,9 +120,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
             StarterKit, Highlight.configure({ multicolor: true }), TextStyle, Color,
-            Typography, YoutubeExtension.configure({ nocookie: true }),
-            Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, 
-            // FontSize // Desativado para o teste
+            Typography, Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, FontSize
         ],
         content: initialContent || '',
         editorProps: {
@@ -159,20 +131,70 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         onUpdate: ({ editor }) => {
             debouncedSave(editor);
         },
+        onSelectionUpdate: ({ editor }) => {
+            // Este é o único sítio que lê o estado do Tiptap e atualiza o estado do React
+            setActiveStates({
+                bold: editor.isActive('bold'),
+                italic: editor.isActive('italic'),
+                underline: editor.isActive('underline'),
+                bulletList: editor.isActive('bulletList'),
+                orderedList: editor.isActive('orderedList'),
+                blockquote: editor.isActive('blockquote'),
+                link: editor.isActive('link'),
+                highlight: editor.isActive('highlight'),
+                headingLevel: editor.isActive('heading', { level: 1 }) ? '1' : editor.isActive('heading', { level: 2 }) ? '2' : editor.isActive('heading', { level: 3 }) ? '3' : '0',
+                fontSize: editor.getAttributes('textStyle').fontSize || 'default'
+            });
+            setCurrentColor(editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000'));
+        }
     });
     
     useEffect(() => {
         if (editor && initialContent) {
             const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);
-            if (!isSame) {
-                editor.commands.setContent(initialContent, false);
-            }
+            if (!isSame) editor.commands.setContent(initialContent, false);
         }
     }, [initialContent, editor]);
 
+    // Handlers que serão passados para a MenuBar
+    const handlers = {
+        toggleBold: () => editor?.chain().focus().toggleBold().run(),
+        toggleItalic: () => editor?.chain().focus().toggleItalic().run(),
+        toggleUnderline: () => editor?.chain().focus().toggleUnderline().run(),
+        toggleBulletList: () => editor?.chain().focus().toggleBulletList().run(),
+        toggleOrderedList: () => editor?.chain().focus().toggleOrderedList().run(),
+        toggleBlockquote: () => editor?.chain().focus().toggleBlockquote().run(),
+        setLink: useCallback(() => {
+            if (!editor) return;
+            if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
+            const url = window.prompt('URL', editor.getAttributes('link').href);
+            if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+        }, [editor]),
+        toggleHighlight: () => editor?.chain().focus().toggleHighlight({ color: highlightColor }).run(),
+        handleHeadingChange: (value: string) => {
+            const level = parseInt(value);
+            if (level > 0) editor?.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+            else editor?.chain().focus().setParagraph().run();
+        },
+        handleFontSizeChange: (value: string) => {
+            if (value === 'default') editor?.chain().focus().unsetFontSize().run();
+            else editor?.chain().focus().setFontSize(value).run();
+        },
+        insertTable: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+        setColor: (color: string) => editor?.chain().focus().setColor(color).run(),
+    };
+
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            <MenuBar editor={editor} onClose={onClose} />
+            <MenuBar 
+                editor={editor} 
+                activeStates={activeStates}
+                handlers={handlers}
+                highlightColor={highlightColor}
+                setHighlightColor={setHighlightColor}
+                currentColor={currentColor}
+                onClose={onClose} 
+            />
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
