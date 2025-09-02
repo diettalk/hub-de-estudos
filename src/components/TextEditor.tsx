@@ -28,16 +28,38 @@ import { FontSize } from '@/lib/FontSize';
 const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
 
-    // Forçar a re-renderização quando o estado da seleção muda para atualizar os botões
-    const [_, setForceUpdate] = useState(0);
+    // --- ARQUITETURA CORRETA: Estado do React para os botões ---
+    const [activeStates, setActiveStates] = useState({
+        bold: false, italic: false, underline: false,
+        bulletList: false, orderedList: false, blockquote: false,
+        link: false, highlight: false,
+        headingLevel: '0', fontSize: 'default'
+    });
+
     useEffect(() => {
         if (editor) {
-            const update = () => setForceUpdate(val => val + 1);
-            editor.on('selectionUpdate', update);
-            editor.on('transaction', update);
+            const updateStates = () => {
+                setActiveStates({
+                    bold: editor.isActive('bold'),
+                    italic: editor.isActive('italic'),
+                    underline: editor.isActive('underline'),
+                    bulletList: editor.isActive('bulletList'),
+                    orderedList: editor.isActive('orderedList'),
+                    blockquote: editor.isActive('blockquote'),
+                    link: editor.isActive('link'),
+                    highlight: editor.isActive('highlight'),
+                    headingLevel: editor.isActive('heading', { level: 1 }) ? '1' : editor.isActive('heading', { level: 2 }) ? '2' : editor.isActive('heading', { level: 3 }) ? '3' : '0',
+                    fontSize: editor.getAttributes('textStyle').fontSize || 'default'
+                });
+            };
+            
+            editor.on('transaction', updateStates);
+            editor.on('selectionUpdate', updateStates);
+            updateStates(); // Chamada inicial
+
             return () => {
-                editor.off('selectionUpdate', update);
-                editor.off('transaction', update);
+                editor.off('transaction', updateStates);
+                editor.off('selectionUpdate', updateStates);
             };
         }
     }, [editor]);
@@ -53,44 +75,23 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
         editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
 
-    if (!editor) {
-        return null;
-    }
+    if (!editor) return null;
 
     const handleHeadingChange = (value: string) => {
         const level = parseInt(value);
-        if (level > 0) {
-            editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
-        } else {
-            editor.chain().focus().setParagraph().run();
-        }
+        if (level > 0) editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+        else editor.chain().focus().setParagraph().run();
     }
     
     const handleFontSizeChange = (value: string) => {
-        if (value === 'default') {
-            editor.chain().focus().unsetFontSize().run();
-        } else {
-            editor.chain().focus().setFontSize(value).run();
-        }
-    }
-
-    const getCurrentHeadingLevel = () => {
-        if (editor.isActive('heading', { level: 1 })) return '1';
-        if (editor.isActive('heading', { level: 2 })) return '2';
-        if (editor.isActive('heading', { level: 3 })) return '3';
-        return '0';
-    }
-
-    const getCurrentFontSize = () => {
-        return editor.getAttributes('textStyle').fontSize || 'default';
+        if (value === 'default') editor.chain().focus().unsetFontSize().run();
+        else editor.chain().focus().setFontSize(value).run();
     }
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <Select value={getCurrentHeadingLevel()} onValueChange={handleHeadingChange}>
-                <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Estilo" />
-                </SelectTrigger>
+            <Select value={activeStates.headingLevel} onValueChange={handleHeadingChange}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Estilo" /></SelectTrigger>
                 <SelectContent>
                     <SelectItem value="0"><div className="flex items-center gap-2"><Pilcrow className="w-4 h-4" />Parágrafo</div></SelectItem>
                     <SelectItem value="1"><div className="flex items-center gap-2"><Heading1 className="w-4 h-4" />Título 1</div></SelectItem>
@@ -99,10 +100,8 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </SelectContent>
             </Select>
 
-            <Select value={getCurrentFontSize()} onValueChange={handleFontSizeChange}>
-                <SelectTrigger className="w-[120px]">
-                    <SelectValue placeholder="Tamanho" />
-                </SelectTrigger>
+            <Select value={activeStates.fontSize} onValueChange={handleFontSizeChange}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Tamanho" /></SelectTrigger>
                 <SelectContent>
                      <SelectItem value="default"><div className="flex items-center gap-2"><CaseSensitive className="w-4 h-4" />Normal</div></SelectItem>
                      <SelectItem value="0.75rem"><span className="text-xs">Pequeno</span></SelectItem>
@@ -111,40 +110,33 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </SelectContent>
             </Select>
 
-            {/* --- CORREÇÃO FINAL: Usamos um useEffect para forçar a atualização --- */}
             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') ? 'bg-accent text-accent-foreground' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') ? 'bg-accent text-accent-foreground' : '')} title="Itálico"><Italic className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') ? 'bg-accent text-accent-foreground' : '')} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(activeStates.bold ? 'bg-accent text-accent-foreground' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(activeStates.italic ? 'bg-accent text-accent-foreground' : '')} title="Itálico"><Italic className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(activeStates.underline ? 'bg-accent text-accent-foreground' : '')} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
 
              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') ? 'bg-accent text-accent-foreground' : '')} title="Lista"><List className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') ? 'bg-accent text-accent-foreground' : '')} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={cn(editor.isActive('blockquote') ? 'bg-accent text-accent-foreground' : '')} title="Citação"><Blockquote className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(activeStates.bulletList ? 'bg-accent text-accent-foreground' : '')} title="Lista"><List className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(activeStates.orderedList ? 'bg-accent text-accent-foreground' : '')} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={cn(activeStates.blockquote ? 'bg-accent text-accent-foreground' : '')} title="Citação"><Blockquote className="w-4 h-4" /></Button>
             </div>
 
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') ? 'bg-accent text-accent-foreground' : '')} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Button>
-                
+                <Button variant="ghost" size="sm" onClick={setLink} className={cn(activeStates.link ? 'bg-accent text-accent-foreground' : '')} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Button>
                 <div className="flex items-center rounded bg-transparent border">
-                     <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') ? 'bg-accent text-accent-foreground' : '')} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button>
+                     <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(activeStates.highlight ? 'bg-accent text-accent-foreground' : '')} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button>
                      <input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer" title="Escolher Cor do Marca-Texto"/>
                 </div>
-                
                 <div className="flex items-center rounded bg-transparent border">
                     <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
                     <input type="color" onInput={event => editor.chain().focus().setColor((event.target as HTMLInputElement).value).run()} value={editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000')} className="w-6 h-6 p-0 border-none bg-transparent rounded cursor-pointer" title="Cor da Fonte" />
                 </div>
-                
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
             </div>
 
             <div className="flex-grow"></div>
-
-            <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor">
-                <X className="w-5 h-5" />
-            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor"><X className="w-5 h-5" /></Button>
         </div>
     );
 };
@@ -162,17 +154,9 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 
     const editor = useEditor({
         extensions: [
-            StarterKit,
-            Highlight.configure({ multicolor: true }),
-            TextStyle,
-            Color,
-            Typography,
-            YoutubeExtension.configure({ nocookie: true }),
-            Table.configure({ resizable: true }),
-            TableRow,
-            TableHeader,
-            TableCell,
-            FontSize
+            StarterKit, Highlight.configure({ multicolor: true }), TextStyle, Color,
+            Typography, YoutubeExtension.configure({ nocookie: true }),
+            Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, FontSize
         ],
         content: initialContent || '',
         editorProps: {
@@ -193,7 +177,6 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             }
         }
     }, [initialContent, editor]);
-
 
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
