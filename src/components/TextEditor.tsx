@@ -22,13 +22,11 @@ import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FontSize } from '@/lib/FontSize';
+// import { FontSize } from '@/lib/FontSize'; // Desativado para o teste
 
 
 const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
-
-    // --- ARQUITETURA CORRETA: Estado do React para os botões ---
     const [activeStates, setActiveStates] = useState({
         bold: false, italic: false, underline: false,
         bulletList: false, orderedList: false, blockquote: false,
@@ -55,7 +53,7 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
             
             editor.on('transaction', updateStates);
             editor.on('selectionUpdate', updateStates);
-            updateStates(); // Chamada inicial
+            updateStates();
 
             return () => {
                 editor.off('transaction', updateStates);
@@ -83,9 +81,10 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
         else editor.chain().focus().setParagraph().run();
     }
     
+    // O handler de tamanho de fonte permanece, mas não será usado
     const handleFontSizeChange = (value: string) => {
-        if (value === 'default') editor.chain().focus().unsetFontSize().run();
-        else editor.chain().focus().setFontSize(value).run();
+        // if (value === 'default') editor.chain().focus().unsetFontSize().run();
+        // else editor.chain().focus().setFontSize(value).run();
     }
 
     return (
@@ -100,15 +99,7 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </SelectContent>
             </Select>
 
-            <Select value={activeStates.fontSize} onValueChange={handleFontSizeChange}>
-                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Tamanho" /></SelectTrigger>
-                <SelectContent>
-                     <SelectItem value="default"><div className="flex items-center gap-2"><CaseSensitive className="w-4 h-4" />Normal</div></SelectItem>
-                     <SelectItem value="0.75rem"><span className="text-xs">Pequeno</span></SelectItem>
-                     <SelectItem value="1.25rem"><span className="text-lg">Grande</span></SelectItem>
-                     <SelectItem value="1.5rem"><span className="text-xl">Extra Grande</span></SelectItem>
-                </SelectContent>
-            </Select>
+            {/* O seletor de tamanho de fonte está temporariamente desativado */}
 
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(activeStates.bold ? 'bg-accent text-accent-foreground' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
@@ -156,7 +147,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         extensions: [
             StarterKit, Highlight.configure({ multicolor: true }), TextStyle, Color,
             Typography, YoutubeExtension.configure({ nocookie: true }),
-            Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, FontSize
+            Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, 
+            // FontSize // Desativado para o teste
         ],
         content: initialContent || '',
         editorProps: {
