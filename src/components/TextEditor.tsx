@@ -19,7 +19,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { useDebouncedCallback } from 'use-debounce';
-import { Button } from '@/components/ui/button'; // Usando o Button do shadcn
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -135,8 +135,17 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 
     const editor = useEditor({
         extensions: [
+            // --- CORREÇÃO: Configuração explícita do StarterKit ---
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },
+                bulletList: {
+                    keepMarks: true,
+                    keepAttributes: true, 
+                },
+                orderedList: {
+                    keepMarks: true,
+                    keepAttributes: true,
+                },
             }),
             Highlight.configure({ multicolor: true }), 
             TextStyle, 
