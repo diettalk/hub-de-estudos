@@ -27,8 +27,8 @@ import { FontSize } from '@/lib/FontSize';
 
 const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
-    
-    // Força a re-renderização quando o estado da seleção muda para atualizar os botões
+
+    // Forçar a re-renderização quando o estado da seleção muda para atualizar os botões
     const [_, setForceUpdate] = useState(0);
     useEffect(() => {
         if (editor) {
@@ -41,7 +41,6 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
             };
         }
     }, [editor]);
-
 
     const setLink = useCallback(() => {
         if (!editor) return;
@@ -112,7 +111,7 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </SelectContent>
             </Select>
 
-            {/* --- CORREÇÃO: Substituímos <Toggle> por <Button> com estilo condicional --- */}
+            {/* --- CORREÇÃO FINAL: Usamos um useEffect para forçar a atualização --- */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') ? 'bg-accent text-accent-foreground' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') ? 'bg-accent text-accent-foreground' : '')} title="Itálico"><Italic className="w-4 h-4" /></Button>
@@ -140,7 +139,6 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
             </div>
-
 
             <div className="flex-grow"></div>
 
