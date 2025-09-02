@@ -189,8 +189,6 @@ export default TextEditor;
 /* ========================================================================== */
 /* --- ESTILOS PARA LISTAS DE TAREFAS (TIPTAP TASK LISTS) --- */
 /* ========================================================================== */
-
-/* Remove o marcador de lista padrão, pois vamos usar uma checkbox customizada. */
 .ProseMirror ul[data-type="taskList"] {
     list-style: none;
     padding: 0;
