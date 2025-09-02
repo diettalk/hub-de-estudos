@@ -10,7 +10,7 @@ import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
-// --- MenuBar (Reconstruída do Zero - Adicionando Listas e Blocos) ---
+// --- MenuBar (Versão Estável com HTML Nativo) ---
 // ============================================================================
 interface MenuBarProps {
   editor: Editor;
@@ -18,7 +18,6 @@ interface MenuBarProps {
 }
 
 const MenuBar = ({ editor, onClose }: MenuBarProps) => {
-    // Estado para forçar a re-renderização e manter a UI dos botões atualizada.
     const [_, setForceUpdate] = useState(0);
     useEffect(() => {
         const updateListener = () => setForceUpdate(val => val + 1);
@@ -30,7 +29,6 @@ const MenuBar = ({ editor, onClose }: MenuBarProps) => {
         };
     }, [editor]);
 
-    // Classes de estilo para botões HTML puros, para manter a aparência.
     const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors";
     const activeClass = "bg-accent text-accent-foreground";
 
@@ -38,65 +36,27 @@ const MenuBar = ({ editor, onClose }: MenuBarProps) => {
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
             {/* GRUPO DE ESTILOS BÁSICOS */}
             <div className="flex items-center gap-1">
-                <button
-                    onClick={() => editor.chain().focus().toggleBold().run()}
-                    className={cn(buttonClass, editor.isActive('bold') ? activeClass : '')}
-                    title="Negrito"
-                >
-                    <Bold className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => editor.chain().focus().toggleItalic().run()}
-                    className={cn(buttonClass, editor.isActive('italic') ? activeClass : '')}
-                    title="Itálico"
-                >
-                    <Italic className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => editor.chain().focus().toggleUnderline().run()}
-                    className={cn(buttonClass, editor.isActive('underline') ? activeClass : '')}
-                    title="Sublinhado"
-                >
-                    <Underline className="w-4 h-4" />
-                </button>
+                <button onClick={() => editor.chain().focus().toggleBold().run()} className={cn(buttonClass, editor.isActive('bold') ? activeClass : '')} title="Negrito"><Bold className="w-4 h-4" /></button>
+                <button onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(buttonClass, editor.isActive('italic') ? activeClass : '')} title="Itálico"><Italic className="w-4 h-4" /></button>
+                <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(buttonClass, editor.isActive('underline') ? activeClass : '')} title="Sublinhado"><Underline className="w-4 h-4" /></button>
             </div>
 
             {/* GRUPO DE LISTAS E BLOCOS */}
             <div className="flex items-center gap-1">
-                <button
-                    onClick={() => editor.chain().focus().toggleBulletList().run()}
-                    className={cn(buttonClass, editor.isActive('bulletList') ? activeClass : '')}
-                    title="Lista"
-                >
-                    <List className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                    className={cn(buttonClass, editor.isActive('orderedList') ? activeClass : '')}
-                    title="Lista Numerada"
-                >
-                    <ListOrdered className="w-4 h-4" />
-                </button>
-                <button
-                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                    className={cn(buttonClass, editor.isActive('blockquote') ? activeClass : '')}
-                    title="Citação"
-                >
-                    <Blockquote className="w-4 h-4" />
-                </button>
+                <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(buttonClass, editor.isActive('bulletList') ? activeClass : '')} title="Lista"><List className="w-4 h-4" /></button>
+                <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(buttonClass, editor.isActive('orderedList') ? activeClass : '')} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></button>
+                <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={cn(buttonClass, editor.isActive('blockquote') ? activeClass : '')} title="Citação"><Blockquote className="w-4 h-4" /></button>
             </div>
             
             <div className="flex-grow"></div>
             
-            <button onClick={onClose} className={buttonClass} title="Fechar Editor">
-                <X className="w-5 h-5" />
-            </button>
+            <button onClick={onClose} className={buttonClass} title="Fechar Editor"><X className="w-5 h-5" /></button>
         </div>
     );
 };
 
 // ============================================================================
-// --- Componente TextEditor (Estrutura Estável) ---
+// --- Componente TextEditor (Arquitetura Final) ---
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -112,9 +72,16 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     }, 1000);
 
     const editor = useEditor({
-        // As extensões de lista e citação já fazem parte do StarterKit.
         extensions: [
-            StarterKit,
+            // CORREÇÃO FINAL: Configuração explícita para garantir que tudo seja incluído.
+            StarterKit.configure({
+                bold: true,
+                italic: true,
+                underline: true,
+                bulletList: true,
+                orderedList: true,
+                blockquote: true,
+            }),
         ],
         content: initialContent || '',
         editorProps: {
