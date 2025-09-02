@@ -186,3 +186,49 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 
 export default TextEditor;
 
+/* ========================================================================== */
+/* --- ESTILOS PARA LISTAS DE TAREFAS (TIPTAP TASK LISTS) --- */
+/* ========================================================================== */
+
+/* Remove o marcador de lista padrão, pois vamos usar uma checkbox customizada. */
+.ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding: 0;
+}
+
+/* Transforma o item da lista num contentor flexível. */
+/* Esta é a correção principal que coloca a checkbox e o texto lado a lado. */
+.ProseMirror li[data-type="taskItem"] {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* 8px de espaço entre a checkbox e o texto. */
+}
+
+/* Garante que a área da checkbox não encolha. */
+.ProseMirror li[data-type="taskItem"] > label {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* Permite que a área de texto cresça e ocupe o espaço restante. */
+.ProseMirror li[data-type="taskItem"] > div {
+    flex: 1 1 auto;
+}
+
+/* Estiliza a checkbox para se parecer com o resto da UI. */
+.ProseMirror li[data-type="taskItem"] input[type="checkbox"] {
+    cursor: pointer;
+    width: 1rem; /* 16px */
+    height: 1rem; /* 16px */
+    margin-right: 0.5rem;
+}
+
+/* Quando uma tarefa é marcada como concluída, adiciona um risco ao texto */
+/* e muda a cor para uma mais subtil, indicando que está feita. */
+.ProseMirror li[data-type="taskItem"][data-checked="true"] > div > p {
+    text-decoration: line-through;
+    color: hsl(var(--muted-foreground));
+}
+
