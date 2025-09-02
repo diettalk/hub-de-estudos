@@ -15,8 +15,6 @@ import Typography from '@tiptap/extension-typography';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 import { FontSize } from '@/lib/FontSize';
-
-// --- CORREÇÃO: Adicionando as importações que faltavam ---
 import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
@@ -24,10 +22,10 @@ import TableCell from '@tiptap/extension-table-cell';
 import YoutubeExtension from '@tiptap/extension-youtube';
 
 // ============================================================================
-// --- Componente MenuBar (Arquitetura Estável) ---
+// --- Componente MenuBar (Reconstruído do Zero com HTML Nativo) ---
 // ============================================================================
 interface MenuBarProps {
-  editor: Editor; // Agora é garantido que o editor existe
+  editor: Editor;
   activeStates: {
     bold: boolean; italic: boolean; underline: boolean;
     bulletList: boolean; orderedList: boolean; blockquote: boolean;
@@ -50,20 +48,20 @@ interface MenuBarProps {
   onClose: () => void;
 }
 
-const MenuBar = ({ editor, activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
-    const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50";
+const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
+    const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors";
     const activeClass = "bg-accent text-accent-foreground";
-    const selectTriggerClass = "flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-[130px]";
+    const selectClass = "h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 w-[130px]";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <select value={activeStates.headingLevel} onChange={(e) => handlers.handleHeadingChange(e.target.value)} className={selectTriggerClass}>
+            <select value={activeStates.headingLevel} onChange={(e) => handlers.handleHeadingChange(e.target.value)} className={selectClass}>
                 <option value="0">Parágrafo</option>
                 <option value="1">Título 1</option>
                 <option value="2">Título 2</option>
                 <option value="3">Título 3</option>
             </select>
-            <select value={activeStates.fontSize} onChange={(e) => handlers.handleFontSizeChange(e.target.value)} className={selectTriggerClass}>
+            <select value={activeStates.fontSize} onChange={(e) => handlers.handleFontSizeChange(e.target.value)} className={selectClass}>
                 <option value="default">Normal</option>
                 <option value="0.75rem">Pequeno</option>
                 <option value="1.25rem">Grande</option>
