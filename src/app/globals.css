@@ -47,9 +47,7 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
   }
-}
- 
-@layer base {
+
   * {
     @apply border-border;
   }
@@ -116,18 +114,19 @@
   .mini-sidebar > div {
     height: 100% !important;
     overflow-y: auto !important;
-    &::-webkit-scrollbar {
-      width: 8px;
-    }
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    &::-webkit-scrollbar-thumb {
-      background-color: hsl(var(--border));
-      border-radius: 10px;
-      border: 2px solid hsl(var(--card));
-    }
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
   }
+  .mini-sidebar > div::-webkit-scrollbar {
+    width: 8px;
+  }
+  .mini-sidebar > div::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .mini-sidebar > div::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 10px;
+    border: 2px solid hsl(var(--card));
+  }
 }
+
