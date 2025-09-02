@@ -18,9 +18,9 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Typography from '@tiptap/extension-typography';
 import { useDebouncedCallback } from 'use-debounce';
+import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
-import { Toggle } from '@/components/ui/toggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FontSize } from '@/lib/FontSize';
 
@@ -38,15 +38,6 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
         if (url === null || url === '') return;
         editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
-
-    const addYoutubeVideo = useCallback(() => {
-        if (!editor) return;
-        const url = prompt('Cole a URL do vídeo do YouTube:');
-        if (url) {
-            editor.commands.setYoutubeVideo({ src: url });
-        }
-    }, [editor]);
-
 
     if (!editor) {
         return null;
@@ -80,10 +71,8 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
         return editor.getAttributes('textStyle').fontSize || 'default';
     }
 
-
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            
             <Select value={getCurrentHeadingLevel()} onValueChange={handleHeadingChange}>
                 <SelectTrigger className="w-[120px]">
                     <SelectValue placeholder="Estilo" />
@@ -107,25 +96,25 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                      <SelectItem value="1.5rem"><span className="text-xl">Extra Grande</span></SelectItem>
                 </SelectContent>
             </Select>
-            
-            {/* --- PASSO DE DEPURAÇÃO 3: Reativando os TOGGLES --- */}
+
+            {/* --- CORREÇÃO: Substituímos <Toggle> por <Button> com estilo condicional --- */}
             <div className="flex items-center gap-1">
-                <Toggle size="sm" pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></Toggle>
-                <Toggle size="sm" pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-4 h-4" /></Toggle>
-                <Toggle size="sm" pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado"><Underline className="w-4 h-4" /></Toggle>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') ? 'bg-accent' : '')} title="Negrito"><Bold className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') ? 'bg-accent' : '')} title="Itálico"><Italic className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') ? 'bg-accent' : '')} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
 
              <div className="flex items-center gap-1">
-                <Toggle size="sm" pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} title="Lista"><List className="w-4 h-4" /></Toggle>
-                <Toggle size="sm" pressed={editor.isActive('orderedList')} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Toggle>
-                <Toggle size="sm" pressed={editor.isActive('blockquote')} onPressedChange={() => editor.chain().focus().toggleBlockquote().run()} title="Citação"><Blockquote className="w-4 h-4" /></Toggle>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') ? 'bg-accent' : '')} title="Lista"><List className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') ? 'bg-accent' : '')} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} className={cn(editor.isActive('blockquote') ? 'bg-accent' : '')} title="Citação"><Blockquote className="w-4 h-4" /></Button>
             </div>
 
             <div className="flex items-center gap-2">
-                <Toggle size="sm" pressed={editor.isActive('link')} onPressedChange={setLink} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Toggle>
+                <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') ? 'bg-accent' : '')} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Button>
                 
                 <div className="flex items-center rounded bg-transparent border">
-                     <Toggle size="sm" pressed={editor.isActive('highlight')} onPressedChange={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} title="Marca Texto"><Highlighter className="w-4 h-4" /></Toggle>
+                     <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') ? 'bg-accent' : '')} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button>
                      <input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer" title="Escolher Cor do Marca-Texto"/>
                 </div>
                 
@@ -135,7 +124,6 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </div>
                 
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></Button>
             </div>
 
 
