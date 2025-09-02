@@ -4,13 +4,13 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
-import { Italic, Bold, X } from 'lucide-react';
+import { Italic, Bold, X, Underline } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
-// --- MenuBar (Reconstruída do Zero - Versão Mínima) ---
+// --- MenuBar (Reconstruída do Zero - Adicionando Estilos Básicos) ---
 // ============================================================================
 interface MenuBarProps {
   editor: Editor;
@@ -36,7 +36,7 @@ const MenuBar = ({ editor, onClose }: MenuBarProps) => {
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            {/* GRUPO DE TESTE: Apenas um botão funcional para garantir a estabilidade. */}
+            {/* GRUPO DE ESTILOS BÁSICOS */}
             <div className="flex items-center gap-1">
                 <button
                     onClick={() => editor.chain().focus().toggleBold().run()}
@@ -45,7 +45,20 @@ const MenuBar = ({ editor, onClose }: MenuBarProps) => {
                 >
                     <Bold className="w-4 h-4" />
                 </button>
-                 <p className="text-xs text-muted-foreground">[Modo de Reconstrução]</p>
+                <button
+                    onClick={() => editor.chain().focus().toggleItalic().run()}
+                    className={cn(buttonClass, editor.isActive('italic') ? activeClass : '')}
+                    title="Itálico"
+                >
+                    <Italic className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={() => editor.chain().focus().toggleUnderline().run()}
+                    className={cn(buttonClass, editor.isActive('underline') ? activeClass : '')}
+                    title="Sublinhado"
+                >
+                    <Underline className="w-4 h-4" />
+                </button>
             </div>
             
             <div className="flex-grow"></div>
@@ -74,7 +87,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     }, 1000);
 
     const editor = useEditor({
-        // Usamos apenas o StarterKit para garantir a estabilidade máxima neste passo.
+        // A extensão Underline faz parte do StarterKit, então não precisamos de a adicionar.
         extensions: [
             StarterKit,
         ],
