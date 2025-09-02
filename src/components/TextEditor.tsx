@@ -20,80 +20,113 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import YoutubeExtension from '@tiptap/extension-youtube';
+import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // ============================================================================
-// --- Componente MenuBar (Reconstruído do Zero com HTML Nativo) ---
+// --- Componente MenuBar ---
 // ============================================================================
 interface MenuBarProps {
   editor: Editor;
-  activeStates: {
-    bold: boolean; italic: boolean; underline: boolean;
-    bulletList: boolean; orderedList: boolean; blockquote: boolean;
-    link: boolean; highlight: boolean;
-    headingLevel: string; fontSize: string;
-  };
-  handlers: {
-    toggleBold: () => void; toggleItalic: () => void; toggleUnderline: () => void;
-    toggleBulletList: () => void; toggleOrderedList: () => void; toggleBlockquote: () => void;
-    setLink: () => void; toggleHighlight: () => void;
-    handleHeadingChange: (value: string) => void;
-    handleFontSizeChange: (value: string) => void;
-    insertTable: () => void;
-    setColor: (color: string) => void;
-    addYoutubeVideo: () => void;
-  };
-  highlightColor: string;
-  setHighlightColor: (color: string) => void;
-  currentColor: string;
   onClose: () => void;
 }
 
-const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
-    const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors";
-    const activeClass = "bg-accent text-accent-foreground";
-    const selectClass = "h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 w-[130px]";
+const MenuBar = ({ editor, onClose }: MenuBarProps) => {
+    const [highlightColor, setHighlightColor] = useState('#ffcc00');
+    
+    // Força a re-renderização quando o estado muda para que a UI dos botões se atualize.
+    const [_, setForceUpdate] = useState(0);
+    useEffect(() => {
+        const updateListener = () => setForceUpdate(val => val + 1);
+        editor.on('transaction', updateListener);
+        editor.on('selectionUpdate', updateListener);
+        return () => {
+            editor.off('transaction', updateListener);
+            editor.off('selectionUpdate', updateListener);
+        };
+    }, [editor]);
+
+    const setLink = useCallback(() => {
+        if (editor.isActive('link')) {
+            return editor.chain().focus().unsetLink().run();
+        }
+        const url = window.prompt('URL', editor.getAttributes('link').href);
+        if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }, [editor]);
+
+    const addYoutubeVideo = useCallback(() => {
+        const url = prompt('Cole a URL do vídeo do YouTube:');
+        if (url) editor.commands.setYoutubeVideo({ src: url });
+    }, [editor]);
+
+    const handleHeadingChange = (value: string) => {
+        const level = parseInt(value);
+        if (level > 0) editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+        else editor.chain().focus().setParagraph().run();
+    }
+    
+    const handleFontSizeChange = (value: string) => {
+        if (value === 'default') editor.chain().focus().unsetFontSize().run();
+        else editor.chain().focus().setFontSize(value).run();
+    }
+
+    const getCurrentHeadingLevel = () => {
+        if (editor.isActive('heading', { level: 1 })) return '1';
+        if (editor.isActive('heading', { level: 2 })) return '2';
+        if (editor.isActive('heading', { level: 3 })) return '3';
+        return '0';
+    }
+
+    const getCurrentFontSize = () => editor.getAttributes('textStyle').fontSize || 'default';
+    const currentColor = editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000');
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <select value={activeStates.headingLevel} onChange={(e) => handlers.handleHeadingChange(e.target.value)} className={selectClass}>
-                <option value="0">Parágrafo</option>
-                <option value="1">Título 1</option>
-                <option value="2">Título 2</option>
-                <option value="3">Título 3</option>
-            </select>
-            <select value={activeStates.fontSize} onChange={(e) => handlers.handleFontSizeChange(e.target.value)} className={selectClass}>
-                <option value="default">Normal</option>
-                <option value="0.75rem">Pequeno</option>
-                <option value="1.25rem">Grande</option>
-                <option value="1.5rem">Extra Grande</option>
-            </select>
+            <Select value={getCurrentHeadingLevel()} onValueChange={handleHeadingChange}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Estilo" /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="0"><div className="flex items-center gap-2"><Pilcrow className="w-4 h-4" />Parágrafo</div></SelectItem>
+                    <SelectItem value="1"><div className="flex items-center gap-2"><Heading1 className="w-4 h-4" />Título 1</div></SelectItem>
+                    <SelectItem value="2"><div className="flex items-center gap-2"><Heading2 className="w-4 h-4" />Título 2</div></SelectItem>
+                    <SelectItem value="3"><div className="flex items-center gap-2"><Heading3 className="w-4 h-4" />Título 3</div></SelectItem>
+                </SelectContent>
+            </Select>
+            <Select value={getCurrentFontSize()} onValueChange={handleFontSizeChange}>
+                <SelectTrigger className="w-[120px]"><SelectValue placeholder="Tamanho" /></SelectTrigger>
+                <SelectContent>
+                     <SelectItem value="default"><div className="flex items-center gap-2"><CaseSensitive className="w-4 h-4" />Normal</div></SelectItem>
+                     <SelectItem value="0.75rem"><span className="text-xs">Pequeno</span></SelectItem>
+                     <SelectItem value="1.25rem"><span className="text-lg">Grande</span></SelectItem>
+                     <SelectItem value="1.5rem"><span className="text-xl">Extra Grande</span></SelectItem>
+                </SelectContent>
+            </Select>
 
             <div className="flex items-center gap-1">
-                <button onClick={handlers.toggleBold} className={cn(buttonClass, activeStates.bold && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></button>
-                <button onClick={handlers.toggleItalic} className={cn(buttonClass, activeStates.italic && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></button>
-                <button onClick={handlers.toggleUnderline} className={cn(buttonClass, activeStates.underline && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></button>
+                <Toggle size="sm" pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado"><Underline className="w-4 h-4" /></Toggle>
             </div>
 
             <div className="flex items-center gap-1">
-                <button onClick={handlers.toggleBulletList} className={cn(buttonClass, activeStates.bulletList && activeClass)} title="Lista"><List className="w-4 h-4" /></button>
-                <button onClick={handlers.toggleOrderedList} className={cn(buttonClass, activeStates.orderedList && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></button>
-                <button onClick={handlers.toggleBlockquote} className={cn(buttonClass, activeStates.blockquote && activeClass)} title="Citação"><Blockquote className="w-4 h-4" /></button>
+                <Toggle size="sm" pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} title="Lista"><List className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('orderedList')} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('blockquote')} onPressedChange={() => editor.chain().focus().toggleBlockquote().run()} title="Citação"><Blockquote className="w-4 h-4" /></Toggle>
             </div>
 
             <div className="flex items-center gap-2">
-                <button onClick={handlers.setLink} className={cn(buttonClass, activeStates.link && activeClass)} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></button>
-                <div className="flex items-center rounded border"><button onClick={handlers.toggleHighlight} className={cn(buttonClass, activeStates.highlight && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
-                <div className="flex items-center rounded border"><Palette className="w-4 h-4 mx-1 text-muted-foreground" /><input type="color" onInput={(e) => handlers.setColor((e.target as HTMLInputElement).value)} value={currentColor} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
-                <button onClick={handlers.insertTable} className={buttonClass} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
-                <button onClick={handlers.addYoutubeVideo} className={buttonClass} title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
+                <Toggle size="sm" pressed={editor.isActive('link')} onPressedChange={setLink} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Toggle>
+                <div className="flex items-center rounded border"><Toggle size="sm" pressed={editor.isActive('highlight')} onPressedChange={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} title="Marca Texto"><Highlighter className="w-4 h-4" /></Toggle><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
+                <div className="flex items-center rounded border"><Palette className="w-4 h-4 mx-1 text-muted-foreground" /><input type="color" onInput={(e) => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()} value={currentColor} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></Button>
             </div>
 
             <div className="flex-grow"></div>
-            <button onClick={onClose} className={buttonClass} title="Fechar Editor"><X className="w-5 h-5" /></button>
+            <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor"><X className="w-5 h-5" /></Button>
         </div>
     );
 };
-
 
 // ============================================================================
 // --- Componente TextEditor (O Cérebro) ---
@@ -105,12 +138,7 @@ interface TextEditorProps {
 }
 
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
-    const [activeStates, setActiveStates] = useState({
-        bold: false, italic: false, underline: false, bulletList: false, orderedList: false, 
-        blockquote: false, link: false, highlight: false, headingLevel: '0', fontSize: 'default'
-    });
-    const [highlightColor, setHighlightColor] = useState('#ffcc00');
-    const [currentColor, setCurrentColor] = useState('#000000');
+    const [isEditorReady, setIsEditorReady] = useState(false);
 
     const debouncedSave = useDebouncedCallback((editor) => {
         onSave(editor.getJSON());
@@ -131,21 +159,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         onUpdate: ({ editor }) => {
             debouncedSave(editor);
         },
-        onSelectionUpdate: ({ editor }) => {
-            setActiveStates({
-                bold: editor.isActive('bold'),
-                italic: editor.isActive('italic'),
-                underline: editor.isActive('underline'),
-                bulletList: editor.isActive('bulletList'),
-                orderedList: editor.isActive('orderedList'),
-                blockquote: editor.isActive('blockquote'),
-                link: editor.isActive('link'),
-                highlight: editor.isActive('highlight'),
-                headingLevel: editor.isActive('heading', { level: 1 }) ? '1' : editor.isActive('heading', { level: 2 }) ? '2' : editor.isActive('heading', { level: 3 }) ? '3' : '0',
-                fontSize: editor.getAttributes('textStyle').fontSize || 'default'
-            });
-            setCurrentColor(editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000'));
-        }
+        // --- A CORREÇÃO FINAL: Usamos o onCreate para garantir que o editor está pronto ---
+        onCreate: () => {
+            setIsEditorReady(true);
+        },
     });
     
     useEffect(() => {
@@ -155,51 +172,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         }
     }, [initialContent, editor]);
 
-    const handlers = {
-        toggleBold: () => editor?.chain().focus().toggleBold().run(),
-        toggleItalic: () => editor?.chain().focus().toggleItalic().run(),
-        toggleUnderline: () => editor?.chain().focus().toggleUnderline().run(),
-        toggleBulletList: () => editor?.chain().focus().toggleBulletList().run(),
-        toggleOrderedList: () => editor?.chain().focus().toggleOrderedList().run(),
-        toggleBlockquote: () => editor?.chain().focus().toggleBlockquote().run(),
-        setLink: useCallback(() => {
-            if (!editor) return;
-            if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
-            const url = window.prompt('URL', editor.getAttributes('link').href);
-            if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-        }, [editor]),
-        toggleHighlight: () => editor?.chain().focus().toggleHighlight({ color: highlightColor }).run(),
-        handleHeadingChange: (value: string) => {
-            const level = parseInt(value);
-            if (level > 0) editor?.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
-            else editor?.chain().focus().setParagraph().run();
-        },
-        handleFontSizeChange: (value: string) => {
-            if (value === 'default') editor?.chain().focus().unsetFontSize().run();
-            else editor?.chain().focus().setFontSize(value).run();
-        },
-        insertTable: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
-        setColor: (color: string) => editor?.chain().focus().setColor(color).run(),
-        addYoutubeVideo: useCallback(() => {
-            if (!editor) return;
-            const url = prompt('Cole a URL do vídeo do YouTube:');
-            if (url) editor.commands.setYoutubeVideo({ src: url });
-        }, [editor]),
-    };
-
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            {editor && (
-                <MenuBar 
-                    editor={editor} 
-                    activeStates={activeStates}
-                    handlers={handlers}
-                    highlightColor={highlightColor}
-                    setHighlightColor={setHighlightColor}
-                    currentColor={currentColor}
-                    onClose={onClose} 
-                />
-            )}
+            {/* A MenuBar só é renderizada quando o editor nos der o "sinal verde" */}
+            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
