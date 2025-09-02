@@ -31,16 +31,66 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
         return null;
     }
 
+    // Lógica dos handlers que os Selects precisam
+    const handleHeadingChange = (value: string) => {
+        const level = parseInt(value);
+        if (level > 0) {
+            editor.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 }).run();
+        } else {
+            editor.chain().focus().setParagraph().run();
+        }
+    }
+    
+    const handleFontSizeChange = (value: string) => {
+        if (value === 'default') {
+            editor.chain().focus().unsetFontSize().run();
+        } else {
+            editor.chain().focus().setFontSize(value).run();
+        }
+    }
+
+    const getCurrentHeadingLevel = () => {
+        if (editor.isActive('heading', { level: 1 })) return '1';
+        if (editor.isActive('heading', { level: 2 })) return '2';
+        if (editor.isActive('heading', { level: 3 })) return '3';
+        return '0';
+    }
+
+    const getCurrentFontSize = () => {
+        return editor.getAttributes('textStyle').fontSize || 'default';
+    }
+
+
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
             
-            {/* --- PASSO DE DEPURAÇÃO 1 --- */}
-            {/* Todos os componentes interativos foram removidos temporariamente. */}
-            <p className="text-sm text-muted-foreground">Teste de Depuração da Barra de Ferramentas Ativo.</p>
+            {/* --- PASSO DE DEPURAÇÃO 2: Reativando os SELECTS --- */}
+            <Select value={getCurrentHeadingLevel()} onValueChange={handleHeadingChange}>
+                <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Estilo" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="0"><div className="flex items-center gap-2"><Pilcrow className="w-4 h-4" />Parágrafo</div></SelectItem>
+                    <SelectItem value="1"><div className="flex items-center gap-2"><Heading1 className="w-4 h-4" />Título 1</div></SelectItem>
+                    <SelectItem value="2"><div className="flex items-center gap-2"><Heading2 className="w-4 h-4" />Título 2</div></SelectItem>
+                    <SelectItem value="3"><div className="flex items-center gap-2"><Heading3 className="w-4 h-4" />Título 3</div></SelectItem>
+                </SelectContent>
+            </Select>
+
+            <Select value={getCurrentFontSize()} onValueChange={handleFontSizeChange}>
+                <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Tamanho" />
+                </SelectTrigger>
+                <SelectContent>
+                     <SelectItem value="default"><div className="flex items-center gap-2"><CaseSensitive className="w-4 h-4" />Normal</div></SelectItem>
+                     <SelectItem value="0.75rem"><span className="text-xs">Pequeno</span></SelectItem>
+                     <SelectItem value="1.25rem"><span className="text-lg">Grande</span></SelectItem>
+                     <SelectItem value="1.5rem"><span className="text-xl">Extra Grande</span></SelectItem>
+                </SelectContent>
+            </Select>
             
             <div className="flex-grow"></div>
 
-            {/* Mantemos apenas o botão de fechar, que já provou ser estável. */}
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor">
                 <X className="w-5 h-5" />
             </Button>
