@@ -1,57 +1,33 @@
-/* Estilos para as tabelas no editor Tiptap */
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-  table-layout: fixed;
-  overflow: hidden;
+/* Estilos para a lista de tarefas do Tiptap */
+.ProseMirror ul[data-type="taskList"] {
+    list-style: none;
+    padding: 0;
 }
 
-.prose th,
-.prose td {
-  border: 1px solid #4b5563; /* Cor da borda cinza escuro */
-  padding: 0.75rem;
-  vertical-align: top;
-  position: relative;
+.ProseMirror li[data-type="taskItem"] {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* 8px */
 }
 
-.prose th {
-  font-weight: bold;
-  text-align: left;
-  background-color: #374151; /* Cor de fundo para o cabeçalho */
+.ProseMirror li[data-type="taskItem"] > label {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
 }
 
-/* Estilo para redimensionamento de colunas */
-.column-resizing {
-  background-color: #4f46e5; /* Cor primária */
-  opacity: 0.5;
+.ProseMirror li[data-type="taskItem"] > div {
+    flex: 1 1 auto;
 }
 
-.resize-cursor {
-  cursor: col-resize;
+.ProseMirror li[data-type="taskItem"] input[type="checkbox"] {
+    cursor: pointer;
+    width: 1rem; /* 16px */
+    height: 1rem; /* 16px */
 }
 
-/* Célula selecionada */
-.prose .selectedCell:after {
-  z-index: 2;
-  position: absolute;
-  content: "";
-  left: 0; right: 0; top: 0; bottom: 0;
-  background: rgba(79, 70, 229, 0.15);
-  pointer-events: none;
-}
-
-/* Estilo para links dentro do editor */
-.tiptap a {
-  color: #818cf8; /* Cor roxa/azul para links */
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* Estilo para os vídeos do YouTube ficarem responsivos */
-.tiptap iframe {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9; /* Proporção de vídeo widescreen */
-  border-radius: 8px;
+/* Estilos para o estado "concluído" */
+.ProseMirror li[data-type="taskItem"][data-checked="true"] > div > p {
+    text-decoration: line-through;
+    color: hsl(var(--muted-foreground));
 }
