@@ -28,32 +28,12 @@ import FontFamily from '@tiptap/extension-font-family';
 import './TextEditor.css';
 
 // ============================================================================
-// --- Componente MenuBar (Reconstruído para ser Puramente Visual) ---
+// --- Componente MenuBar (Versão Final e Estável) ---
 // ============================================================================
-
-/**
- * Props para o componente MenuBar.
- * Este componente é "burro", recebendo todo o seu estado e lógica do componente pai.
- */
-interface MenuBarProps {
-  editor: Editor;
-  onClose: () => void;
-}
-
-/**
- * A barra de ferramentas visual do editor.
- * Não contém lógica de estado complexa; apenas renderiza botões e chama
- * as funções de handler fornecidas pelo componente pai (TextEditor).
- * Usamos React.memo para otimizar a performance, evitando re-renderizações
- * desnecessárias se as props não mudarem.
- */
-const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
-    // --- State Interno da MenuBar (Apenas para elementos da UI) ---
+const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     
-    // --- Forçar Re-renderização para Sincronia da UI ---
-    // Um truque simples para garantir que a UI da barra de ferramentas (botões ativos)
-    // se atualize sempre que a seleção ou o conteúdo do editor mudar.
+    // Um truque simples para garantir que a UI da barra de ferramentas se atualize
     const [_, setForceUpdate] = useState(0);
     useEffect(() => {
         const updateListener = () => setForceUpdate(val => val + 1);
@@ -65,7 +45,6 @@ const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
         };
     }, [editor]);
 
-    // --- Handlers de Ações ---
     const setLink = useCallback(() => {
         if (editor.isActive('link')) {
             return editor.chain().focus().unsetLink().run();
@@ -79,14 +58,11 @@ const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
         if (url) editor.commands.setYoutubeVideo({ src: url });
     }, [editor]);
 
-    // --- Constantes de Estilo ---
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
-    // --- Renderização ---
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            {/* GRUPO: FONTES E TÍTULOS */}
             <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
@@ -104,7 +80,13 @@ const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
             <select
                 className={cn(selectClass, "w-[120px]")}
                 value={editor.getAttributes('textStyle').fontFamily || 'default'}
-                onChange={(e) => e.target.value === 'default' ? editor.chain().focus().unsetFontFamily().run() : editor.chain().focus().setFontFamily(e.target.value).run()}
+                onChange={(e) => {
+                    if (e.target.value === 'default') {
+                        editor.chain().focus().unsetFontFamily().run();
+                    } else {
+                        editor.chain().focus().setFontFamily(e.target.value).run();
+                    }
+                }}
             >
                 <option value="default">Padrão</option>
                 <option value="Inter">Inter</option>
@@ -112,21 +94,18 @@ const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
                 <option value="monospace">Mono</option>
             </select>
             
-            {/* GRUPO: ESTILOS BÁSICOS */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
             
-            {/* GRUPO: LISTAS */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') && activeClass)} title="Lista"><List className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
 
-            {/* GRUPO: INSERÇÃO E CORES */}
             <div className="flex items-center gap-2">
                  <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                  <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
@@ -140,11 +119,10 @@ const MenuBar = React.memo(({ editor, onClose }: MenuBarProps) => {
         </div>
     );
 });
-MenuBar.displayName = 'MenuBar'; // Nome para facilitar a depuração no React DevTools
-
+MenuBar.displayName = 'MenuBar';
 
 // ============================================================================
-// --- Componente Principal TextEditor (O Cérebro da Operação) ---
+// --- Componente Principal TextEditor ---
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -152,36 +130,19 @@ interface TextEditorProps {
   onClose: () => void;
 }
 
-/**
- * O componente principal do editor.
- * É responsável por:
- * 1. Inicializar e gerir a instância do editor Tiptap.
- * 2. Lidar com o estado de carregamento para evitar erros de hidratação.
- * 3. Gerir o salvamento automático (debounced).
- * 4. Passar o estado e os handlers para o componente MenuBar.
- */
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
-    // --- State Management ---
     const [isEditorReady, setIsEditorReady] = useState(false);
+    const debouncedSave = useDebouncedCallback((editor) => onSave(editor.getJSON()), 1000);
 
-    // --- Debounced Save Callback ---
-    const debouncedSave = useDebouncedCallback((editor) => {
-        onSave(editor.getJSON());
-    }, 1000);
-
-    // --- Editor Instance ---
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                // Configuração explícita para garantir que as extensões funcionem.
                 heading: { levels: [1, 2, 3] },
             }),
             Highlight.configure({ multicolor: true }), 
             TextStyle, 
             Color,
-            FontFamily.configure({
-                types: ['textStyle'], // Permite que a fonte seja aplicada a qualquer texto
-            }),
+            FontFamily.configure({ types: ['textStyle'] }),
             TaskList,
             TaskItem.configure({ nested: true }),
             Table.configure({ resizable: true }), 
@@ -196,19 +157,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
             },
         },
-        onUpdate: ({ editor }) => {
-            debouncedSave(editor);
-        },
-        // A solução para o erro do React: só consideramos o editor pronto
-        // quando o Tiptap nos dá o "sinal verde".
-        onCreate: () => {
-            setIsEditorReady(true);
-        },
+        onUpdate: ({ editor }) => debouncedSave(editor),
+        onCreate: () => setIsEditorReady(true),
     });
     
-    // --- Effects ---
-    // Este efeito garante que, se o utilizador clicar noutro documento,
-    // o conteúdo do editor seja atualizado corretamente.
     useEffect(() => {
         if (editor && initialContent) {
             const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);
@@ -216,10 +168,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         }
     }, [initialContent, editor]);
 
-    // --- Render Logic ---
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            {/* A MenuBar só é renderizada quando o editor está 100% pronto */}
             {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>

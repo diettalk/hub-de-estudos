@@ -114,58 +114,30 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
-  .ProseMirror table th,
-  .ProseMirror table td {
-    border: 1px solid hsl(var(--border));
+  /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO --- */
+  .ProseMirror {
+    /* CORREÇÃO: Aplicamos os estilos de fonte diretamente aqui */
+    font-family: 'Inter', sans-serif;
+  }
+  .ProseMirror:focus {
+    outline: none;
+  }
+  /* Estilos para Títulos */
+  .ProseMirror h1 { @apply text-3xl font-bold my-4; }
+  .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
+  .ProseMirror h3 { @apply text-xl font-semibold my-2; }
+  /* Estilos para Listas, garantindo que os marcadores sejam visíveis */
+  .ProseMirror ul, .ProseMirror ol {
+    @apply list-inside my-4 pl-4;
+  }
+  .ProseMirror li::marker {
     color: hsl(var(--foreground));
-    background-color: transparent !important; 
   }
-
-  .ProseMirror table th {
-      font-weight: bold;
-  }
-}
-
-/* Estilos para o Calendário */
-.day-with-event {
-  position: relative;
-  font-weight: 700 !important;
-  color: hsl(var(--destructive)) !important;
-}
-
-.day-with-event::after {
-  content: '';
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background-color: hsl(var(--destructive));
-}
-
-.rdp {
-    --rdp-cell-size: 40px;
-    --rdp-caption-font-size: 1rem;
-    --rdp-background-color: hsl(var(--card));
-    --rdp-color: hsl(var(--foreground));
-    --rdp-accent-color: hsl(var(--primary));
-    --rdp-accent-color-dark: hsl(var(--primary));
-    --rdp-outline: 2px solid hsl(var(--primary));
-    --rdp-outline-selected: 3px solid hsl(var(--primary));
-}
-
-.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
-    background-color: hsl(var(--primary)) !important;
-    color: hsl(var(--primary-foreground)) !important;
-}
-
-.rdp-day_selected.day-with-event::after {
-    background-color: hsl(var(--primary-foreground));
-}
-
+  /* Estilos para Fontes */
+  .ProseMirror [style*="font-family: Inter"] { font-family: 'Inter', sans-serif; }
+  .ProseMirror [style*="font-family: serif"] { font-family: serif; }
+  .ProseMirror [style*="font-family: monospace"] { font-family: monospace; }
+  
 /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO E MINI-SIDEBAR --- */
 .ProseMirror {
     padding: 1rem;
