@@ -114,28 +114,42 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO --- */
-  .ProseMirror {
-    font-family: 'Inter', sans-serif;
+  /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO (Typography Plugin) --- */
+  .prose {
+    /* Reseta as cores padrão do plugin para usar as nossas variáveis de tema */
+    --tw-prose-body: hsl(var(--foreground));
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-lead: hsl(var(--muted-foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-counters: hsl(var(--foreground)); /* CORREÇÃO */
+    --tw-prose-bullets: hsl(var(--foreground)); /* CORREÇÃO */
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-quotes: hsl(var(--foreground));
+    --tw-prose-quote-borders: hsl(var(--border));
+    --tw-prose-captions: hsl(var(--muted-foreground));
+    --tw-prose-code: hsl(var(--foreground));
+    --tw-prose-pre-code: hsl(var(--foreground));
+    --tw-prose-pre-bg: hsl(var(--muted));
+    --tw-prose-th-borders: hsl(var(--border));
+    --tw-prose-td-borders: hsl(var(--border));
+    --tw-prose-invert-body: hsl(var(--foreground));
+    --tw-prose-invert-headings: hsl(var(--foreground));
+    --tw-prose-invert-lead: hsl(var(--muted-foreground));
+    --tw-prose-invert-links: hsl(var(--primary));
+    --tw-prose-invert-bold: hsl(var(--foreground));
+    --tw-prose-invert-counters: hsl(var(--foreground)); /* CORREÇÃO */
+    --tw-prose-invert-bullets: hsl(var(--foreground)); /* CORREÇÃO */
+    --tw-prose-invert-hr: hsl(var(--border));
+    --tw-prose-invert-quotes: hsl(var(--foreground));
+    --tw-prose-invert-quote-borders: hsl(var(--border));
+    --tw-prose-invert-captions: hsl(var(--muted-foreground));
+    --tw-prose-invert-code: hsl(var(--foreground));
+    --tw-prose-invert-pre-code: hsl(var(--foreground));
+    --tw-prose-invert-pre-bg: hsl(var(--muted));
+    --tw-prose-invert-th-borders: hsl(var(--border));
+    --tw-prose-invert-td-borders: hsl(var(--border));
   }
-  .ProseMirror:focus {
-    outline: none;
-  }
-  /* Estilos para Títulos */
-  .ProseMirror h1 { @apply text-3xl font-bold my-4; }
-  .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
-  .ProseMirror h3 { @apply text-xl font-semibold my-2; }
-  /* Estilos para Listas, garantindo que os marcadores sejam visíveis */
-  .ProseMirror ul, .ProseMirror ol {
-    @apply list-inside my-4 pl-4;
-  }
-  .ProseMirror li::marker {
-    color: hsl(var(--foreground));
-  }
-  /* Estilos para Fontes */
-  .ProseMirror [style*="font-family: Inter"] { font-family: 'Inter', sans-serif; }
-  .ProseMirror [style*="font-family: serif"] { font-family: serif; }
-  .ProseMirror [style*="font-family: monospace"] { font-family: monospace; }
   
   /* --- ESTILOS DA MINI-SIDEBAR --- */
   .mini-sidebar > div {
@@ -156,3 +170,4 @@
     border: 2px solid hsl(var(--card));
   }
 }
+
