@@ -35,6 +35,7 @@ interface MenuBarProps {
 const MenuBar = ({ editor, onClose }: MenuBarProps) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     
+    // Força a re-renderização quando o estado muda para que a UI dos botões se atualize.
     const [_, setForceUpdate] = useState(0);
     useEffect(() => {
         const updateListener = () => setForceUpdate(val => val + 1);
