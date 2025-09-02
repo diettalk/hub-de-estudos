@@ -114,50 +114,64 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO --- */
-  .ProseMirror {
-    font-family: 'Inter', sans-serif;
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  .ProseMirror table th,
+  .ProseMirror table td {
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    background-color: transparent !important; 
   }
-  .ProseMirror:focus {
-    outline: none;
+
+  .ProseMirror table th {
+      font-weight: bold;
   }
   
-  /* --- CORREÇÃO DEFINITIVA PARA ESTILOS DO EDITOR --- */
-  /* Aplicamos os estilos de tipografia diretamente aos elementos dentro do editor */
+  /* --- ESTILOS DEFINITIVOS PARA O EDITOR DE TEXTO --- */
   .ProseMirror h1 { @apply text-3xl font-bold my-4; }
   .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
   .ProseMirror h3 { @apply text-xl font-semibold my-2; }
+  .ProseMirror ul { @apply list-disc list-outside pl-6; }
+  .ProseMirror ol { @apply list-decimal list-outside pl-6; }
+  .ProseMirror li > p { @apply my-0; } /* Remove margem extra em parágrafos dentro de listas */
+  .ProseMirror li::marker { color: hsl(var(--muted-foreground)); }
+}
 
-  /* Corrigimos as listas para serem visíveis e corretamente alinhadas */
-  .ProseMirror ul { @apply list-disc list-outside pl-6 my-4; }
-  .ProseMirror ol { @apply list-decimal list-outside pl-6 my-4; }
-  .ProseMirror li { @apply my-1; }
-  .ProseMirror li::marker {
-    color: hsl(var(--foreground));
-  }
-  
-  /* Garantimos que as fontes customizadas sejam aplicadas */
-  .ProseMirror [style*="font-family: Inter"] { font-family: 'Inter', sans-serif; }
-  .ProseMirror [style*="font-family: serif"] { font-family: serif; }
-  .ProseMirror [style*="font-family: monospace"] { font-family: monospace; }
-  
-  /* --- ESTILOS DA MINI-SIDEBAR --- */
-  .mini-sidebar > div {
-    height: 100% !important;
-    overflow-y: auto !important;
-    scrollbar-width: thin;
-    scrollbar-color: hsl(var(--border)) transparent;
-  }
-  .mini-sidebar > div::-webkit-scrollbar {
-    width: 8px;
-  }
-  .mini-sidebar > div::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .mini-sidebar > div::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
-    border-radius: 10px;
-    border: 2px solid hsl(var(--card));
-  }
+/* Estilos para o Calendário */
+.day-with-event {
+  position: relative;
+  font-weight: 700 !important;
+  color: hsl(var(--destructive)) !important;
+}
+
+.day-with-event::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: hsl(var(--destructive));
+}
+
+.rdp {
+    --rdp-cell-size: 40px;
+    --rdp-caption-font-size: 1rem;
+    --rdp-background-color: hsl(var(--card));
+    --rdp-color: hsl(var(--foreground));
+    --rdp-accent-color: hsl(var(--primary));
+    --rdp-accent-color-dark: hsl(var(--primary));
+    --rdp-outline: 2px solid hsl(var(--primary));
+    --rdp-outline-selected: 3px solid hsl(var(--primary));
+}
+
+.rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+    background-color: hsl(var(--primary)) !important;
+    color: hsl(var(--primary-foreground)) !important;
+}
+
+.rdp-day_selected.day-with-event::after {
+    background-color: hsl(var(--primary-foreground));
 }
 

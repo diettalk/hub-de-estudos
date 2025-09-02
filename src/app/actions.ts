@@ -969,3 +969,51 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
     }
 }
 
+// --- FUNÇÕES EM FALTA ADICIONADAS PARA CORRIGIR O BUILD ---
+
+export async function updateConcursosOrdem(updates: { id: number, ordem: number }[]) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+
+    try {
+        const updatePromises = updates.map(item => 
+            supabase.from('concursos')
+                .update({ ordem: item.ordem })
+                .eq('id', item.id)
+                .eq('user_id', user.id)
+        );
+        
+        const results = await Promise.all(updatePromises);
+        const firstError = results.find(res => res.error);
+        if (firstError) throw firstError.error;
+
+        revalidatePath('/guia-estudos');
+        return { success: true };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Erro desconhecido";
+        return { error: `Falha ao salvar a nova ordem: ${message}` };
+    }
+}
+
+export async function updateAnkiDeck(deckId: number, title: string, cards: Flashcard[]) {
+    const supabase = createServerActionClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Utilizador não autenticado." };
+    
+    if (!title.trim()) return { error: "O título é obrigatório." };
+    if (cards.length === 0) return { error: "Não há flashcards para guardar." };
+
+    const { error } = await supabase
+        .from('anki_decks')
+        .update({ title, cards })
+        .match({ id: deckId, user_id: user.id });
+
+    if (error) {
+        return { error: "Falha ao atualizar o deck." };
+    }
+
+    revalidatePath('/anki');
+    return { success: true };
+}
+
