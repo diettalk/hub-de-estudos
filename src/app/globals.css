@@ -114,79 +114,55 @@
     @apply bg-background text-foreground;
   }
 
+  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  .ProseMirror table th,
+  .ProseMirror table td {
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    background-color: transparent !important; 
+  }
+
+  .ProseMirror table th {
+      font-weight: bold;
+  }
+  
   /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO --- */
   .ProseMirror {
-    /* CORREÇÃO: Aplicamos os estilos de fonte diretamente aqui */
     font-family: 'Inter', sans-serif;
   }
   .ProseMirror:focus {
     outline: none;
   }
-  /* Estilos para Títulos */
   .ProseMirror h1 { @apply text-3xl font-bold my-4; }
   .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
   .ProseMirror h3 { @apply text-xl font-semibold my-2; }
-  /* Estilos para Listas, garantindo que os marcadores sejam visíveis */
   .ProseMirror ul, .ProseMirror ol {
     @apply list-inside my-4 pl-4;
   }
   .ProseMirror li::marker {
     color: hsl(var(--foreground));
   }
-  /* Estilos para Fontes */
   .ProseMirror [style*="font-family: Inter"] { font-family: 'Inter', sans-serif; }
   .ProseMirror [style*="font-family: serif"] { font-family: serif; }
   .ProseMirror [style*="font-family: monospace"] { font-family: monospace; }
   
-/* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO E MINI-SIDEBAR --- */
-.ProseMirror {
-    padding: 1rem;
-    line-height: 1.7;
-    white-space: pre-wrap;
-}
-.ProseMirror:focus {
-    outline: none;
-}
-.ProseMirror p {
-    margin-bottom: 1rem;
-}
-.ProseMirror [style*="font-size: 0.75rem"] { @apply text-xs; }
-.ProseMirror [style*="font-size: 1.25rem"] { @apply text-lg; }
-.ProseMirror [style*="font-size: 1.5rem"] { @apply text-xl; }
-
-.ProseMirror .selectedCell:after {
-    z-index: 2;
-    position: absolute;
-    content: "";
-    left: 0; right: 0; top: 0; bottom: 0;
-    background: rgba(200, 200, 255, 0.4);
-    pointer-events: none;
-}
-.ProseMirror .column-resize-handle {
-    position: absolute;
-    right: -2px; top: 0; bottom: 0;
-    width: 4px;
-    background-color: #adf;
-    pointer-events: none;
-}
-.mini-sidebar {
-    height: 100%;
-}
-.mini-sidebar > div {
+  /* --- ESTILOS DA MINI-SIDEBAR --- */
+  .mini-sidebar > div {
     height: 100% !important;
     overflow-y: auto !important;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
-}
-.mini-sidebar > div::-webkit-scrollbar {
+  }
+  .mini-sidebar > div::-webkit-scrollbar {
     width: 8px;
-}
-.mini-sidebar > div::-webkit-scrollbar-track {
+  }
+  .mini-sidebar > div::-webkit-scrollbar-track {
     background: transparent;
-}
-.mini-sidebar > div::-webkit-scrollbar-thumb {
+  }
+  .mini-sidebar > div::-webkit-scrollbar-thumb {
     background-color: hsl(var(--border));
     border-radius: 10px;
     border: 2px solid hsl(var(--card));
+  }
 }
 
