@@ -18,9 +18,16 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     const searchParams = useSearchParams();
     const [selectedPage, setSelectedPage] = useState(initialPage);
 
+    // --- CORREÇÃO FINAL: Estado para atrasar a renderização do editor ---
+    const [isMounted, setIsMounted] = useState(false);
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+
     useEffect(() => {
         const id = searchParams.get('page');
-         if (id && initialPage && String(initialPage.id) === id) {
+        if (id && initialPage && Number(id) === initialPage.id) {
             setSelectedPage(initialPage);
         } else if (!id) {
             setSelectedPage(null);
@@ -32,36 +39,26 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         await updatePaginaContent(selectedPage.id, newContent);
     };
 
-    // NOVO LAYOUT: Se uma página estiver selecionada, mostramos a mini-sidebar e o editor.
-    if (selectedPage) {
+    if (selectedPage && isMounted) {
         return (
-             <div className="grid grid-cols-[300px_1fr] h-full gap-4 p-4">
-                {/* Coluna da Esquerda: Mini-Sidebar de Navegação */}
-                <div className="h-full flex flex-col">
-                     <h2 className="text-lg font-bold uppercase tracking-wider mb-4 pb-4 border-b">NAVEGAR</h2>
-                     <div className="flex-grow overflow-hidden -mr-2 pr-2 mini-sidebar">
-                          <HierarchicalSidebar 
-                             treeData={paginaTree} 
-                             table="paginas"
-                             title=""
-                          />
-                     </div>
-                </div>
-
-                {/* Coluna da Direita: Editor de Texto */}
-                <div className="h-full w-full">
-                    <TextEditor
-                        key={selectedPage.id}
-                        initialContent={selectedPage.content}
-                        onSave={handleSave}
-                        onClose={() => router.push('/disciplinas')}
+             <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 h-full p-4">
+                <div className="mini-sidebar hidden md:block">
+                    <HierarchicalSidebar 
+                        treeData={paginaTree} 
+                        table="paginas"
+                        title="NAVEGAR"
                     />
                 </div>
+                <TextEditor
+                    key={selectedPage.id}
+                    initialContent={selectedPage.content}
+                    onSave={handleSave}
+                    onClose={() => router.push('/disciplinas')}
+                />
             </div>
         );
     }
 
-    // Layout Padrão: Apenas a sidebar principal
     return (
         <div className="h-full p-4">
             <HierarchicalSidebar 
@@ -72,3 +69,4 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         </div>
     );
 }
+
