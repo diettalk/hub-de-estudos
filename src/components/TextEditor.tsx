@@ -4,13 +4,13 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
-import { Italic, Bold, X, Underline } from 'lucide-react';
+import { Italic, Bold, X, Underline, List, ListOrdered, Blockquote } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
-// --- MenuBar (Reconstruída do Zero - Adicionando Estilos Básicos) ---
+// --- MenuBar (Reconstruída do Zero - Adicionando Listas e Blocos) ---
 // ============================================================================
 interface MenuBarProps {
   editor: Editor;
@@ -60,6 +60,31 @@ const MenuBar = ({ editor, onClose }: MenuBarProps) => {
                     <Underline className="w-4 h-4" />
                 </button>
             </div>
+
+            {/* GRUPO DE LISTAS E BLOCOS */}
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => editor.chain().focus().toggleBulletList().run()}
+                    className={cn(buttonClass, editor.isActive('bulletList') ? activeClass : '')}
+                    title="Lista"
+                >
+                    <List className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                    className={cn(buttonClass, editor.isActive('orderedList') ? activeClass : '')}
+                    title="Lista Numerada"
+                >
+                    <ListOrdered className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                    className={cn(buttonClass, editor.isActive('blockquote') ? activeClass : '')}
+                    title="Citação"
+                >
+                    <Blockquote className="w-4 h-4" />
+                </button>
+            </div>
             
             <div className="flex-grow"></div>
             
@@ -87,7 +112,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     }, 1000);
 
     const editor = useEditor({
-        // A extensão Underline faz parte do StarterKit, então não precisamos de a adicionar.
+        // As extensões de lista e citação já fazem parte do StarterKit.
         extensions: [
             StarterKit,
         ],
