@@ -26,12 +26,32 @@ import { FontSize } from '@/lib/FontSize';
 
 
 const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => void; }) => {
-    // A lógica interna permanece, mas a renderização dos componentes da UI está desativada.
+    const [highlightColor, setHighlightColor] = useState('#ffcc00');
+
+    const setLink = useCallback(() => {
+        if (!editor) return;
+        if (editor.isActive('link')) {
+            return editor.chain().focus().unsetLink().run();
+        }
+        const previousUrl = editor.getAttributes('link').href;
+        const url = window.prompt('URL', previousUrl);
+        if (url === null || url === '') return;
+        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }, [editor]);
+
+    const addYoutubeVideo = useCallback(() => {
+        if (!editor) return;
+        const url = prompt('Cole a URL do vídeo do YouTube:');
+        if (url) {
+            editor.commands.setYoutubeVideo({ src: url });
+        }
+    }, [editor]);
+
+
     if (!editor) {
         return null;
     }
 
-    // Lógica dos handlers que os Selects precisam
     const handleHeadingChange = (value: string) => {
         const level = parseInt(value);
         if (level > 0) {
@@ -64,7 +84,6 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
             
-            {/* --- PASSO DE DEPURAÇÃO 2: Reativando os SELECTS --- */}
             <Select value={getCurrentHeadingLevel()} onValueChange={handleHeadingChange}>
                 <SelectTrigger className="w-[120px]">
                     <SelectValue placeholder="Estilo" />
@@ -89,6 +108,37 @@ const MenuBar = ({ editor, onClose }: { editor: Editor | null; onClose: () => vo
                 </SelectContent>
             </Select>
             
+            {/* --- PASSO DE DEPURAÇÃO 3: Reativando os TOGGLES --- */}
+            <div className="flex items-center gap-1">
+                <Toggle size="sm" pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title="Negrito"><Bold className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title="Itálico"><Italic className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado"><Underline className="w-4 h-4" /></Toggle>
+            </div>
+
+             <div className="flex items-center gap-1">
+                <Toggle size="sm" pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} title="Lista"><List className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('orderedList')} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Toggle>
+                <Toggle size="sm" pressed={editor.isActive('blockquote')} onPressedChange={() => editor.chain().focus().toggleBlockquote().run()} title="Citação"><Blockquote className="w-4 h-4" /></Toggle>
+            </div>
+
+            <div className="flex items-center gap-2">
+                <Toggle size="sm" pressed={editor.isActive('link')} onPressedChange={setLink} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></Toggle>
+                
+                <div className="flex items-center rounded bg-transparent border">
+                     <Toggle size="sm" pressed={editor.isActive('highlight')} onPressedChange={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} title="Marca Texto"><Highlighter className="w-4 h-4" /></Toggle>
+                     <input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer" title="Escolher Cor do Marca-Texto"/>
+                </div>
+                
+                <div className="flex items-center rounded bg-transparent border">
+                    <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
+                    <input type="color" onInput={event => editor.chain().focus().setColor((event.target as HTMLInputElement).value).run()} value={editor.getAttributes('textStyle').color || (typeof window !== 'undefined' && document.body.classList.contains('dark') ? '#ffffff' : '#000000')} className="w-6 h-6 p-0 border-none bg-transparent rounded cursor-pointer" title="Cor da Fonte" />
+                </div>
+                
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></Button>
+            </div>
+
+
             <div className="flex-grow"></div>
 
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar Editor">
