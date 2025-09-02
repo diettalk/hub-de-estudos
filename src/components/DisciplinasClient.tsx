@@ -40,21 +40,25 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
     if (selectedPage && isMounted) {
         return (
-             <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 h-full p-4">
-                {/* --- CORREÇÃO DA SIDEBAR: Adicionamos 'flex flex-col' para que o filho ocupe toda a altura --- */}
-                <div className="mini-sidebar hidden md:block h-full flex flex-col">
-                    <HierarchicalSidebar 
-                        treeData={paginaTree} 
-                        table="paginas"
-                        title="NAVEGAR"
+             <div className="flex gap-4 h-full p-4">
+                <div className="hidden md:block w-[300px] flex-shrink-0">
+                    {/* A sidebar agora é "pegajosa" (sticky) e tem uma altura máxima */}
+                    <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
+                        <HierarchicalSidebar 
+                            treeData={paginaTree} 
+                            table="paginas"
+                            title="NAVEGAR"
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 min-w-0"> {/* Garante que o editor possa encolher */}
+                    <TextEditor
+                        key={selectedPage.id} // A chave garante que o editor reinicie ao mudar de pág
+                        initialContent={selectedPage.content}
+                        onSave={handleSave}
+                        onClose={() => router.push('/disciplinas')}
                     />
                 </div>
-                <TextEditor
-                    key={selectedPage.id}
-                    initialContent={selectedPage.content}
-                    onSave={handleSave}
-                    onClose={() => router.push('/disciplinas')}
-                />
             </div>
         );
     }

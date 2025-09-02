@@ -159,16 +159,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         },
     });
 
-    // --- CORREÇÃO DO "ENTER": Apenas atualiza se o conteúdo for diferente ---
-    useEffect(() => {
-        if (editor && initialContent) {
-            const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);
-            if (!isSame) {
-                editor.commands.setContent(initialContent, false);
-            }
-        }
-    }, [initialContent, editor]);
-
+    // --- CORREÇÃO DEFINITIVA DO "ENTER": Removemos o useEffect ---
+    // A propriedade `key` nos componentes `...Client` agora é a única
+    // responsável por recriar o editor quando o documento muda.
+    // Isto evita a re-renderização que causava o bug do cursor.
 
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card">

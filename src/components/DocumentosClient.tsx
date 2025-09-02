@@ -18,6 +18,7 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
     const searchParams = useSearchParams();
     const [selectedDocument, setSelectedDocument] = useState(initialDocument);
     
+    // Este estado garante que o editor só renderize no cliente, evitando erros de hidratação.
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
@@ -39,21 +40,26 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
 
     if (selectedDocument && isMounted) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 h-full p-4">
-                {/* --- CORREÇÃO DA SIDEBAR: Adicionamos 'flex flex-col' para que o filho ocupe toda a altura --- */}
-                <div className="mini-sidebar hidden md:block h-full flex flex-col">
-                    <HierarchicalSidebar 
-                        treeData={documentTree} 
-                        table="documentos"
-                        title="NAVEGAR"
+            // --- CORREÇÃO DA SIDEBAR: Trocamos Grid por Flexbox para um layout mais dinâmico ---
+            <div className="flex gap-4 h-full p-4">
+                <div className="hidden md:block w-[300px] flex-shrink-0">
+                    {/* A sidebar agora é "pegajosa" (sticky) e tem uma altura máxima */}
+                    <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
+                        <HierarchicalSidebar 
+                            treeData={documentTree} 
+                            table="documentos"
+                            title="NAVEGAR"
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 min-w-0"> {/* Garante que o editor possa encolher */}
+                    <TextEditor
+                        key={selectedDocument.id} // A chave garante que o editor reinicie ao mudar de doc
+                        initialContent={selectedDocument.content}
+                        onSave={handleSave}
+                        onClose={() => router.push('/documentos')}
                     />
                 </div>
-                <TextEditor
-                    key={selectedDocument.id}
-                    initialContent={selectedDocument.content}
-                    onSave={handleSave}
-                    onClose={() => router.push('/documentos')}
-                />
             </div>
         );
     }
