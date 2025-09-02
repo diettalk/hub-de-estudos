@@ -159,6 +159,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         },
     });
 
+    // --- CORREÇÃO DO "ENTER": Apenas atualiza se o conteúdo for diferente ---
     useEffect(() => {
         if (editor && initialContent) {
             const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);

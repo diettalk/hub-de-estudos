@@ -18,7 +18,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     const searchParams = useSearchParams();
     const [selectedPage, setSelectedPage] = useState(initialPage);
 
-    // --- CORREÇÃO FINAL: Estado para atrasar a renderização do editor ---
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
@@ -42,7 +41,8 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     if (selectedPage && isMounted) {
         return (
              <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4 h-full p-4">
-                <div className="mini-sidebar hidden md:block">
+                {/* --- CORREÇÃO DA SIDEBAR: Adicionamos 'flex flex-col' para que o filho ocupe toda a altura --- */}
+                <div className="mini-sidebar hidden md:block h-full flex flex-col">
                     <HierarchicalSidebar 
                         treeData={paginaTree} 
                         table="paginas"
