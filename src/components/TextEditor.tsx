@@ -19,7 +19,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { useDebouncedCallback } from 'use-debounce';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button'; // Usando o Button do shadcn
 import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -28,12 +28,11 @@ import FontFamily from '@tiptap/extension-font-family';
 import './TextEditor.css';
 
 // ============================================================================
-// --- Componente MenuBar (Versão Final e Estável) ---
+// --- MenuBar (Versão Final e Estável) ---
 // ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     
-    // Um truque simples para garantir que a UI da barra de ferramentas se atualize
     const [_, setForceUpdate] = useState(0);
     useEffect(() => {
         const updateListener = () => setForceUpdate(val => val + 1);

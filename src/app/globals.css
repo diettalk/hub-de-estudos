@@ -114,18 +114,6 @@
     @apply bg-background text-foreground;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
-  .ProseMirror table th,
-  .ProseMirror table td {
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--foreground));
-    background-color: transparent !important; 
-  }
-
-  .ProseMirror table th {
-      font-weight: bold;
-  }
-  
   /* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO --- */
   .ProseMirror {
     font-family: 'Inter', sans-serif;
@@ -133,15 +121,18 @@
   .ProseMirror:focus {
     outline: none;
   }
+  /* Estilos para Títulos */
   .ProseMirror h1 { @apply text-3xl font-bold my-4; }
   .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
   .ProseMirror h3 { @apply text-xl font-semibold my-2; }
+  /* Estilos para Listas, garantindo que os marcadores sejam visíveis */
   .ProseMirror ul, .ProseMirror ol {
     @apply list-inside my-4 pl-4;
   }
   .ProseMirror li::marker {
     color: hsl(var(--foreground));
   }
+  /* Estilos para Fontes */
   .ProseMirror [style*="font-family: Inter"] { font-family: 'Inter', sans-serif; }
   .ProseMirror [style*="font-family: serif"] { font-family: serif; }
   .ProseMirror [style*="font-family: monospace"] { font-family: monospace; }
@@ -165,4 +156,3 @@
     border: 2px solid hsl(var(--card));
   }
 }
-
