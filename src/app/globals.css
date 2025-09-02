@@ -119,7 +119,6 @@
   .ProseMirror table td {
     border: 1px solid hsl(var(--border));
     color: hsl(var(--foreground));
-    /* CORREÇÃO: Usamos !important para garantir que esta regra seja aplicada */
     background-color: transparent !important; 
   }
 
@@ -166,3 +165,56 @@
 .rdp-day_selected.day-with-event::after {
     background-color: hsl(var(--primary-foreground));
 }
+
+/* --- ESTILOS ADICIONADOS PARA O EDITOR DE TEXTO E MINI-SIDEBAR --- */
+.ProseMirror {
+    padding: 1rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+}
+.ProseMirror:focus {
+    outline: none;
+}
+.ProseMirror p {
+    margin-bottom: 1rem;
+}
+.ProseMirror [style*="font-size: 0.75rem"] { @apply text-xs; }
+.ProseMirror [style*="font-size: 1.25rem"] { @apply text-lg; }
+.ProseMirror [style*="font-size: 1.5rem"] { @apply text-xl; }
+
+.ProseMirror .selectedCell:after {
+    z-index: 2;
+    position: absolute;
+    content: "";
+    left: 0; right: 0; top: 0; bottom: 0;
+    background: rgba(200, 200, 255, 0.4);
+    pointer-events: none;
+}
+.ProseMirror .column-resize-handle {
+    position: absolute;
+    right: -2px; top: 0; bottom: 0;
+    width: 4px;
+    background-color: #adf;
+    pointer-events: none;
+}
+.mini-sidebar {
+    height: 100%;
+}
+.mini-sidebar > div {
+    height: 100% !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+}
+.mini-sidebar > div::-webkit-scrollbar {
+    width: 8px;
+}
+.mini-sidebar > div::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mini-sidebar > div::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 10px;
+    border: 2px solid hsl(var(--card));
+}
+
