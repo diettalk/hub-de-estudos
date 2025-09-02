@@ -5,7 +5,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
 import { 
-    Italic, Bold, Link as LinkIcon, Highlighter, Table as TableIcon, Underline, X, Pilcrow, Heading1, Heading2, Heading3, List, ListOrdered, Blockquote, CaseSensitive, Palette
+    Italic, Bold, Link as LinkIcon, Highlighter, Table as TableIcon, Underline, X, Pilcrow, Heading1, Heading2, Heading3, List, ListOrdered, Blockquote, CaseSensitive, Palette, Youtube
 } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
@@ -16,13 +16,18 @@ import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 import { FontSize } from '@/lib/FontSize';
 
-// ============================================================================
-// --- Componente MenuBar (Reconstruído do Zero) ---
-// Este componente agora é "burro". Ele apenas recebe o estado e as funções
-// como propriedades, sem nunca interagir diretamente com o editor do Tiptap.
-// ============================================================================
+// --- CORREÇÃO: Adicionando as importações que faltavam ---
+import { Table } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import YoutubeExtension from '@tiptap/extension-youtube';
 
+// ============================================================================
+// --- Componente MenuBar (Arquitetura Estável) ---
+// ============================================================================
 interface MenuBarProps {
+  editor: Editor; // Agora é garantido que o editor existe
   activeStates: {
     bold: boolean; italic: boolean; underline: boolean;
     bulletList: boolean; orderedList: boolean; blockquote: boolean;
@@ -37,6 +42,7 @@ interface MenuBarProps {
     handleFontSizeChange: (value: string) => void;
     insertTable: () => void;
     setColor: (color: string) => void;
+    addYoutubeVideo: () => void;
   };
   highlightColor: string;
   setHighlightColor: (color: string) => void;
@@ -44,15 +50,13 @@ interface MenuBarProps {
   onClose: () => void;
 }
 
-const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
-    // Usamos botões HTML puros para garantir estabilidade máxima.
+const MenuBar = ({ editor, activeStates, handlers, highlightColor, setHighlightColor, currentColor, onClose }: MenuBarProps) => {
     const buttonClass = "p-2 rounded inline-flex items-center justify-center text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50";
     const activeClass = "bg-accent text-accent-foreground";
     const selectTriggerClass = "flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-[130px]";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            {/* GRUPO: ESTILO E TAMANHO */}
             <select value={activeStates.headingLevel} onChange={(e) => handlers.handleHeadingChange(e.target.value)} className={selectTriggerClass}>
                 <option value="0">Parágrafo</option>
                 <option value="1">Título 1</option>
@@ -66,26 +70,24 @@ const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, cu
                 <option value="1.5rem">Extra Grande</option>
             </select>
 
-            {/* GRUPO: ESTILOS BÁSICOS */}
             <div className="flex items-center gap-1">
                 <button onClick={handlers.toggleBold} className={cn(buttonClass, activeStates.bold && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></button>
                 <button onClick={handlers.toggleItalic} className={cn(buttonClass, activeStates.italic && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></button>
                 <button onClick={handlers.toggleUnderline} className={cn(buttonClass, activeStates.underline && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></button>
             </div>
 
-            {/* GRUPO: LISTAS E BLOCOS */}
             <div className="flex items-center gap-1">
                 <button onClick={handlers.toggleBulletList} className={cn(buttonClass, activeStates.bulletList && activeClass)} title="Lista"><List className="w-4 h-4" /></button>
                 <button onClick={handlers.toggleOrderedList} className={cn(buttonClass, activeStates.orderedList && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></button>
                 <button onClick={handlers.toggleBlockquote} className={cn(buttonClass, activeStates.blockquote && activeClass)} title="Citação"><Blockquote className="w-4 h-4" /></button>
             </div>
 
-            {/* GRUPO: CORES E INSERÇÃO */}
             <div className="flex items-center gap-2">
                 <button onClick={handlers.setLink} className={cn(buttonClass, activeStates.link && activeClass)} title="Adicionar Link"><LinkIcon className="w-4 h-4" /></button>
                 <div className="flex items-center rounded border"><button onClick={handlers.toggleHighlight} className={cn(buttonClass, activeStates.highlight && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
                 <div className="flex items-center rounded border"><Palette className="w-4 h-4 mx-1 text-muted-foreground" /><input type="color" onInput={(e) => handlers.setColor((e.target as HTMLInputElement).value)} value={currentColor} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
                 <button onClick={handlers.insertTable} className={buttonClass} title="Inserir Tabela"><TableIcon className="w-4 h-4" /></button>
+                <button onClick={handlers.addYoutubeVideo} className={buttonClass} title="Inserir Vídeo do YouTube"><Youtube className="w-4 h-4" /></button>
             </div>
 
             <div className="flex-grow"></div>
@@ -97,7 +99,6 @@ const MenuBar = ({ activeStates, handlers, highlightColor, setHighlightColor, cu
 
 // ============================================================================
 // --- Componente TextEditor (O Cérebro) ---
-// Agora ele gere o estado e passa props simples para a MenuBar.
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -120,7 +121,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const editor = useEditor({
         extensions: [
             StarterKit, Highlight.configure({ multicolor: true }), TextStyle, Color,
-            Typography, Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, FontSize
+            Typography, Table.configure({ resizable: true }), TableRow, TableHeader, TableCell, FontSize,
+            YoutubeExtension.configure({ nocookie: true })
         ],
         content: initialContent || '',
         editorProps: {
@@ -132,7 +134,6 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             debouncedSave(editor);
         },
         onSelectionUpdate: ({ editor }) => {
-            // Este é o único sítio que lê o estado do Tiptap e atualiza o estado do React
             setActiveStates({
                 bold: editor.isActive('bold'),
                 italic: editor.isActive('italic'),
@@ -156,7 +157,6 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         }
     }, [initialContent, editor]);
 
-    // Handlers que serão passados para a MenuBar
     const handlers = {
         toggleBold: () => editor?.chain().focus().toggleBold().run(),
         toggleItalic: () => editor?.chain().focus().toggleItalic().run(),
@@ -182,19 +182,26 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         },
         insertTable: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
         setColor: (color: string) => editor?.chain().focus().setColor(color).run(),
+        addYoutubeVideo: useCallback(() => {
+            if (!editor) return;
+            const url = prompt('Cole a URL do vídeo do YouTube:');
+            if (url) editor.commands.setYoutubeVideo({ src: url });
+        }, [editor]),
     };
 
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            <MenuBar 
-                editor={editor} 
-                activeStates={activeStates}
-                handlers={handlers}
-                highlightColor={highlightColor}
-                setHighlightColor={setHighlightColor}
-                currentColor={currentColor}
-                onClose={onClose} 
-            />
+            {editor && (
+                <MenuBar 
+                    editor={editor} 
+                    activeStates={activeStates}
+                    handlers={handlers}
+                    highlightColor={highlightColor}
+                    setHighlightColor={setHighlightColor}
+                    currentColor={currentColor}
+                    onClose={onClose} 
+                />
+            )}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
