@@ -42,18 +42,17 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         return (
              <div className="flex gap-4 h-full p-4">
                 <div className="hidden md:block w-[300px] flex-shrink-0">
-                    {/* A sidebar agora é "pegajosa" (sticky) e tem uma altura máxima */}
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
-                            treeData={paginaTree} 
+                            treeData={paginaTree} // IDs devem ser string!
                             table="paginas"
                             title="NAVEGAR"
                         />
                     </div>
                 </div>
-                <div className="flex-1 min-w-0"> {/* Garante que o editor possa encolher */}
+                <div className="flex-1 min-w-0">
                     <TextEditor
-                        key={selectedPage.id} // A chave garante que o editor reinicie ao mudar de pág
+                        key={selectedPage.id}
                         initialContent={selectedPage.content}
                         onSave={handleSave}
                         onClose={() => router.push('/disciplinas')}
@@ -63,13 +62,16 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         );
     }
 
+    // Sidebar ocupa toda a largura quando nada está selecionado
     return (
-        <div className="h-full p-4">
-            <HierarchicalSidebar 
-                treeData={paginaTree} 
-                table="paginas"
-                title="DISCIPLINAS"
-            />
+        <div className="h-full p-4 flex">
+            <div className="flex-1 min-w-0">
+                <HierarchicalSidebar 
+                    treeData={paginaTree} // IDs devem ser string!
+                    table="paginas"
+                    title="DISCIPLINAS"
+                />
+            </div>
         </div>
     );
 }

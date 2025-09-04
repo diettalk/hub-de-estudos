@@ -40,21 +40,19 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
 
     if (selectedDocument && isMounted) {
         return (
-            // --- CORREÇÃO DA SIDEBAR: Trocamos Grid por Flexbox para um layout mais dinâmico ---
             <div className="flex gap-4 h-full p-4">
                 <div className="hidden md:block w-[300px] flex-shrink-0">
-                    {/* A sidebar agora é "pegajosa" (sticky) e tem uma altura máxima */}
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
-                            treeData={documentTree} 
+                            treeData={documentTree} // IDs devem ser string!
                             table="documentos"
                             title="NAVEGAR"
                         />
                     </div>
                 </div>
-                <div className="flex-1 min-w-0"> {/* Garante que o editor possa encolher */}
+                <div className="flex-1 min-w-0">
                     <TextEditor
-                        key={selectedDocument.id} // A chave garante que o editor reinicie ao mudar de doc
+                        key={selectedDocument.id}
                         initialContent={selectedDocument.content}
                         onSave={handleSave}
                         onClose={() => router.push('/documentos')}
@@ -64,13 +62,16 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         );
     }
 
+    // Sidebar ocupa toda a largura quando nada está selecionado
     return (
-        <div className="h-full p-4">
-            <HierarchicalSidebar 
-                treeData={documentTree} 
-                table="documentos"
-                title="DOCUMENTOS"
-            />
+        <div className="h-full p-4 flex">
+            <div className="flex-1 min-w-0">
+                <HierarchicalSidebar 
+                    treeData={documentTree} // IDs devem ser string!
+                    table="documentos"
+                    title="DOCUMENTOS"
+                />
+            </div>
         </div>
     );
 }

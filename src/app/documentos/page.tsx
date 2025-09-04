@@ -20,6 +20,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     .order('sort_order'); // CORREÇÃO 2: Ordenamos por 'sort_order'
 
   // CORREÇÃO 3: Convertemos os IDs para string para o react-arborist
+  // Isso é obrigatório para o Tree funcionar corretamente!
   const formattedDocuments = (allDocuments || []).map(doc => ({
     ...doc,
     id: String(doc.id),

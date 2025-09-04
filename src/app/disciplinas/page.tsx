@@ -20,6 +20,7 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
     .order('sort_order'); // CORREÇÃO 2: Ordenamos por 'sort_order'
 
   // CORREÇÃO 3: Convertemos os IDs para string para o react-arborist
+  // Isso é obrigatório para o Tree funcionar corretamente!
   const formattedPaginas = (allPaginas || []).map(page => ({
     ...page,
     id: String(page.id),

@@ -144,6 +144,7 @@ export function HierarchicalSidebar({
   const treeRef = useRef<TreeApi<NodeType>>(null);
 
   const processedData = useMemo(() => {
+    // Os IDs dos nodes DEVEM ser string para o react-arborist funcionar!
     function addTable(nodes: NodeType[]): any[] {
       return nodes.map((n) => ({ ...n, table, children: addTable(n.children) }));
     }
@@ -153,21 +154,20 @@ export function HierarchicalSidebar({
   // 🔹 Persistência: chave única por sidebar
   const storageKey = `openFolders_${table}`;
 
-  // 🔹 Estado local para IDs abertos
-  const [defaultOpenIds, setDefaultOpenIds] = useState<string[]>([]);
-
-  // 🔹 Carregar estado salvo no cliente
-  useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        const ids: string[] = JSON.parse(saved);
-        setDefaultOpenIds(ids);
-      } catch (err) {
-        console.error('Erro ao restaurar pastas abertas:', err);
+  // 🔹 Estado local para IDs abertos (lido sincronamente no primeiro render)
+  const [openIds, setOpenIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return [];
+        }
       }
     }
-  }, [storageKey]);
+    return [];
+  });
 
   // 🔹 Sincronizar barras de rolagem
   useEffect(() => {
@@ -231,6 +231,13 @@ export function HierarchicalSidebar({
     });
   };
 
+  // Atualiza localStorage sempre que openIds muda
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
+    }
+  }, [openIds, storageKey]);
+
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
@@ -248,7 +255,6 @@ export function HierarchicalSidebar({
       <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
         <div ref={contentWidthRef} style={{ height: '1px' }}></div>
       </div>
-
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree<NodeType>
@@ -258,13 +264,8 @@ export function HierarchicalSidebar({
             width="100%"
             rowHeight={40}
             indent={24}
-            defaultOpenIds={defaultOpenIds} // ✅ restaura estado salvo
-            onToggle={() => {
-              if (treeRef.current) {
-                const openIds = Array.from(treeRef.current.openIds);
-                localStorage.setItem(storageKey, JSON.stringify(openIds));
-              }
-            }}
+            openIds={openIds}
+            onOpenChange={setOpenIds}
           >
             {Node}
           </Tree>
