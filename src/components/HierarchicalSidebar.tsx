@@ -124,7 +124,16 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   );
 }
 
-export function HierarchicalSidebar({ treeData = [], table, title }: { treeData: NodeType[], table: 'documentos' | 'paginas', title: string }) {
+/* --- Sidebar --- */
+export function HierarchicalSidebar({
+  treeData = [],
+  table,
+  title,
+}: {
+  treeData: NodeType[];
+  table: 'documentos' | 'paginas';
+  title: string;
+}) {
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -136,7 +145,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
-      return nodes.map(n => ({ ...n, table, children: addTable(n.children) }))
+      return nodes.map((n) => ({ ...n, table, children: addTable(n.children) }));
     }
     return addTable(treeData);
   }, [treeData, table]);
@@ -144,18 +153,21 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
   // 🔹 Persistência: chave única por sidebar
   const storageKey = `openFolders_${table}`;
 
-  // 🔹 Reabrir pastas guardadas (apenas no cliente)
+  // 🔹 Estado local para IDs abertos
+  const [defaultOpenIds, setDefaultOpenIds] = useState<string[]>([]);
+
+  // 🔹 Carregar estado salvo no cliente
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
-    if (saved && treeRef.current) {
+    if (saved) {
       try {
         const ids: string[] = JSON.parse(saved);
-        ids.forEach(id => treeRef.current?.open(id));
+        setDefaultOpenIds(ids);
       } catch (err) {
-        console.error("Erro ao restaurar pastas abertas:", err);
+        console.error('Erro ao restaurar pastas abertas:', err);
       }
     }
-  }, [processedData, storageKey]);
+  }, [storageKey]);
 
   // 🔹 Sincronizar barras de rolagem
   useEffect(() => {
@@ -199,11 +211,11 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
   }, [processedData]);
 
   // mover item
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[], parentId: string | null }) => {
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
     const newParentId = parentId ? Number(parentId) : null;
     startTransition(() => {
-      updateItemParent(table, movedItemId, newParentId).then(result => {
+      updateItemParent(table, movedItemId, newParentId).then((result) => {
         if (result.error) toast.error(result.error);
         router.refresh();
       });
@@ -212,7 +224,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
 
   const handleCreateRoot = () => {
     startTransition(() => {
-      createItem(table, null).then(result => {
+      createItem(table, null).then((result) => {
         if (result?.error) toast.error(result.error);
         else router.refresh();
       });
@@ -241,13 +253,12 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
         {processedData.length > 0 ? (
           <Tree<NodeType>
             ref={treeRef}
-            key={JSON.stringify(processedData)}
             data={processedData}
             onMove={handleMove}
             width="100%"
             rowHeight={40}
             indent={24}
-            // 🔹 Guardar mudanças de abertura/fecho
+            defaultOpenIds={defaultOpenIds} // ✅ restaura estado salvo
             onToggle={() => {
               if (treeRef.current) {
                 const openIds = Array.from(treeRef.current.openIds);
