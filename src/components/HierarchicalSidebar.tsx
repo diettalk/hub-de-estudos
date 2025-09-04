@@ -144,76 +144,94 @@ export function HierarchicalSidebar({
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
-      return nodes.map((n) => ({ ...n, table, children: addTable(n.children) }));
+      return nodes.map((n) => ({
+        ...n,
+        id: String(n.id), // força id como string
+        table,
+        children: addTable(n.children),
+      }));
     }
     return addTable(treeData);
   }, [treeData, table]);
 
+  // --- Persistência ---
   const storageKey = `openFolders_${table}`;
-
-  // --- LÓGICA DE PERSISTÊNCIA CORRIGIDA ---
-
   const [openIds, setOpenIds] = useState<string[]>([]);
-  // 1. Flag para controlar o processo e evitar a race condition.
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
-  
-  // 2. useEffect para CARREGAR o estado do localStorage UMA VEZ.
+
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
     if (savedState) {
       try {
         const savedIds = JSON.parse(savedState);
         if (Array.isArray(savedIds)) {
-          setOpenIds(savedIds);
+          setOpenIds(savedIds.map(String));
         }
       } catch {
         localStorage.removeItem(storageKey);
       }
     }
-    // 3. No final, define a flag como true para permitir que o salvamento comece.
     setIsLoadedFromStorage(true);
   }, [storageKey]);
 
-  // 4. useEffect para GUARDAR o estado, mas apenas DEPOIS do carregamento inicial.
   useEffect(() => {
-    // A condição `if (isLoadedFromStorage)` é a chave!
-    // Impede que o estado inicial vazio `[]` seja salvo no início.
     if (isLoadedFromStorage) {
       localStorage.setItem(storageKey, JSON.stringify(openIds));
     }
   }, [openIds, isLoadedFromStorage, storageKey]);
 
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
+    // sua lógica de mover aqui
+  };
 
-  // Funções handleMove e handleCreateRoot permanecem inalteradas...
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => { /* ... */ };
-  const handleCreateRoot = () => { /* ... */ };
-  useEffect(() => { /* ...lógica de scroll inalterada... */ }, [processedData]);
+  const handleCreateRoot = () => {
+    // sua lógica de criar item raiz aqui
+  };
+
+  useEffect(() => {
+    // sua lógica de scroll (se tiver)...
+  }, [processedData]);
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}>
+        <button
+          onClick={handleCreateRoot}
+          className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full"
+          title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}
+        >
           <Plus className="w-5 h-5" />
         </button>
       </div>
-      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
+
+      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
+        <div ref={contentWidthRef} style={{ height: '1px' }}></div>
+      </div>
+
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
-          <Tree<NodeType>
-            data={processedData}
-            onMove={handleMove}
-            width="100%"
-            rowHeight={40}
-            indent={24}
-            openByDefault={false}
-            openIds={openIds}
-            onOpenChange={setOpenIds}
-          >
-            {Node}
-          </Tree>
+          isLoadedFromStorage && (
+            <Tree<NodeType>
+              data={processedData}
+              onMove={handleMove}
+              width="100%"
+              rowHeight={40}
+              indent={24}
+              openByDefault={false}
+              openIds={openIds}
+              onOpenChange={(ids) => setOpenIds(ids.map(String))}
+              getId={(node) => String(node.id)}
+            >
+              {Node}
+            </Tree>
+          )
         ) : (
-          <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.</p></div>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground text-sm">
+              Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
+            </p>
+          </div>
         )}
       </div>
     </div>
