@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import React, 'useState', useTransition, useMemo, useRef, useEffect } from 'react';
+// --- CORREÇÃO: Sintaxe de importação dos hooks do React corrigida ---
+import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
@@ -131,29 +132,24 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
   const router = useRouter();
   const treeRef = useRef<TreeApi<NodeType>>(null);
 
-  // --- CORREÇÃO DEFINITIVA: Lógica de persistência de estado à prova de falhas de hidratação ---
   const localStorageKey = `openFolders_${table}`;
 
   useEffect(() => {
-    // Este código só é executado no browser, depois de o componente já ter sido renderizado.
     const savedState = localStorage.getItem(localStorageKey);
     if (savedState && treeRef.current) {
         try {
             const openIds = JSON.parse(savedState) as string[];
-            // Usamos a API da árvore para abrir as pastas de forma programática e segura.
             openIds.forEach(id => treeRef.current?.open(id));
         } catch (e) {
             console.error("Falha ao restaurar o estado da sidebar:", e);
         }
     }
-  }, [localStorageKey]); // A dependência garante que isto só é executado uma vez.
+  }, [localStorageKey]);
 
   const handleToggle = (id: string, tree: TreeApi<NodeType>) => {
-    // Sempre que o utilizador abre ou fecha uma pasta, guardamos o novo estado.
     const openIds = Array.from(tree.openIds);
     localStorage.setItem(localStorageKey, JSON.stringify(openIds));
   };
-  // --- FIM DA CORREÇÃO ---
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
@@ -199,7 +195,7 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
       <div className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree
-            ref={treeRef} // Adicionamos a ref para podermos controlar a árvore
+            ref={treeRef}
             onToggle={handleToggle}
             data={processedData}
             onMove={handleMove}
