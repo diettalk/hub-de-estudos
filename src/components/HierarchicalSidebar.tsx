@@ -4,7 +4,7 @@ import Link from 'next/link';
 import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
-import { Tree, NodeRendererProps, TreeApi } from 'react-arborist'; // Importar TreeApi
+import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
@@ -29,8 +29,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     clickTimeout.current = setTimeout(() => {
       if (clickCount.current === 2) {
         const parent = node.parent;
-        // Corrigido para converter para número antes de comparar
-        const grandparentId = parent?.parent?.id ? Number(parent.parent.id) : null;
+        const grandparentId = parent?.parent?.id ? Number(parent.parent.id) : null;
         if (node.data.parent_id !== grandparentId) {
             startTransition(() => {
                 updateItemParent(table, node.data.id, grandparentId).then(refreshView);
@@ -141,12 +140,10 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
 
   useEffect(() => {
     // Este código só é executado no browser, DEPOIS de o componente já ter sido renderizado.
-    // Isto evita o erro de hidratação.
     const savedState = localStorage.getItem(localStorageKey);
     if (savedState && treeRef.current) {
         try {
             const openIds = JSON.parse(savedState) as string[];
-            // Abrimos as pastas uma a uma, de forma segura.
             openIds.forEach(id => treeRef.current?.open(id));
         } catch (e) {
             console.error("Falha ao restaurar o estado da sidebar:", e);
@@ -155,7 +152,6 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
   }, [localStorageKey]); // A dependência garante que isto só é executado uma vez.
 
   const handleToggle = (id: string, tree: TreeApi<NodeType>) => {
-    // Sempre que o utilizador abre ou fecha uma pasta, guardamos o novo estado.
     const openIds = Array.from(tree.openIds);
     localStorage.setItem(localStorageKey, JSON.stringify(openIds));
   };
@@ -163,7 +159,6 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
-        // Corrigido para também converter o id para string aqui, como antes
         return nodes.map(n => ({ ...n, id: String(n.id), table, children: addTable(n.children) }))
     }
     return addTable(treeData);
