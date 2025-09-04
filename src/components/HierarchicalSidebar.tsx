@@ -123,7 +123,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   );
 }
 
-/* --- Sidebar --- */
 export function HierarchicalSidebar({
   treeData = [],
   table,
@@ -147,7 +146,6 @@ export function HierarchicalSidebar({
     function addTable(nodes: NodeType[] | null | undefined): any[] {
       if (!Array.isArray(nodes)) return [];
       return nodes.map((n) => ({
-        // garante id string e children sempre array
         ...n,
         id: String((n as any).id ?? (n as any).ID ?? n.id),
         table,
@@ -160,36 +158,25 @@ export function HierarchicalSidebar({
   // 🔹 Persistência: chave única por sidebar
   const storageKey = `openFolders_${table}`;
 
-  // 🔹 Estado local para IDs abertos
-  // ler localStorage sincronamente para que o Tree receba o estado inicial já no primeiro render
-  const [defaultOpenIds, setDefaultOpenIds] = useState<string[]>(() => {
+  // 🔹 Estado local para IDs abertos (controlado)
+  const [openIds, setOpenIds] = useState<string[]>(() => {
     try {
       if (typeof window === 'undefined') return [];
       const saved = localStorage.getItem(storageKey);
       if (!saved) return [];
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) return parsed.map(String);
-    } catch (err) {
-      // ignore
-    }
+    } catch (err) {}
     return [];
   });
 
-  // Atualiza localStorage quando o tree é toggled
-  const handleToggleSave = () => {
-    if (treeRef.current) {
-      try {
-        const openIdsIter = (treeRef.current as any).openIds ?? [];
-        const openIds = Array.from(openIdsIter).map(String);
-        localStorage.setItem(storageKey, JSON.stringify(openIds));
-        setDefaultOpenIds(openIds);
-      } catch (err) {
-        console.error('Erro ao salvar pastas abertas:', err);
-      }
-    }
+  // Atualiza localStorage e estado quando o usuário abre/fecha pastas
+  const handleToggleSave = (ids: string[]) => {
+    setOpenIds(ids);
+    localStorage.setItem(storageKey, JSON.stringify(ids));
   };
 
-  // 🔹 Sincronizar barras de rolagem
+  // Sincronizar barras de rolagem
   useEffect(() => {
     const topDiv = topScrollRef.current;
     const mainDiv = mainScrollRef.current;
@@ -252,7 +239,7 @@ export function HierarchicalSidebar({
   };
 
   return (
-    <div className="w-full bg-card p-4 rounded-lg h-full flex flex-col border">
+    <div className="w-full h-full bg-card p-4 rounded-lg flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
         <button
@@ -271,16 +258,16 @@ export function HierarchicalSidebar({
 
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
-          <div className="w-full min-w-full">
+          <div className="w-full min-w-full h-full">
             <Tree<NodeType>
               ref={treeRef as any}
               data={processedData}
               onMove={handleMove}
               rowHeight={40}
               indent={24}
-              defaultOpenIds={defaultOpenIds}
-              onToggle={handleToggleSave}
-              className="w-full"
+              openIds={openIds}
+              onOpenChange={handleToggleSave}
+              className="w-full h-full"
             >
               {(props: NodeRendererProps<NodeType>) => <Node {...props} />}
             </Tree>
