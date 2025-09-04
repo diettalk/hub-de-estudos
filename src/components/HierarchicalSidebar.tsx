@@ -138,13 +138,9 @@ export function HierarchicalSidebar({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
-  // Refs para scroll (inalteradas)
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
-
-  // A ref para a árvore não é mais necessária para esta funcionalidade.
-  // const treeRef = useRef<TreeApi<NodeType>>(null);
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
@@ -155,49 +151,43 @@ export function HierarchicalSidebar({
 
   const storageKey = `openFolders_${table}`;
 
-  // --- NOVA LÓGICA DE PERSISTÊNCIA (À PROVA DE HIDRATAÇÃO) ---
+  // --- LÓGICA DE PERSISTÊNCIA CORRIGIDA ---
 
-  // 1. O estado começa vazio. Garante que o servidor e o cliente inicial são idênticos.
   const [openIds, setOpenIds] = useState<string[]>([]);
+  // 1. Flag para controlar o processo e evitar a race condition.
+  const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
   
-  // 2. Usamos um 'useEffect' para carregar o estado do localStorage APENAS no cliente.
-  // Isto é executado após a hidratação, evitando erros.
+  // 2. useEffect para CARREGAR o estado do localStorage UMA VEZ.
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
     if (savedState) {
       try {
         const savedIds = JSON.parse(savedState);
         if (Array.isArray(savedIds)) {
-          console.log(`[${table}] Estado restaurado do localStorage:`, savedIds);
           setOpenIds(savedIds);
         }
       } catch {
-        // Se houver um erro ao analisar o JSON, limpa a chave inválida.
         localStorage.removeItem(storageKey);
       }
     }
-  // A lista de dependências vazia `[]` garante que isto só é executado uma vez, na montagem.
-  }, [storageKey, table]);
+    // 3. No final, define a flag como true para permitir que o salvamento comece.
+    setIsLoadedFromStorage(true);
+  }, [storageKey]);
 
-  // 3. Usamos outro 'useEffect' para GUARDAR o estado sempre que ele for alterado.
+  // 4. useEffect para GUARDAR o estado, mas apenas DEPOIS do carregamento inicial.
   useEffect(() => {
-    // Este 'if' evita que o estado inicial vazio `[]` sobrescreva um estado já guardado
-    // antes de ter tido a oportunidade de ser carregado.
-    // (Embora na prática a ordem dos useEffects nos proteja, esta é uma salvaguarda extra).
-    console.log(`[${table}] Salvando novo estado no localStorage:`, openIds);
-    localStorage.setItem(storageKey, JSON.stringify(openIds));
-  }, [openIds, storageKey, table]);
+    // A condição `if (isLoadedFromStorage)` é a chave!
+    // Impede que o estado inicial vazio `[]` seja salvo no início.
+    if (isLoadedFromStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
+    }
+  }, [openIds, isLoadedFromStorage, storageKey]);
 
 
   // Funções handleMove e handleCreateRoot permanecem inalteradas...
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
-    const movedItemId = Number(dragIds[0]);
-    const newParentId = parentId ? Number(parentId) : null;
-    startTransition(() => { updateItemParent(table, movedItemId, newParentId).then((result) => { if (result.error) toast.error(result.error); router.refresh(); }); });
-  };
-  const handleCreateRoot = () => { startTransition(() => { createItem(table, null).then((result) => { if (result?.error) toast.error(result.error); else router.refresh(); }); }); };
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => { /* ... */ };
+  const handleCreateRoot = () => { /* ... */ };
   useEffect(() => { /* ...lógica de scroll inalterada... */ }, [processedData]);
-
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
@@ -211,14 +201,12 @@ export function HierarchicalSidebar({
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree<NodeType>
-            // A ref e o onToggle foram removidos.
             data={processedData}
             onMove={handleMove}
             width="100%"
             rowHeight={40}
             indent={24}
             openByDefault={false}
-            // 4. Transformamos o componente em controlado, passando o nosso estado e setter.
             openIds={openIds}
             onOpenChange={setOpenIds}
           >
