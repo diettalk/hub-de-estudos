@@ -159,7 +159,8 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
   // --- FIM DA LÓGICA DE PERSISTÊNCIA ---
 
   const processedData = useMemo(() => {
-    function addTable(nodes: NodeType[]): any[] {
+    function addTable(nodes: NodeType[] | null | undefined): any[] {
+        if (!Array.isArray(nodes)) return [];
         return nodes.map(n => ({ ...n, id: String(n.id), table, children: addTable(n.children) }))
     }
     return addTable(treeData);
@@ -220,18 +221,17 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
       <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
-          <Tree
+          <Tree
             ref={treeRef}
-            onToggle={handleToggle}
-            data={processedData}
-            onMove={handleMove}
-            width="100%"
-            rowHeight={40}
-            indent={24}
-          >
-            {Node}
-          </Tree>
-        ) : (
+            onToggle={handleToggle}
+            data={processedData}
+            onMove={handleMove}
+            rowHeight={40}
+            indent={24}
+          >
+            {(props: NodeRendererProps<NodeType>) => <Node {...props} />}
+          </Tree>
+        ) : (
           <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.</p></div>
         )}
       </div>
