@@ -23,6 +23,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         setIsMounted(true);
     }, []);
 
+
     useEffect(() => {
         const id = searchParams.get('page');
         if (id && initialPage && Number(id) === initialPage.id) {
@@ -37,8 +38,39 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         await updatePaginaContent(selectedPage.id, newContent);
     };
 
-    // Quando uma disciplina está selecionada: sidebar minimizada + editor ao lado
     if (selectedPage && isMounted) {
         return (
-            <div className="flex w-full h-full gap-4 p-4">
-                <div className="hidden md:block
+             <div className="flex gap-4 h-full p-4">
+                <div className="hidden md:block w-[300px] flex-shrink-0">
+                    {/* A sidebar agora é "pegajosa" (sticky) e tem uma altura máxima */}
+                    <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
+                        <HierarchicalSidebar 
+                            treeData={paginaTree} 
+                            table="paginas"
+                            title="NAVEGAR"
+                        />
+                    </div>
+                </div>
+                <div className="flex-1 min-w-0"> {/* Garante que o editor possa encolher */}
+                    <TextEditor
+                        key={selectedPage.id} // A chave garante que o editor reinicie ao mudar de pág
+                        initialContent={selectedPage.content}
+                        onSave={handleSave}
+                        onClose={() => router.push('/disciplinas')}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="h-full p-4">
+            <HierarchicalSidebar 
+                treeData={paginaTree} 
+                table="paginas"
+                title="DISCIPLINAS"
+            />
+        </div>
+    );
+}
+

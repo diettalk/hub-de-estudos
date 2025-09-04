@@ -4,11 +4,12 @@ import Link from 'next/link';
 import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
-import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
+import { Tree, NodeRendererProps } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
+// ... (O componente 'Node' continua exatamente igual, não precisa de o alterar)
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.data.title);
@@ -30,15 +31,15 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         const parent = node.parent;
         const grandparentId = parent?.parent?.id ?? null;
         if (node.data.parent_id !== grandparentId) {
-          startTransition(() => {
-            updateItemParent(table, node.data.id, grandparentId).then(refreshView);
-          });
+            startTransition(() => {
+                updateItemParent(table, node.data.id, grandparentId).then(refreshView);
+            });
         }
       } else if (clickCount.current >= 3) {
         if (node.data.parent_id !== null) {
-          startTransition(() => {
-            updateItemParent(table, node.data.id, null).then(refreshView);
-          });
+            startTransition(() => {
+                updateItemParent(table, node.data.id, null).then(refreshView);
+            });
         }
       }
       clickCount.current = 0;
@@ -75,8 +76,8 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     });
   });
 
-  const href = table === 'documentos'
-    ? `/documentos?id=${node.data.id}`
+  const href = table === 'documentos' 
+    ? `/documentos?id=${node.data.id}` 
     : `/disciplinas?page=${node.data.id}`;
 
   return (
@@ -90,7 +91,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       </span>
 
       {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
-
+      
       {node.isLeaf && !node.data.emoji ? (
         <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
       ) : (
@@ -123,6 +124,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   );
 }
 
+/* --- Sidebar --- */
 export function HierarchicalSidebar({
   treeData = [],
   table,
@@ -139,18 +141,11 @@ export function HierarchicalSidebar({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
-  const treeRef = useRef<TreeApi<NodeType> | null>(null);
+  const treeRef = useRef<TreeApi<NodeType>>(null);
 
-  // --- Processamento seguro dos dados para o Tree ---
   const processedData = useMemo(() => {
-    function addTable(nodes: NodeType[] | null | undefined): any[] {
-      if (!Array.isArray(nodes)) return [];
-      return nodes.map((n) => ({
-        ...n,
-        id: String((n as any).id ?? (n as any).ID ?? n.id),
-        table,
-        children: addTable((n as any).children ?? []),
-      }));
+    function addTable(nodes: NodeType[]): any[] {
+      return nodes.map((n) => ({ ...n, table, children: addTable(n.children) }));
     }
     return addTable(treeData);
   }, [treeData, table]);
@@ -158,25 +153,23 @@ export function HierarchicalSidebar({
   // 🔹 Persistência: chave única por sidebar
   const storageKey = `openFolders_${table}`;
 
-  // 🔹 Estado local para IDs abertos (controlado)
-  const [openIds, setOpenIds] = useState<string[]>(() => {
-    try {
-      if (typeof window === 'undefined') return [];
-      const saved = localStorage.getItem(storageKey);
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed.map(String);
-    } catch (err) {}
-    return [];
-  });
+  // 🔹 Estado local para IDs abertos
+  const [defaultOpenIds, setDefaultOpenIds] = useState<string[]>([]);
 
-  // Atualiza localStorage e estado quando o usuário abre/fecha pastas
-  const handleToggleSave = (ids: string[]) => {
-    setOpenIds(ids);
-    localStorage.setItem(storageKey, JSON.stringify(ids));
-  };
+  // 🔹 Carregar estado salvo no cliente
+  useEffect(() => {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const ids: string[] = JSON.parse(saved);
+        setDefaultOpenIds(ids);
+      } catch (err) {
+        console.error('Erro ao restaurar pastas abertas:', err);
+      }
+    }
+  }, [storageKey]);
 
-  // Sincronizar barras de rolagem
+  // 🔹 Sincronizar barras de rolagem
   useEffect(() => {
     const topDiv = topScrollRef.current;
     const mainDiv = mainScrollRef.current;
@@ -239,7 +232,7 @@ export function HierarchicalSidebar({
   };
 
   return (
-    <div className="w-full h-full bg-card p-4 rounded-lg flex flex-col border">
+    <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
         <button
@@ -258,20 +251,23 @@ export function HierarchicalSidebar({
 
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
-          <div className="w-full min-w-full h-full">
-            <Tree<NodeType>
-              ref={treeRef as any}
-              data={processedData}
-              onMove={handleMove}
-              rowHeight={40}
-              indent={24}
-              openIds={openIds}
-              onOpenChange={handleToggleSave}
-              className="w-full h-full"
-            >
-              {(props: NodeRendererProps<NodeType>) => <Node {...props} />}
-            </Tree>
-          </div>
+          <Tree<NodeType>
+            ref={treeRef}
+            data={processedData}
+            onMove={handleMove}
+            width="100%"
+            rowHeight={40}
+            indent={24}
+            defaultOpenIds={defaultOpenIds} // ✅ restaura estado salvo
+            onToggle={() => {
+              if (treeRef.current) {
+                const openIds = Array.from(treeRef.current.openIds);
+                localStorage.setItem(storageKey, JSON.stringify(openIds));
+              }
+            }}
+          >
+            {Node}
+          </Tree>
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground text-sm">
