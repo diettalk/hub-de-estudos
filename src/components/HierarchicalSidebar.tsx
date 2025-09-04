@@ -232,11 +232,39 @@ export function HierarchicalSidebar({
   };
 
 // Customização de cada nó da árvore
+const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({});
+
+useEffect(() => {
+  const savedState = localStorage.getItem("treeOpenNodes");
+  if (savedState) {
+    setOpenNodes(JSON.parse(savedState));
+  }
+}, []);
+
+useEffect(() => {
+  localStorage.setItem("treeOpenNodes", JSON.stringify(openNodes));
+}, [openNodes]);
+
+const toggleNode = (id: string) => {
+  setOpenNodes(prev => ({
+    ...prev,
+    [id]: !prev[id],
+  }));
+};
+
+<Tree
+  data={disciplinas}
+  openNodes={openNodes}
+  onToggleNode={toggleNode}
+/>
 function renderNode({ node, style, dragHandle }) {
   return (
     <div
       style={style}
       ref={dragHandle
+      });
+    });
+  };
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
