@@ -152,16 +152,13 @@ export function HierarchicalSidebar({
 
   const storageKey = `openFolders_${table}`;
 
-  // Lógica de RESTAURAÇÃO com logs
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
-    // LOG 1: Mostra o que foi encontrado no localStorage ao carregar a página
     console.log(`[${table}] Tentando restaurar estado guardado:`, savedState);
     if (savedState && treeRef.current) {
       try {
         const openIds = JSON.parse(savedState);
         if (Array.isArray(openIds)) {
-          // LOG 2: Mostra os IDs que serão abertos
           console.log(`[${table}] Restaurando os seguintes IDs:`, openIds);
           openIds.forEach(id => treeRef.current?.open(id));
         }
@@ -169,15 +166,15 @@ export function HierarchicalSidebar({
         console.error("Falha ao restaurar o estado da árvore do localStorage", e);
       }
     }
-  }, [storageKey, table]); // Adicionada a dependência 'table' usada no log
+  }, [storageKey, table]);
 
-  // Lógica de SALVAR com logs e correção de timing
   const handleToggle = () => {
-    // Usamos um setTimeout para garantir que lemos o estado DEPOIS da sua atualização.
     setTimeout(() => {
       if (treeRef.current) {
-        const openIds = Array.from(treeRef.current.openIds);
-        // LOG 3: Mostra exatamente o que está a ser guardado quando abre/fecha uma pasta
+        // CORREÇÃO: Usamos um Set() vazio como fallback para evitar o erro.
+        const idsToConvert = treeRef.current.openIds || new Set();
+        const openIds = Array.from(idsToConvert);
+
         console.log(`[${table}] Salvando novo estado:`, openIds);
         localStorage.setItem(storageKey, JSON.stringify(openIds));
       }
