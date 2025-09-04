@@ -157,17 +157,20 @@ export function HierarchicalSidebar({
   // 🔹 Estado local para IDs abertos (lido sincronamente no primeiro render)
   const [openIds, setOpenIds] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          return [];
-        }
-      }
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) return JSON.parse(saved);
+      } catch {}
     }
     return [];
   });
+
+  // 🔹 Atualiza localStorage sempre que openIds muda
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
+    }
+  }, [openIds, storageKey]);
 
   // 🔹 Sincronizar barras de rolagem
   useEffect(() => {
@@ -230,13 +233,6 @@ export function HierarchicalSidebar({
       });
     });
   };
-
-  // Atualiza localStorage sempre que openIds muda
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(storageKey, JSON.stringify(openIds));
-    }
-  }, [openIds, storageKey]);
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
