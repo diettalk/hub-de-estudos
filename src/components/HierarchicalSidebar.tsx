@@ -138,7 +138,6 @@ export function HierarchicalSidebar({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
-  // refs
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
@@ -153,105 +152,73 @@ export function HierarchicalSidebar({
 
   const storageKey = `openFolders_${table}`;
 
+  // Lógica de RESTAURAÇÃO com logs
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
+    // LOG 1: Mostra o que foi encontrado no localStorage ao carregar a página
+    console.log(`[${table}] Tentando restaurar estado guardado:`, savedState);
     if (savedState && treeRef.current) {
       try {
         const openIds = JSON.parse(savedState);
         if (Array.isArray(openIds)) {
+          // LOG 2: Mostra os IDs que serão abertos
+          console.log(`[${table}] Restaurando os seguintes IDs:`, openIds);
           openIds.forEach(id => treeRef.current?.open(id));
         }
       } catch (e) {
         console.error("Falha ao restaurar o estado da árvore do localStorage", e);
       }
     }
-  }, [storageKey]);
+  }, [storageKey, table]); // Adicionada a dependência 'table' usada no log
 
+  // Lógica de SALVAR com logs e correção de timing
   const handleToggle = () => {
-    if (treeRef.current) {
-      const openIds = Array.from(treeRef.current.openIds);
-      localStorage.setItem(storageKey, JSON.stringify(openIds));
-    }
+    // Usamos um setTimeout para garantir que lemos o estado DEPOIS da sua atualização.
+    setTimeout(() => {
+      if (treeRef.current) {
+        const openIds = Array.from(treeRef.current.openIds);
+        // LOG 3: Mostra exatamente o que está a ser guardado quando abre/fecha uma pasta
+        console.log(`[${table}] Salvando novo estado:`, openIds);
+        localStorage.setItem(storageKey, JSON.stringify(openIds));
+      }
+    }, 0);
   };
 
-  // ... (a lógica de scroll, move e create permanece inalterada)
+  // ... (o resto do componente, incluindo JSX e outras funções, permanece inalterado)
+
   useEffect(() => {
     const topDiv = topScrollRef.current;
     const mainDiv = mainScrollRef.current;
     if (!topDiv || !mainDiv) return;
-
     let isSyncing = false;
-    const handleTopScroll = () => {
-      if (isSyncing) return;
-      isSyncing = true;
-      mainDiv.scrollLeft = topDiv.scrollLeft;
-      isSyncing = false;
-    };
-    const handleMainScroll = () => {
-      if (isSyncing) return;
-      isSyncing = true;
-      topDiv.scrollLeft = mainDiv.scrollLeft;
-      isSyncing = false;
-    };
-
+    const handleTopScroll = () => { if (!isSyncing) { isSyncing = true; mainDiv.scrollLeft = topDiv.scrollLeft; isSyncing = false; } };
+    const handleMainScroll = () => { if (!isSyncing) { isSyncing = true; topDiv.scrollLeft = mainDiv.scrollLeft; isSyncing = false; } };
     topDiv.addEventListener('scroll', handleTopScroll);
     mainDiv.addEventListener('scroll', handleMainScroll);
-
-    const measureContent = () => {
-      if (mainDiv.firstElementChild && contentWidthRef.current) {
-        contentWidthRef.current.style.width = `${mainDiv.firstElementChild.scrollWidth}px`;
-      }
-    };
+    const measureContent = () => { if (mainDiv.firstElementChild && contentWidthRef.current) { contentWidthRef.current.style.width = `${mainDiv.firstElementChild.scrollWidth}px`; } };
     const resizeObserver = new ResizeObserver(measureContent);
-    if (mainDiv.firstElementChild) {
-      resizeObserver.observe(mainDiv.firstElementChild);
-    }
+    if (mainDiv.firstElementChild) { resizeObserver.observe(mainDiv.firstElementChild); }
     measureContent();
-
-    return () => {
-      topDiv.removeEventListener('scroll', handleTopScroll);
-      mainDiv.removeEventListener('scroll', handleMainScroll);
-      resizeObserver.disconnect();
-    };
+    return () => { topDiv.removeEventListener('scroll', handleTopScroll); mainDiv.removeEventListener('scroll', handleMainScroll); resizeObserver.disconnect(); };
   }, [processedData]);
 
   const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
     const newParentId = parentId ? Number(parentId) : null;
-    startTransition(() => {
-      updateItemParent(table, movedItemId, newParentId).then((result) => {
-        if (result.error) toast.error(result.error);
-        router.refresh();
-      });
-    });
+    startTransition(() => { updateItemParent(table, movedItemId, newParentId).then((result) => { if (result.error) toast.error(result.error); router.refresh(); }); });
   };
 
-  const handleCreateRoot = () => {
-    startTransition(() => {
-      createItem(table, null).then((result) => {
-        if (result?.error) toast.error(result.error);
-        else router.refresh();
-      });
-    });
-  };
-
+  const handleCreateRoot = () => { startTransition(() => { createItem(table, null).then((result) => { if (result?.error) toast.error(result.error); else router.refresh(); }); }); };
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button
-          onClick={handleCreateRoot}
-          className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full"
-          title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}
-        >
+        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}>
           <Plus className="w-5 h-5" />
         </button>
       </div>
-
-      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
-        <div ref={contentWidthRef} style={{ height: '1px' }}></div>
-      </div>
+      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree<NodeType>
@@ -262,19 +229,12 @@ export function HierarchicalSidebar({
             width="100%"
             rowHeight={40}
             indent={24}
-            // A CORREÇÃO CRÍTICA:
-            // Impede que a árvore abra todas as pastas por defeito,
-            // permitindo que o nosso useEffect controle o estado.
             openByDefault={false}
           >
             {Node}
           </Tree>
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground text-sm">
-              Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
-            </p>
-          </div>
+          <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.</p></div>
         )}
       </div>
     </div>
