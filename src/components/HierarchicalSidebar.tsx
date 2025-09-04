@@ -132,7 +132,6 @@ export function HierarchicalSidebar({
   title,
 }: {
   treeData: NodeType[];
-  // 💡 A tipagem foi ajustada para 'disciplinas' para maior consistência com o contexto do projeto.
   table: 'documentos' | 'disciplinas';
   title: string;
 }) {
@@ -143,7 +142,6 @@ export function HierarchicalSidebar({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
-  // ✅ A ref para a árvore é essencial para a nossa solução imperativa.
   const treeRef = useRef<TreeApi<NodeType>>(null);
 
   const processedData = useMemo(() => {
@@ -153,41 +151,30 @@ export function HierarchicalSidebar({
     return addTable(treeData);
   }, [treeData, table]);
 
-  // REQUISITO 1: Usar uma chave única e dinâmica para o localStorage.
   const storageKey = `openFolders_${table}`;
 
-  // REQUISITO 2 (CRÍTICO): Solução à prova de erros de hidratação.
-  // Este useEffect é executado apenas uma vez no cliente, após a montagem do componente.
-  // Ele lê o estado do localStorage e aplica-o de forma imperativa, evitando conflitos
-  // com a renderização do servidor.
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
     if (savedState && treeRef.current) {
       try {
         const openIds = JSON.parse(savedState);
         if (Array.isArray(openIds)) {
-          // Usamos a API da própria biblioteca para abrir as pastas guardadas.
-          // Isto modifica a árvore sem causar uma re-renderização que gere um erro de hidratação.
           openIds.forEach(id => treeRef.current?.open(id));
         }
       } catch (e) {
         console.error("Falha ao restaurar o estado da árvore do localStorage", e);
       }
     }
-  }, [storageKey]); // A dependência garante que o efeito é executado se a chave mudar.
+  }, [storageKey]);
 
-  // REQUISITO 3: Guardar o estado em tempo real.
-  // Esta função é chamada sempre que o utilizador abre ou fecha uma pasta.
   const handleToggle = () => {
     if (treeRef.current) {
-      // Através da ref, obtemos a lista atual de IDs de pastas abertas (é um Set).
       const openIds = Array.from(treeRef.current.openIds);
-      // Guardamos a lista atualizada no localStorage.
       localStorage.setItem(storageKey, JSON.stringify(openIds));
     }
   };
 
-  // Sincronizar barras de rolagem (lógica inalterada)
+  // ... (a lógica de scroll, move e create permanece inalterada)
   useEffect(() => {
     const topDiv = topScrollRef.current;
     const mainDiv = mainScrollRef.current;
@@ -228,7 +215,6 @@ export function HierarchicalSidebar({
     };
   }, [processedData]);
 
-  // mover item (lógica inalterada)
   const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
     const newParentId = parentId ? Number(parentId) : null;
@@ -240,7 +226,6 @@ export function HierarchicalSidebar({
     });
   };
 
-  // criar item raiz (lógica inalterada)
   const handleCreateRoot = () => {
     startTransition(() => {
       createItem(table, null).then((result) => {
@@ -249,6 +234,7 @@ export function HierarchicalSidebar({
       });
     });
   };
+
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
@@ -263,7 +249,6 @@ export function HierarchicalSidebar({
         </button>
       </div>
 
-      {/* Barra de rolagem superior */}
       <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
         <div ref={contentWidthRef} style={{ height: '1px' }}></div>
       </div>
@@ -273,14 +258,14 @@ export function HierarchicalSidebar({
             ref={treeRef}
             data={processedData}
             onMove={handleMove}
-            // ✅ Ligamos o nosso handler ao evento onToggle da árvore.
             onToggle={handleToggle}
             width="100%"
             rowHeight={40}
             indent={24}
-            // ❌ As props 'openIds' e 'onOpenChange' foram removidas.
-            // A árvore agora gere o seu estado de abertura internamente (não-controlada),
-            // o que é fundamental para evitar o erro de hidratação.
+            // A CORREÇÃO CRÍTICA:
+            // Impede que a árvore abra todas as pastas por defeito,
+            // permitindo que o nosso useEffect controle o estado.
+            openByDefault={false}
           >
             {Node}
           </Tree>
