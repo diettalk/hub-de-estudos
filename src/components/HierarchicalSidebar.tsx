@@ -231,6 +231,13 @@ export function HierarchicalSidebar({
     });
   };
 
+// Customização de cada nó da árvore
+function renderNode({ node, style, dragHandle }) {
+  return (
+    <div
+      style={style}
+      ref={dragHandle
+
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
