@@ -128,43 +128,34 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
 export function HierarchicalSidebar({ treeData = [], table, title }: { treeData: NodeType[], table: 'documentos' | 'paginas', title: string }) {
   const [, startTransition] = useTransition();
   const router = useRouter();
+  const treeRef = useRef<TreeApi<NodeType>>(null);
   
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
 
-  // --- NOVA LÓGICA DE PERSISTÊNCIA DE ESTADO INDIVIDUAL ---
-  const storageKey = `folderState_${table}`;
-  const [openState, setOpenState] = useState<Record<string, boolean>>({});
+  // --- LÓGICA DE PERSISTÊNCIA DE ESTADO (À PROVA DE ERROS DE HIDRATAÇÃO) ---
+  const localStorageKey = `openFolders_${table}`;
 
-  // Efeito para CARREGAR o estado do localStorage APENAS no cliente, evitando erros de hidratação.
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
+    // Este código só é executado no browser, DEPOIS de o componente já ter sido renderizado.
+    const savedState = localStorage.getItem(localStorageKey);
+    if (savedState && treeRef.current) {
         try {
-            setOpenState(JSON.parse(saved));
+            const openIds = JSON.parse(savedState) as string[];
+            // Abrimos as pastas uma a uma, de forma segura, usando a API da árvore.
+            openIds.forEach(id => treeRef.current?.open(id));
         } catch (e) {
-            console.error("Falha ao ler o estado da sidebar do localStorage:", e);
+            console.error("Falha ao restaurar o estado da sidebar:", e);
         }
     }
-  }, [storageKey]);
+  }, [localStorageKey]); // A dependência garante que isto só é executado uma vez.
 
-  // Efeito para SALVAR o estado no localStorage sempre que o utilizador o altera.
-  useEffect(() => {
-    // Não guardamos o estado inicial vazio para não apagar um estado já salvo por engano.
-    if (Object.keys(openState).length > 0) {
-        localStorage.setItem(storageKey, JSON.stringify(openState));
-    }
-  }, [openState, storageKey]);
-
-  // Handler que é chamado pelo react-arborist sempre que uma pasta é aberta/fechada.
-  const handleToggle = (node: any) => {
-    // Atualizamos o nosso mapa de estado com o novo estado da pasta.
-    setOpenState(prev => ({
-        ...prev,
-        [node.id]: !prev[node.id]
-    }));
-  };
+  const handleToggle = (id: string, tree: TreeApi<NodeType>) => {
+    // Sempre que o utilizador abre ou fecha uma pasta, guardamos o novo estado.
+    const openIds = Array.from(tree.openIds);
+    localStorage.setItem(localStorageKey, JSON.stringify(openIds));
+  };
   // --- FIM DA LÓGICA DE PERSISTÊNCIA ---
 
   const processedData = useMemo(() => {
@@ -230,11 +221,10 @@ export function HierarchicalSidebar({ treeData = [], table, title }: { treeData:
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           <Tree
+            ref={treeRef}
+            onToggle={handleToggle}
             data={processedData}
             onMove={handleMove}
-            // --- ATUALIZAÇÃO: Conectamos o nosso estado à árvore ---
-            isOpen={(node) => openState[node.id] || false}
-            onToggle={handleToggle}
             width="100%"
             rowHeight={40}
             indent={24}
