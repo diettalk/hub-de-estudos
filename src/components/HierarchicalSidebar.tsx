@@ -12,7 +12,6 @@ import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
 import { 
     ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator
 } from '@/components/ui/context-menu';
-// Importa a nova server action
 import { createItem, updateItemTitle, deleteItem, updateItemParent, toggleFavoriteStatus } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
@@ -128,6 +127,22 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
                             ) : (
                                 <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
                             )}
+
+                            {/* NOVO: Estrela clicável para favoritar/desfavoritar */}
+                            <span
+                                onClick={handleToggleFavorite}
+                                className={cn(
+                                    "ml-auto p-2 cursor-pointer transition-opacity",
+                                    // Se for favorito, está sempre visível. Se não, aparece no hover.
+                                    node.data.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                )}
+                                title={node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
+                            >
+                                <Star className={cn(
+                                    "w-4 h-4 text-muted-foreground hover:text-yellow-500 hover:fill-yellow-400",
+                                    node.data.is_favorite && "fill-yellow-400 text-yellow-500"
+                                )} />
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -177,39 +192,43 @@ export function HierarchicalSidebar({
   const treeRef = useRef<TreeApi<NodeType>>(null);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [openIds, setOpenIds] = useState<string[]>([]);
+  const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
+  
+  const [favoriteItems, setFavoriteItems] = useState<NodeType[]>([]);
+
+  const storageKey = `openFolders_${table}`;
 
   const processedData = useMemo(() => {
-    function addTable(nodes: NodeType[]): any[] {
-      return nodes.map((n) => ({ ...n, id: String(n.id), table, children: addTable(n.children) }));
+    function processNodes(nodes: NodeType[] = []): any[] {
+      return nodes.map((n) => ({
+        ...n,
+        id: String(n.id),
+        table,
+        is_favorite: n.is_favorite ?? false,
+        children: processNodes(n.children),
+      }));
     }
-    return addTable(treeData);
+    return processNodes(treeData);
   }, [treeData, table]);
 
-  // Lógica para encontrar os favoritos recursivamente
-  const favoriteItems = useMemo(() => {
+  useEffect(() => {
     const favorites: NodeType[] = [];
     function findFavorites(nodes: NodeType[]) {
-        // CORREÇÃO: Adicionada uma verificação para evitar crash
         if (!nodes) return; 
         for (const node of nodes) {
             if (node.is_favorite) {
                 favorites.push(node);
             }
-            // Verifica se 'children' existe e é um array antes de continuar
             if (Array.isArray(node.children)) {
                 findFavorites(node.children);
             }
         }
     }
-    findFavorites(treeData);
-    return favorites;
+    findFavorites(treeData); // Usa os dados originais para evitar problemas de tipo
+    setFavoriteItems(favorites);
   }, [treeData]);
 
-  const storageKey = `openFolders_${table}`;
-  const [openIds, setOpenIds] = useState<string[]>([]);
-  const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
-  
-  // Lógica de persistência completa
   useEffect(() => {
     const savedState = localStorage.getItem(storageKey);
     if (savedState) {
@@ -231,7 +250,6 @@ export function HierarchicalSidebar({
     }
   }, [openIds, isLoadedFromStorage, storageKey]);
 
-  // Lógica de scroll para o item ativo completa
   useEffect(() => {
     if (activeId && treeRef.current && isLoadedFromStorage) {
       const timer = setTimeout(() => {
@@ -274,7 +292,6 @@ export function HierarchicalSidebar({
         <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
       </div>
 
-      {/* Secção de Favoritos */}
       {favoriteItems.length > 0 && (
           <div className="mb-4">
               <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-2 flex items-center">
@@ -296,10 +313,8 @@ export function HierarchicalSidebar({
           </div>
       )}
 
-      {/* Separador Visual */}
       <div className="border-b border-border/50 my-2"></div>
       
-      {/* Container Principal da Árvore */}
       <div className="flex-grow flex flex-col min-h-0">
           <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
           <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
