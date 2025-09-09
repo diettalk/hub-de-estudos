@@ -185,6 +185,21 @@ export function HierarchicalSidebar({
     return addTable(treeData);
   }, [treeData, table]);
 
+  // DEBUG 1 - ver os dados que chegam crus da props
+useEffect(() => {
+  console.log("📥 treeData recebido:", treeData);
+}, [treeData]);
+
+// DEBUG 2 - ver os dados que foram processados com id e table
+useEffect(() => {
+  console.log("📦 processedData pronto:", processedData);
+}, [processedData]);
+
+// DEBUG 3 - ver o que foi detectado como favorito
+useEffect(() => {
+  console.log("⭐ favoriteItems detectados:", favoriteItems);
+}, [favoriteItems]);
+
   // Lógica para encontrar os favoritos recursivamente
   const favoriteItems = useMemo(() => {
     const favorites: NodeType[] = [];

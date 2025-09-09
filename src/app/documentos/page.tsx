@@ -12,6 +12,8 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+console.log("--- DADOS BRUTOS DO SUPABASE ---", JSON.stringify(documentos, null, 2));
+
   // CORREÇÃO 1: Adicionamos 'sort_order' à query
   const { data: allDocuments } = await supabase
     .from('documentos')
