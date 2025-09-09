@@ -1,5 +1,3 @@
-// src/components/TextEditor.tsx
-
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -135,7 +133,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 
     const editor = useEditor({
         extensions: [
-            // --- CORREÇÃO: Configuração explícita do StarterKit ---
+            // --- CORREÇÃO: Adicionamos textStyle: false para evitar conflitos ---
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },
                 bulletList: {
@@ -146,8 +144,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                     keepMarks: true,
                     keepAttributes: true,
                 },
+                textStyle: false, // Impede que o StarterKit controle os estilos de texto
             }),
             Highlight.configure({ multicolor: true }), 
+            // Agora estas extensões têm controlo total, sem interferência
             TextStyle, 
             Color.configure({ types: ['textStyle'] }),
             FontFamily.configure({ types: ['textStyle'] }),
@@ -185,3 +185,4 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 }
 
 export default TextEditor;
+
