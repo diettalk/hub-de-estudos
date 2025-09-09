@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { buildTree } from '@/lib/utils';
 import DisciplinasClient from '@/components/DisciplinasClient';
 import { type Node } from '@/lib/types';
+import { HierarchicalSidebar } from "@/components/HierarchicalSidebar";
 
 export const dynamic = 'force-dynamic';
 

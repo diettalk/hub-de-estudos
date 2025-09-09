@@ -185,30 +185,18 @@ export function HierarchicalSidebar({
     return addTable(treeData);
   }, [treeData, table]);
 
-  // DEBUG 1 - ver os dados que chegam crus da props
-useEffect(() => {
-  console.log("📥 treeData recebido:", treeData);
-}, [treeData]);
-
-// DEBUG 2 - ver os dados que foram processados com id e table
-useEffect(() => {
-  console.log("📦 processedData pronto:", processedData);
-}, [processedData]);
-
-// DEBUG 3 - ver o que foi detectado como favorito
-useEffect(() => {
-  console.log("⭐ favoriteItems detectados:", favoriteItems);
-}, [favoriteItems]);
-
   // Lógica para encontrar os favoritos recursivamente
   const favoriteItems = useMemo(() => {
     const favorites: NodeType[] = [];
     function findFavorites(nodes: NodeType[]) {
+        // CORREÇÃO: Adicionada uma verificação para evitar crash
+        if (!nodes) return; 
         for (const node of nodes) {
             if (node.is_favorite) {
                 favorites.push(node);
             }
-            if (node.children) {
+            // Verifica se 'children' existe e é um array antes de continuar
+            if (Array.isArray(node.children)) {
                 findFavorites(node.children);
             }
         }
@@ -220,10 +208,38 @@ useEffect(() => {
   const storageKey = `openFolders_${table}`;
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
+  
+  // Lógica de persistência completa
+  useEffect(() => {
+    const savedState = localStorage.getItem(storageKey);
+    if (savedState) {
+      try {
+        const savedIds = JSON.parse(savedState);
+        if (Array.isArray(savedIds)) {
+          setOpenIds(savedIds.map(String));
+        }
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
+    }
+    setIsLoadedFromStorage(true);
+  }, [storageKey]);
 
-  useEffect(() => { /* ...lógica de persistência inalterada... */ }, [storageKey]);
-  useEffect(() => { /* ...lógica de persistência inalterada... */ }, [openIds, isLoadedFromStorage, storageKey]);
-  useEffect(() => { /* ...lógica de scroll inalterada... */ }, [activeId, isLoadedFromStorage]);
+  useEffect(() => {
+    if (isLoadedFromStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
+    }
+  }, [openIds, isLoadedFromStorage, storageKey]);
+
+  // Lógica de scroll para o item ativo completa
+  useEffect(() => {
+    if (activeId && treeRef.current && isLoadedFromStorage) {
+      const timer = setTimeout(() => {
+        treeRef.current?.scrollTo(activeId);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeId, isLoadedFromStorage]);
 
   const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
     const movedItemId = Number(dragIds[0]);
