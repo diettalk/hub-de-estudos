@@ -10,6 +10,16 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
+// NOVO: Importação dos componentes para o Menu de Contexto
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu"
+
+// ALTERADO: Apenas o componente Node foi modificado para usar o Menu de Contexto.
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(node.data.title);
@@ -29,70 +39,86 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const href = table === 'documentos'
         ? `/documentos?id=${node.data.id}`
         : `/disciplinas?page=${node.data.id}`;
+        
+    // Se o nó estiver no modo de edição, não usamos o menu de contexto
+    if (isEditing) {
+        return (
+            <div style={style} className="flex items-center my-1 pr-2">
+                 <span className="p-2 text-muted-foreground"><GripVertical className="w-4 h-4" /></span>
+                 <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onBlur={handleSaveTitle}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+                    className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
+                    autoFocus
+                />
+            </div>
+        )
+    }
 
     return (
-        <div
-            style={style}
-            ref={dragHandle}
-            className="flex items-center group my-1 rounded-md hover:bg-secondary pr-2 relative" // Adicionado 'relative' para o contexto das guias
-        >
-            {/* --- GUIAS VISUAIS CORRIGIDAS --- */}
-            {/* Este loop desenha as linhas verticais para os níveis pais */}
-            {Array.from({ length: node.level }).map((_, i) => (
-                <span
-                    key={i}
-                    className="absolute top-0 w-px h-full bg-slate-700/50"
-                    // A posição de cada linha pai é calculada com base no nível e na indentação (24px)
-                    style={{ left: `${(i * 24) + 12}px` }}
-                />
-            ))}
-            
-            {/* Desenha a "perna" da guia para o item atual */}
-            {node.level > 0 && (
-                 <span
-                    className="absolute top-1/2 h-px w-[12px] bg-slate-700/50"
-                    style={{ left: `${((node.level - 1) * 24) + 12}px` }}
-                />
-            )}
-            
-            {/* O conteúdo do nó é colocado por cima das guias com z-index */}
-            <div className="relative z-10 flex items-center flex-grow bg-card">
-                 <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover...">
-                    <GripVertical className="w-4 h-4" />
-                </span>
+        <ContextMenu>
+            <ContextMenuTrigger asChild>
+                <div
+                    style={style}
+                    ref={dragHandle}
+                    className="flex items-center group my-1 rounded-md hover:bg-secondary pr-2 relative"
+                >
+                    {/* As guias visuais da etapa anterior continuam aqui */}
+                    {Array.from({ length: node.level }).map((_, i) => (
+                        <span key={i} className="absolute top-0 w-px h-full bg-slate-700/50" style={{ left: `${(i * 24) + 12}px` }} />
+                    ))}
+                    {node.level > 0 && (
+                        <span className="absolute top-1/2 h-px w-[12px] bg-slate-700/50" style={{ left: `${((node.level - 1) * 24) + 12}px` }} />
+                    )}
+                    
+                    {/* O conteúdo visível do nó */}
+                    <div className="relative z-10 flex items-center flex-grow bg-card">
+                        <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover...">
+                            <GripVertical className="w-4 h-4" />
+                        </span>
 
-                {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
+                        {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
 
-                {node.isLeaf && !node.data.emoji ? (
-                    <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
-                ) : (
-                    !node.isLeaf && <ChevronDown
-                        onClick={() => node.toggle()}
-                        className={`w-4 h-4 mx-2 cursor-pointer transition-transform ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
-                    />
-                )}
+                        {node.isLeaf && !node.data.emoji ? (
+                            <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
+                        ) : (
+                            !node.isLeaf && <ChevronDown
+                                onClick={() => node.toggle()}
+                                className={`w-4 h-4 mx-2 cursor-pointer transition-transform ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
+                            />
+                        )}
 
-                {isEditing ? (
-                    <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        onBlur={handleSaveTitle}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
-                        className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
-                        autoFocus
-                    />
-                ) : (
-                    <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
-                )}
+                        <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
 
-                <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setIsEditing(true)} title="Renomear" className="p-2 text-muted-foreground hover:text-foreground rounded"><Edit2 className="w-4 h-4" /></button>
-                    {!node.isLeaf && <button onClick={handleCreateChild} title="Criar Sub-item" className="p-2 text-muted-foreground hover:text-foreground rounded"><Plus className="w-4 h-4" /></button>}
-                    <button onClick={handleDelete} title="Excluir" className="p-2 text-muted-foreground hover:text-destructive rounded"><Trash2 className="w-4 h-4" /></button>
+                        {/* REMOVIDO: A div com os botões que apareciam no hover foi completamente removida. */}
+                    </div>
                 </div>
-            </div>
-        </div>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-56">
+                <ContextMenuItem onSelect={() => setIsEditing(true)}>
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    <span>Renomear</span>
+                </ContextMenuItem>
+
+                {/* A opção "Criar Sub-item" só aparece para pastas */}
+                {!node.isLeaf && (
+                    <ContextMenuItem onSelect={handleCreateChild}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        <span>Criar Sub-item</span>
+                    </ContextMenuItem>
+                )}
+                
+                <ContextMenuSeparator />
+                
+                <ContextMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    <span>Excluir</span>
+                </ContextMenuItem>
+            </ContextMenuContent>
+        </ContextMenu>
     );
 }
 
