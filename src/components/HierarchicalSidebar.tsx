@@ -1,25 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
+import React, from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical, Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { 
+    ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical, Search, 
+    FilePlus2, Pencil, Trash
+} from 'lucide-react';
+import { Input } from '@/components/ui/input'; 
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
+import { 
+    ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger 
+} from '@/components/ui/context-menu';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
-// NOVO: Importação dos componentes para o Menu de Contexto
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuSeparator,
-} from "@/components/ui/context-menu"
-
-// ALTERADO: Apenas o componente Node foi modificado para usar o Menu de Contexto.
+// ============================================================================
+// --- Componente Node ---
+// ============================================================================
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(node.data.title);
@@ -27,113 +26,129 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const router = useRouter();
     const table = node.data.table;
 
-    // A lógica interna do Node (handlers de clique, etc.) permanece a mesma.
-    const clickTimeout = useRef<NodeJS.Timeout | null>(null);
-    const clickCount = useRef(0);
     const refreshView = () => router.refresh();
-    const handleMultiClick = () => { /* ...código inalterado... */ };
-    const handleSaveTitle = () => { /* ...código inalterado... */ };
-    const handleCreateChild = () => { /* ...código inalterado... */ };
-    const handleDelete = () => { /* ...código inalterado... */ };
 
-    const href = table === 'documentos'
-        ? `/documentos?id=${node.data.id}`
+    const handleSaveTitle = () => {
+        if (title.trim() && title !== node.data.title) {
+            startTransition(() => {
+                updateItemTitle(table, node.data.id, title).then(result => {
+                    if (result.error) toast.error(result.error);
+                    setIsEditing(false);
+                    refreshView();
+                });
+            });
+        } else {
+            setIsEditing(false);
+            setTitle(node.data.title);
+        }
+    };
+
+    const handleCreateChild = () => startTransition(() => {
+        createItem(table, node.data.id).then(() => {
+            if (!node.isOpen) node.toggle();
+            refreshView();
+        });
+    });
+
+    const handleDelete = () => startTransition(() => {
+        deleteItem(table, node.data.id).then(res => {
+            if (res.error) toast.error(res.error);
+            else toast.success(`"${node.data.title}" foi excluído.`);
+            refreshView();
+        });
+    });
+
+    const href = table === 'documentos' 
+        ? `/documentos?id=${node.data.id}` 
         : `/disciplinas?page=${node.data.id}`;
-        
-    // Se o nó estiver no modo de edição, não usamos o menu de contexto
-    if (isEditing) {
-        return (
-            <div style={style} className="flex items-center my-1 pr-2">
-                 <span className="p-2 text-muted-foreground"><GripVertical className="w-4 h-4" /></span>
-                 <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    onBlur={handleSaveTitle}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
-                    className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
-                    autoFocus
-                />
-            </div>
-        )
-    }
 
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
+                {/* ALTERADO: Adicionada a classe para o feedback de drop */}
                 <div
                     style={style}
-                    ref={dragHandle}
-                    className="flex items-center group my-1 rounded-md hover:bg-secondary pr-2 relative"
-                >
-                    {/* As guias visuais da etapa anterior continuam aqui */}
-                    {Array.from({ length: node.level }).map((_, i) => (
-                        <span key={i} className="absolute top-0 w-px h-full bg-slate-700/50" style={{ left: `${(i * 24) + 12}px` }} />
-                    ))}
-                    {node.level > 0 && (
-                        <span className="absolute top-1/2 h-px w-[12px] bg-slate-700/50" style={{ left: `${((node.level - 1) * 24) + 12}px` }} />
+                    className={cn(
+                        "relative flex items-center group my-1 rounded-md hover:bg-secondary pr-2 transition-colors",
+                        node.state.isDragging && "opacity-50",
+                        node.state.isSelected && "bg-primary/20",
+                        node.state.willReceiveDrop && "outline-2 outline-dashed outline-primary/50" // <-- AQUI ESTÁ A MAGIA
                     )}
-                    
-                    {/* O conteúdo visível do nó */}
-                    <div className="relative z-10 flex items-center flex-grow bg-card">
-                        <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover...">
-                            <GripVertical className="w-4 h-4" />
-                        </span>
+                >
+                    <span ref={dragHandle} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Mover">
+                        <GripVertical className="w-4 h-4" />
+                    </span>
 
-                        {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
+                    <div className="relative flex-1 flex items-center h-full">
+                        {/* Guias Visuais */}
+                        {node.parent && node.parent.level > 0 && Array.from({ length: node.parent.level }).map((_, i) => (
+                            <div key={i} className="absolute left-0 top-0 h-full w-[24px]" style={{ transform: `translateX(-${(i + 1) * 24}px)` }}>
+                                <div className="h-full w-px bg-slate-700/50 mx-auto"></div>
+                            </div>
+                        ))}
+                        <div className="absolute left-0 top-0 h-1/2 w-[24px]" style={{ transform: `translateX(-24px)` }}>
+                            <div className={`mx-auto ${node.isLast ? 'h-full' : 'h-1/2'} w-px bg-slate-700/50`}></div>
+                            <div className="h-px w-1/2 bg-slate-700/50 absolute bottom-0 right-0"></div>
+                        </div>
 
-                        {node.isLeaf && !node.data.emoji ? (
-                            <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
-                        ) : (
-                            !node.isLeaf && <ChevronDown
-                                onClick={() => node.toggle()}
-                                className={`w-4 h-4 mx-2 cursor-pointer transition-transform ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
-                            />
-                        )}
-
-                        <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
-
-                        {/* REMOVIDO: A div com os botões que apareciam no hover foi completamente removida. */}
+                        {/* Conteúdo do Nó */}
+                        <div className="relative z-10 bg-card flex items-center h-full w-full">
+                            {node.isLeaf ? (
+                                <FileText className="w-4 h-4 mx-2 text-muted-foreground flex-shrink-0" />
+                            ) : (
+                                <ChevronDown
+                                    onClick={() => node.toggle()}
+                                    className={`w-4 h-4 mx-2 cursor-pointer transition-transform flex-shrink-0 ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
+                                />
+                            )}
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    onBlur={handleSaveTitle}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+                                    className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
+                                    autoFocus
+                                />
+                            ) : (
+                                <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
+                            )}
+                        </div>
                     </div>
                 </div>
             </ContextMenuTrigger>
-            <ContextMenuContent className="w-56">
-                <ContextMenuItem onSelect={() => setIsEditing(true)}>
-                    <Edit2 className="mr-2 h-4 w-4" />
-                    <span>Renomear</span>
+            <ContextMenuContent>
+                <ContextMenuItem onClick={() => setIsEditing(true)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Renomear
                 </ContextMenuItem>
-
-                {/* A opção "Criar Sub-item" só aparece para pastas */}
                 {!node.isLeaf && (
-                    <ContextMenuItem onSelect={handleCreateChild}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        <span>Criar Sub-item</span>
+                    <ContextMenuItem onClick={handleCreateChild}>
+                        <FilePlus2 className="w-4 h-4 mr-2" /> Criar Sub-item
                     </ContextMenuItem>
                 )}
-                
-                <ContextMenuSeparator />
-                
-                <ContextMenuItem onSelect={handleDelete} className="text-destructive focus:text-destructive">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    <span>Excluir</span>
+                <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+                    <Trash className="w-4 h-4 mr-2" /> Excluir
                 </ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
     );
 }
 
-/* --- Sidebar --- */
+
+// ============================================================================
+// --- Componente HierarchicalSidebar ---
+// ============================================================================
 export function HierarchicalSidebar({
   treeData = [],
   table,
   title,
-  // NOVO: Prop para receber o ID do item ativo atualmente
   activeId,
 }: {
   treeData: NodeType[];
   table: 'documentos' | 'disciplinas';
   title: string;
-  activeId?: string | null; // A prop é opcional
+  activeId?: string | null;
 }) {
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -141,25 +156,17 @@ export function HierarchicalSidebar({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
-  
-  // NOVO: A ref para a árvore é necessária para a função de scroll
   const treeRef = useRef<TreeApi<NodeType>>(null);
-
+  
   const [searchTerm, setSearchTerm] = useState('');
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
-      return nodes.map((n) => ({
-        ...n,
-        id: String(n.id),
-        table,
-        children: addTable(n.children),
-      }));
+      return nodes.map((n) => ({ ...n, id: String(n.id), table, children: addTable(n.children) }));
     }
     return addTable(treeData);
   }, [treeData, table]);
 
-  // A lógica de persistência permanece inalterada
   const storageKey = `openFolders_${table}`;
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
@@ -172,9 +179,7 @@ export function HierarchicalSidebar({
         if (Array.isArray(savedIds)) {
           setOpenIds(savedIds.map(String));
         }
-      } catch {
-        localStorage.removeItem(storageKey);
-      }
+      } catch { localStorage.removeItem(storageKey); }
     }
     setIsLoadedFromStorage(true);
   }, [storageKey]);
@@ -185,29 +190,37 @@ export function HierarchicalSidebar({
     }
   }, [openIds, isLoadedFromStorage, storageKey]);
 
-  // NOVO: useEffect para controlar o scroll automático
   useEffect(() => {
-    // Só executa se tivermos um activeId, a árvore estiver pronta e o estado carregado
     if (activeId && treeRef.current && isLoadedFromStorage) {
-      // Usamos um pequeno timeout para garantir que a árvore já renderizou e pode calcular as posições
-      const timer = setTimeout(() => {
-        treeRef.current?.scrollTo(activeId);
-      }, 100); // 100ms é um delay seguro
-      
-      // Limpa o timeout se o componente for desmontado
+      const timer = setTimeout(() => { treeRef.current?.scrollTo(activeId); }, 100);
       return () => clearTimeout(timer);
     }
-  }, [activeId, isLoadedFromStorage]); // Re-executa se o item ativo mudar
+  }, [activeId, isLoadedFromStorage]);
 
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => { /* ... */ };
-  const handleCreateRoot = () => { /* ... */ };
-  useEffect(() => { /* ...lógica de scroll... */ }, [processedData]);
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
+    const movedItemId = Number(dragIds[0]);
+    const newParentId = parentId ? Number(parentId) : null;
+    startTransition(() => {
+      updateItemParent(table, movedItemId, newParentId).then((result) => {
+        if (result.error) toast.error(result.error);
+        router.refresh();
+      });
+    });
+  };
+
+  const handleCreateRoot = () => {
+    startTransition(() => {
+      createItem(table, null).then(() => {
+        router.refresh();
+      });
+    });
+  };
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`...`}>
+        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}>
           <Plus className="w-5 h-5" />
         </button>
       </div>
@@ -217,15 +230,12 @@ export function HierarchicalSidebar({
         <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
       </div>
 
-      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
-        <div ref={contentWidthRef} style={{ height: '1px' }}></div>
-      </div>
+      <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
 
       <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
         {processedData.length > 0 ? (
           isLoadedFromStorage && (
             <Tree<NodeType>
-              // ALTERADO: Adicionamos a ref de volta
               ref={treeRef}
               data={processedData}
               onMove={handleMove}
@@ -242,11 +252,10 @@ export function HierarchicalSidebar({
             </Tree>
           )
         ) : (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground text-sm">...</p>
-          </div>
+          <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum item. Clique em '+' para criar.</p></div>
         )}
       </div>
     </div>
   );
 }
+
