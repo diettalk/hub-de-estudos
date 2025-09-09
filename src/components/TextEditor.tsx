@@ -4,10 +4,26 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
 import { 
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, 
-    Underline, Palette, X, Pilcrow, Heading1, Heading2, Heading3, 
+    Underline, Palette, X,
     List, ListOrdered, CheckSquare
 } from 'lucide-react';
-import StarterKit from '@tiptap/starter-kit';
+
+// --- ALTERADO: Importações Manuais ---
+// REMOVIDO: import StarterKit from '@tiptap/starter-kit';
+// ADICIONADO: Importações individuais para substituir o StarterKit
+import Document from '@tiptap/extension-document';
+import Paragraph from '@tiptap/extension-paragraph';
+import Text from '@tiptap/extension-text';
+import Heading from '@tiptap/extension-heading';
+import BoldExtension from '@tiptap/extension-bold';
+import ItalicExtension from '@tiptap/extension-italic';
+import UnderlineExtension from '@tiptap/extension-underline';
+import BulletList from '@tiptap/extension-bullet-list';
+import OrderedList from '@tiptap/extension-ordered-list';
+import ListItem from '@tiptap/extension-list-item';
+import History from '@tiptap/extension-history';
+import Link from '@tiptap/extension-link';
+
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
@@ -25,13 +41,9 @@ import FontFamily from '@tiptap/extension-font-family';
 
 import './TextEditor.css';
 
-// ============================================================================
-// --- MenuBar ---
-// ============================================================================
-const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClose: () => void; onSave: () => void; }) => {
+// O MenuBar permanece funcionalmente o mesmo, apenas o reconstruímos para ser completo
+const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
-    
-    // Este estado força a re-renderização para atualizar o valor do seletor de cores
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
 
     const updateListener = useCallback(() => {
@@ -49,7 +61,7 @@ const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClo
 
     const setLink = useCallback(() => {
         if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
-        const url = window.prompt('URL', editor.getAttributes('link').href);
+        const url = window.prompt('URL', editor.getAttributes('link').href || '');
         if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
 
@@ -63,7 +75,7 @@ const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClo
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <select
+             <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
                 onChange={(e) => {
@@ -90,41 +102,31 @@ const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClo
                 <option value="serif">Serif</option>
                 <option value="monospace">Mono</option>
             </select>
-            
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
-            
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') && activeClass)} title="Lista"><List className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
-
             <div className="flex items-center gap-2">
                  <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                  <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
-                 
                  <div className="flex items-center rounded border">
                     <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
                     <input 
                       type="color" 
-                      onChange={(e) => { // Usando onChange para maior fiabilidade
-                        const newColor = (e.target as HTMLInputElement).value;
-                        editor.chain().focus().setColor(newColor).run();
-                        onSave(); // Acionamento manual no evento de mudança confirmada
-                      }} 
-                      value={currentColor} // Ligado a um estado que se atualiza
+                      onInput={(e) => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()}
+                      value={currentColor}
                       className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                  </div>
-
                  <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
                  <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
             </div>
-            
             <div className="flex-grow"></div>
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar"><X className="w-5 h-5" /></Button>
         </div>
@@ -132,9 +134,6 @@ const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClo
 });
 MenuBar.displayName = 'MenuBar';
 
-// ============================================================================
-// --- Componente Principal TextEditor ---
-// ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
   onSave: (newContent: JSONContent) => Promise<any>;
@@ -143,21 +142,42 @@ interface TextEditorProps {
 
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const [isEditorReady, setIsEditorReady] = useState(false);
-    
-    // Simplificamos o debounce para apenas receber a função
-    const debouncedSave = useDebouncedCallback((content: JSONContent) => {
-        onSave(content);
+    const debouncedSave = useDebouncedCallback((editor: Editor) => {
+        if (editor && !editor.isDestroyed) {
+            onSave(editor.getJSON());
+        }
     }, 1000);
 
     const editor = useEditor({
+        // --- ALTERADO: Lista de extensões manual ---
         extensions: [
-            StarterKit, // Manter simples é mais robusto
-            Highlight.configure({ multicolor: true }), 
-            TextStyle, 
-            Color,
-            FontFamily,
+            // Essenciais para o funcionamento
+            Document,
+            Paragraph,
+            Text,
+            History,
+            
+            // Estilos de Bloco
+            Heading.configure({ levels: [1, 2, 3] }),
+            BulletList,
+            OrderedList,
+            ListItem,
             TaskList,
             TaskItem.configure({ nested: true }),
+
+            // Estilos de Linha (Marks)
+            BoldExtension,
+            ItalicExtension,
+            UnderlineExtension,
+            Link.configure({ openOnClick: false }),
+            Highlight.configure({ multicolor: true }), 
+            
+            // Extensões de Cor e Fonte (o foco do nosso problema)
+            TextStyle, // A base para Color e FontFamily
+            Color,     // Não precisa mais de .configure aqui, pois TextStyle é a base
+            FontFamily,
+
+            // Outras extensões
             Table.configure({ resizable: true }), 
             TableRow, 
             TableHeader, 
@@ -171,7 +191,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             },
         },
         onUpdate: ({ editor }) => {
-            debouncedSave(editor.getJSON());
+            debouncedSave(editor);
         },
         onCreate: () => setIsEditorReady(true),
     });
@@ -183,16 +203,9 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         }
     }, [initialContent, editor]);
 
-    // Função de salvamento manual, sem debounce, para ser passada ao MenuBar
-    const handleManualSave = useCallback(() => {
-        if (editor) {
-            onSave(editor.getJSON());
-        }
-    }, [editor, onSave]);
-
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} onSave={handleManualSave} />}
+            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
