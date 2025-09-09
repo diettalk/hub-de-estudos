@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import React, from 'react';
+// ALTERADO: useTransition foi adicionado de volta à importação.
+import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
     ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical, Search, 
@@ -15,6 +16,7 @@ import {
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // ============================================================================
 // --- Componente Node ---
@@ -65,14 +67,13 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                {/* ALTERADO: Adicionada a classe para o feedback de drop */}
                 <div
                     style={style}
                     className={cn(
                         "relative flex items-center group my-1 rounded-md hover:bg-secondary pr-2 transition-colors",
                         node.state.isDragging && "opacity-50",
                         node.state.isSelected && "bg-primary/20",
-                        node.state.willReceiveDrop && "outline-2 outline-dashed outline-primary/50" // <-- AQUI ESTÁ A MAGIA
+                        node.state.willReceiveDrop && "outline-2 outline-dashed outline-primary/50"
                     )}
                 >
                     <span ref={dragHandle} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing" title="Mover">
@@ -134,7 +135,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         </ContextMenu>
     );
 }
-
 
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
