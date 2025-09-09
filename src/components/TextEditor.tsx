@@ -149,7 +149,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             }),
             Highlight.configure({ multicolor: true }), 
             TextStyle, 
-            Color,
+            Color.configure({ types: ['textStyle'] }),
             FontFamily.configure({ types: ['textStyle'] }),
             TaskList,
             TaskItem.configure({ nested: true }),
