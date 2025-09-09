@@ -10,7 +10,6 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
-// ALTERADO: Apenas o componente Node foi modificado para adicionar as guias.
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(node.data.title);
@@ -18,9 +17,9 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
     const router = useRouter();
     const table = node.data.table;
 
+    // A lógica interna do Node (handlers de clique, etc.) permanece a mesma.
     const clickTimeout = useRef<NodeJS.Timeout | null>(null);
     const clickCount = useRef(0);
-
     const refreshView = () => router.refresh();
     const handleMultiClick = () => { /* ...código inalterado... */ };
     const handleSaveTitle = () => { /* ...código inalterado... */ };
@@ -35,34 +34,33 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         <div
             style={style}
             ref={dragHandle}
-            className={`flex items-center group my-1 rounded-md hover:bg-secondary pr-2 ${node.state.isDragging ? 'opacity-50' : ''} ${node.state.isSelected ? 'bg-primary/20' : ''}`}
+            className="flex items-center group my-1 rounded-md hover:bg-secondary pr-2 relative" // Adicionado 'relative' para o contexto das guias
         >
-            {/* A alça de arrastar permanece como o primeiro elemento */}
-            <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
-                <GripVertical className="w-4 h-4" />
-            </span>
+            {/* --- GUIAS VISUAIS CORRIGIDAS --- */}
+            {/* Este loop desenha as linhas verticais para os níveis pais */}
+            {Array.from({ length: node.level }).map((_, i) => (
+                <span
+                    key={i}
+                    className="absolute top-0 w-px h-full bg-slate-700/50"
+                    // A posição de cada linha pai é calculada com base no nível e na indentação (24px)
+                    style={{ left: `${(i * 24) + 12}px` }}
+                />
+            ))}
+            
+            {/* Desenha a "perna" da guia para o item atual */}
+            {node.level > 0 && (
+                 <span
+                    className="absolute top-1/2 h-px w-[12px] bg-slate-700/50"
+                    style={{ left: `${((node.level - 1) * 24) + 12}px` }}
+                />
+            )}
+            
+            {/* O conteúdo do nó é colocado por cima das guias com z-index */}
+            <div className="relative z-10 flex items-center flex-grow bg-card">
+                 <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover...">
+                    <GripVertical className="w-4 h-4" />
+                </span>
 
-            {/* Este wrapper contém todo o conteúdo indentado e as novas guias visuais */}
-            <div className="relative flex-grow flex items-center h-full">
-                {/* As guias só são desenhadas para itens que não estão na raiz (nível > 0) */}
-                {node.level > 0 && (
-                    <>
-                        {/* Linha Vertical: conecta-se ao pai. A altura depende se é o último filho. */}
-                        <span
-                            className={`absolute w-px bg-border/50
-                                ${node.isLast ? "h-1/2 top-0" : "h-full top-0"}`}
-                            // O valor 'left' foi ajustado para alinhar com o ícone de expandir/recolher
-                            style={{ left: "-16px" }}
-                        />
-                        {/* Linha Horizontal: conecta-se a este item. */}
-                        <span
-                            className="absolute top-1/2 h-px w-3 bg-border/50"
-                            style={{ left: "-16px" }}
-                        />
-                    </>
-                )}
-
-                {/* O resto do conteúdo do item (ícone, título, botões) */}
                 {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
 
                 {node.isLeaf && !node.data.emoji ? (
