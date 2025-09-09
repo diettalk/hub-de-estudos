@@ -28,47 +28,95 @@ import './TextEditor.css';
 // ============================================================================
 // --- MenuBar ---
 // ============================================================================
-// ALTERADO: Adicionamos a prop 'onSave' para acionamento manual
 const MenuBar = React.memo(({ editor, onClose, onSave }: { editor: Editor; onClose: () => void; onSave: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     
-    const [_, setForceUpdate] = useState(0);
+    // Este estado força a re-renderização para atualizar o valor do seletor de cores
+    const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
+
+    const updateListener = useCallback(() => {
+        setCurrentColor(editor.getAttributes('textStyle').color || '#ffffff');
+    }, [editor]);
+
     useEffect(() => {
-        const updateListener = () => setForceUpdate(val => val + 1);
         editor.on('transaction', updateListener);
         editor.on('selectionUpdate', updateListener);
         return () => {
             editor.off('transaction', updateListener);
             editor.off('selectionUpdate', updateListener);
         };
+    }, [editor, updateListener]);
+
+    const setLink = useCallback(() => {
+        if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
+        const url = window.prompt('URL', editor.getAttributes('link').href);
+        if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
 
-    const setLink = useCallback(() => { /* ...código inalterado... */ }, [editor]);
-    const addYoutubeVideo = useCallback(() => { /* ...código inalterado... */ }, [editor]);
+    const addYoutubeVideo = useCallback(() => {
+        const url = prompt('Cole a URL do vídeo do YouTube:');
+        if (url) editor.commands.setYoutubeVideo({ src: url });
+    }, [editor]);
 
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            {/* ...outros botões e selects inalterados... */}
+            <select
+                className={cn(selectClass, "w-[120px]")}
+                value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
+                onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === 'p') editor.chain().focus().setParagraph().run();
+                    else editor.chain().focus().toggleHeading({ level: parseInt(value.replace('h', '')) as 1 | 2 | 3 }).run()
+                }}
+            >
+                <option value="p">Parágrafo</option>
+                <option value="h1">Título 1</option>
+                <option value="h2">Título 2</option>
+                <option value="h3">Título 3</option>
+            </select>
+            <select
+                className={cn(selectClass, "w-[120px]")}
+                value={editor.getAttributes('textStyle').fontFamily || 'default'}
+                onChange={(e) => {
+                    if (e.target.value === 'default') editor.chain().focus().unsetFontFamily().run();
+                    else editor.chain().focus().setFontFamily(e.target.value).run();
+                }}
+            >
+                <option value="default">Padrão</option>
+                <option value="Inter">Inter</option>
+                <option value="serif">Serif</option>
+                <option value="monospace">Mono</option>
+            </select>
             
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
+            </div>
+            
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') && activeClass)} title="Lista"><List className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
+            </div>
+
             <div className="flex items-center gap-2">
                  <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                  <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
                  
-                 {/* ALTERADO: O onInput agora também chama a função onSave */}
                  <div className="flex items-center rounded border">
                     <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
                     <input 
                       type="color" 
-                      onInput={(e) => {
+                      onChange={(e) => { // Usando onChange para maior fiabilidade
                         const newColor = (e.target as HTMLInputElement).value;
                         editor.chain().focus().setColor(newColor).run();
-                        // Força o salvamento imediatamente após a mudança de cor
-                        onSave();
+                        onSave(); // Acionamento manual no evento de mudança confirmada
                       }} 
-                      value={editor.getAttributes('textStyle').color || '#ffffff'} // Mudei o default para branco para temas escuros
+                      value={currentColor} // Ligado a um estado que se atualiza
                       className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                  </div>
@@ -95,25 +143,19 @@ interface TextEditorProps {
 
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const [isEditorReady, setIsEditorReady] = useState(false);
-    // IMPORTANTE: Passamos o editor para a função de debounce
-    const debouncedSave = useDebouncedCallback((currentEditor: Editor) => {
-        if (currentEditor && !currentEditor.isDestroyed) {
-            onSave(currentEditor.getJSON());
-        }
+    
+    // Simplificamos o debounce para apenas receber a função
+    const debouncedSave = useDebouncedCallback((content: JSONContent) => {
+        onSave(content);
     }, 1000);
 
     const editor = useEditor({
-        // A configuração das extensões pode voltar ao que estava, pois a correção é manual agora
         extensions: [
-            StarterKit.configure({
-                heading: { levels: [1, 2, 3] },
-                bulletList: { keepMarks: true, keepAttributes: true },
-                orderedList: { keepMarks: true, keepAttributes: true },
-            }),
+            StarterKit, // Manter simples é mais robusto
             Highlight.configure({ multicolor: true }), 
             TextStyle, 
-            Color.configure({ types: ['textStyle'] }),
-            FontFamily.configure({ types: ['textStyle'] }),
+            Color,
+            FontFamily,
             TaskList,
             TaskItem.configure({ nested: true }),
             Table.configure({ resizable: true }), 
@@ -128,8 +170,9 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
             },
         },
-        // O onUpdate continua a funcionar para todas as outras alterações
-        onUpdate: ({ editor }) => debouncedSave(editor),
+        onUpdate: ({ editor }) => {
+            debouncedSave(editor.getJSON());
+        },
         onCreate: () => setIsEditorReady(true),
     });
     
@@ -140,10 +183,16 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
         }
     }, [initialContent, editor]);
 
+    // Função de salvamento manual, sem debounce, para ser passada ao MenuBar
+    const handleManualSave = useCallback(() => {
+        if (editor) {
+            onSave(editor.getJSON());
+        }
+    }, [editor, onSave]);
+
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            {/* ALTERADO: Passamos a função de salvamento para o MenuBar */}
-            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} onSave={() => debouncedSave(editor)} />}
+            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} onSave={handleManualSave} />}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
