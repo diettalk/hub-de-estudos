@@ -3,30 +3,28 @@
 import Link from 'next/link';
 import React, { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical } from 'lucide-react';
-// 💡 A importação de 'TreeApi' é necessária para a tipagem da nossa ref.
+// NOVO: Importação do ícone de pesquisa e do componente de Input
+import { ChevronDown, FileText, Edit2, Trash2, Plus, GripVertical, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input'; 
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
 import { createItem, updateItemTitle, deleteItem, updateItemParent } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 
-// O componente 'Node' continua exatamente igual, não precisa de o alterar.
+// O componente Node permanece inalterado
 function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(node.data.title);
   const [, startTransition] = useTransition();
   const router = useRouter();
   const table = node.data.table;
-
   const clickTimeout = useRef<NodeJS.Timeout | null>(null);
   const clickCount = useRef(0);
-
   const refreshView = () => router.refresh();
 
   const handleMultiClick = () => {
     clickCount.current += 1;
     if (clickTimeout.current) clearTimeout(clickTimeout.current);
-
     clickTimeout.current = setTimeout(() => {
       if (clickCount.current === 2) {
         const parent = node.parent;
@@ -90,9 +88,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       <span onClick={handleMultiClick} className="p-2 text-muted-foreground hover:text-foreground cursor-grab active-cursor-grabbing" title="Mover (2 cliques: subir nível, 3 cliques: mover para raiz)">
         <GripVertical className="w-4 h-4" />
       </span>
-
       {node.data.emoji && <span className="mx-2">{node.data.emoji}</span>}
-      
       {node.isLeaf && !node.data.emoji ? (
         <FileText className="w-4 h-4 mx-2 text-muted-foreground" />
       ) : (
@@ -101,7 +97,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
           className={`w-4 h-4 mx-2 cursor-pointer transition-transform ${node.isOpen ? 'rotate-0' : '-rotate-90'}`}
         />
       )}
-
       {isEditing ? (
         <input
           type="text"
@@ -115,7 +110,6 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
       ) : (
         <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
       )}
-
       <div className="ml-auto flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => setIsEditing(true)} title="Renomear" className="p-2 text-muted-foreground hover:text-foreground rounded"><Edit2 className="w-4 h-4" /></button>
         {!node.isLeaf && <button onClick={handleCreateChild} title="Criar Sub-item" className="p-2 text-muted-foreground hover:text-foreground rounded"><Plus className="w-4 h-4" /></button>}
@@ -142,6 +136,9 @@ export function HierarchicalSidebar({
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
 
+  // NOVO: Estado para guardar o termo da pesquisa
+  const [searchTerm, setSearchTerm] = useState('');
+
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
       return nodes.map((n) => ({
@@ -154,7 +151,7 @@ export function HierarchicalSidebar({
     return addTable(treeData);
   }, [treeData, table]);
 
-  // --- Persistência ---
+  // --- Persistência (lógica inalterada) ---
   const storageKey = `openFolders_${table}`;
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
@@ -205,6 +202,17 @@ export function HierarchicalSidebar({
         </button>
       </div>
 
+      {/* NOVO: Campo de pesquisa */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
       <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
         <div ref={contentWidthRef} style={{ height: '1px' }}></div>
       </div>
@@ -222,6 +230,8 @@ export function HierarchicalSidebar({
               openIds={openIds}
               onOpenChange={(ids) => setOpenIds(ids.map(String))}
               getId={(node) => String(node.id)}
+              // NOVO: Passa o termo da pesquisa para a árvore
+              searchTerm={searchTerm}
             >
               {Node}
             </Tree>
