@@ -18,11 +18,13 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
     const searchParams = useSearchParams();
     const [selectedDocument, setSelectedDocument] = useState(initialDocument);
     
-    // Este estado garante que o editor só renderize no cliente, evitando erros de hidratação.
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    // ALTERADO: Captura o ID da URL para passar para a sidebar.
+    const activeId = searchParams.get('id');
 
     useEffect(() => {
         const id = searchParams.get('id');
@@ -44,9 +46,11 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
                 <div className="hidden md:block w-[300px] flex-shrink-0">
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
-                            treeData={documentTree} // IDs devem ser string!
+                            treeData={documentTree}
                             table="documentos"
                             title="NAVEGAR"
+                            // ALTERADO: Passa o ID ativo para a sidebar.
+                            activeId={activeId}
                         />
                     </div>
                 </div>
@@ -62,17 +66,17 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         );
     }
 
-    // Sidebar ocupa toda a largura quando nada está selecionado
     return (
         <div className="h-full p-4 flex">
             <div className="flex-1 min-w-0">
                 <HierarchicalSidebar 
-                    treeData={documentTree} // IDs devem ser string!
+                    treeData={documentTree}
                     table="documentos"
                     title="DOCUMENTOS"
+                    // ALTERADO: Passa o ID ativo também nesta visualização.
+                    activeId={activeId}
                 />
             </div>
         </div>
     );
 }
-

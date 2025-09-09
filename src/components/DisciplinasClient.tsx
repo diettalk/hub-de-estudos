@@ -23,6 +23,8 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         setIsMounted(true);
     }, []);
 
+    // ALTERADO: Captura o ID da URL ('page') para passar para a sidebar.
+    const activeId = searchParams.get('page');
 
     useEffect(() => {
         const id = searchParams.get('page');
@@ -44,9 +46,11 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                 <div className="hidden md:block w-[300px] flex-shrink-0">
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
-                            treeData={paginaTree} // IDs devem ser string!
-                            table="paginas"
+                            treeData={paginaTree}
+                            table="paginas" // Lembre-se que aqui a tabela é 'paginas'
                             title="NAVEGAR"
+                            // ALTERADO: Passa o ID ativo para a sidebar.
+                            activeId={activeId}
                         />
                     </div>
                 </div>
@@ -62,17 +66,17 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         );
     }
 
-    // Sidebar ocupa toda a largura quando nada está selecionado
     return (
         <div className="h-full p-4 flex">
             <div className="flex-1 min-w-0">
                 <HierarchicalSidebar 
-                    treeData={paginaTree} // IDs devem ser string!
-                    table="paginas"
+                    treeData={paginaTree}
+                    table="paginas" // E aqui também
                     title="DISCIPLINAS"
+                    // ALTERADO: Passa o ID ativo também nesta visualização.
+                    activeId={activeId}
                 />
             </div>
         </div>
     );
 }
-

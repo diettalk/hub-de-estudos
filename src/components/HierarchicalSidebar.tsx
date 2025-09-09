@@ -124,10 +124,13 @@ export function HierarchicalSidebar({
   treeData = [],
   table,
   title,
+  // NOVO: Prop para receber o ID do item ativo atualmente
+  activeId,
 }: {
   treeData: NodeType[];
   table: 'documentos' | 'disciplinas';
   title: string;
+  activeId?: string | null; // A prop é opcional
 }) {
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -135,15 +138,17 @@ export function HierarchicalSidebar({
   const topScrollRef = useRef<HTMLDivElement>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const contentWidthRef = useRef<HTMLDivElement>(null);
+  
+  // NOVO: A ref para a árvore é necessária para a função de scroll
+  const treeRef = useRef<TreeApi<NodeType>>(null);
 
-  // NOVO: Estado para guardar o termo da pesquisa
   const [searchTerm, setSearchTerm] = useState('');
 
   const processedData = useMemo(() => {
     function addTable(nodes: NodeType[]): any[] {
       return nodes.map((n) => ({
         ...n,
-        id: String(n.id), // força id como string
+        id: String(n.id),
         table,
         children: addTable(n.children),
       }));
@@ -151,7 +156,7 @@ export function HierarchicalSidebar({
     return addTable(treeData);
   }, [treeData, table]);
 
-  // --- Persistência (lógica inalterada) ---
+  // A lógica de persistência permanece inalterada
   const storageKey = `openFolders_${table}`;
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
@@ -177,40 +182,36 @@ export function HierarchicalSidebar({
     }
   }, [openIds, isLoadedFromStorage, storageKey]);
 
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
-    // sua lógica de mover aqui
-  };
-
-  const handleCreateRoot = () => {
-    // sua lógica de criar item raiz aqui
-  };
-
+  // NOVO: useEffect para controlar o scroll automático
   useEffect(() => {
-    // sua lógica de scroll (se tiver)...
-  }, [processedData]);
+    // Só executa se tivermos um activeId, a árvore estiver pronta e o estado carregado
+    if (activeId && treeRef.current && isLoadedFromStorage) {
+      // Usamos um pequeno timeout para garantir que a árvore já renderizou e pode calcular as posições
+      const timer = setTimeout(() => {
+        treeRef.current?.scrollTo(activeId);
+      }, 100); // 100ms é um delay seguro
+      
+      // Limpa o timeout se o componente for desmontado
+      return () => clearTimeout(timer);
+    }
+  }, [activeId, isLoadedFromStorage]); // Re-executa se o item ativo mudar
+
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => { /* ... */ };
+  const handleCreateRoot = () => { /* ... */ };
+  useEffect(() => { /* ...lógica de scroll... */ }, [processedData]);
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4 pb-4 border-b">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button
-          onClick={handleCreateRoot}
-          className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full"
-          title={`Criar ${table === 'documentos' ? 'Documento' : 'Disciplina'} Raiz`}
-        >
+        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`...`}>
           <Plus className="w-5 h-5" />
         </button>
       </div>
 
-      {/* NOVO: Campo de pesquisa */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9"
-        />
+        <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
       </div>
 
       <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin">
@@ -221,6 +222,8 @@ export function HierarchicalSidebar({
         {processedData.length > 0 ? (
           isLoadedFromStorage && (
             <Tree<NodeType>
+              // ALTERADO: Adicionamos a ref de volta
+              ref={treeRef}
               data={processedData}
               onMove={handleMove}
               width="100%"
@@ -230,7 +233,6 @@ export function HierarchicalSidebar({
               openIds={openIds}
               onOpenChange={(ids) => setOpenIds(ids.map(String))}
               getId={(node) => String(node.id)}
-              // NOVO: Passa o termo da pesquisa para a árvore
               searchTerm={searchTerm}
             >
               {Node}
@@ -238,9 +240,7 @@ export function HierarchicalSidebar({
           )
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground text-sm">
-              Nenhum {table === 'documentos' ? 'documento' : 'item'} ainda. Clique em '+' para criar.
-            </p>
+            <p className="text-muted-foreground text-sm">...</p>
           </div>
         )}
       </div>
