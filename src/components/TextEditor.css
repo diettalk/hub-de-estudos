@@ -44,3 +44,14 @@
     color: hsl(var(--muted-foreground));
 }
 
+/* NOVO: Estilos para o menu de sugestão (comandos de barra) */
+.suggestion-list {
+  position: relative;
+}
+
+.suggestion-list .cmdk-root {
+  position: absolute;
+  will-change: transform;
+  top: 0;
+  left: 0;
+}

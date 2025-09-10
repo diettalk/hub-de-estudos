@@ -8,9 +8,7 @@ import {
     List, ListOrdered, CheckSquare
 } from 'lucide-react';
 
-// --- ALTERADO: Importações Manuais ---
-// REMOVIDO: import StarterKit from '@tiptap/starter-kit';
-// ADICIONADO: Importações individuais para substituir o StarterKit
+// Importações Manuais para substituir o StarterKit
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -23,7 +21,6 @@ import OrderedList from '@tiptap/extension-ordered-list';
 import ListItem from '@tiptap/extension-list-item';
 import History from '@tiptap/extension-history';
 import Link from '@tiptap/extension-link';
-
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
@@ -39,9 +36,15 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
 
+// NOVO: Importações para os Comandos de Barra
+import Suggestion from '@tiptap/suggestion';
+import { slashCommand } from './SlashCommandList';
+
 import './TextEditor.css';
 
-// O MenuBar permanece funcionalmente o mesmo, apenas o reconstruímos para ser completo
+// ============================================================================
+// --- MenuBar (Completo) ---
+// ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
@@ -75,7 +78,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-             <select
+            <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
                 onChange={(e) => {
@@ -149,40 +152,35 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     }, 1000);
 
     const editor = useEditor({
-        // --- ALTERADO: Lista de extensões manual ---
         extensions: [
-            // Essenciais para o funcionamento
             Document,
             Paragraph,
             Text,
             History,
-            
-            // Estilos de Bloco
             Heading.configure({ levels: [1, 2, 3] }),
             BulletList,
             OrderedList,
             ListItem,
             TaskList,
             TaskItem.configure({ nested: true }),
-
-            // Estilos de Linha (Marks)
             BoldExtension,
             ItalicExtension,
             UnderlineExtension,
             Link.configure({ openOnClick: false }),
             Highlight.configure({ multicolor: true }), 
-            
-            // Extensões de Cor e Fonte (o foco do nosso problema)
-            TextStyle, // A base para Color e FontFamily
-            Color,     // Não precisa mais de .configure aqui, pois TextStyle é a base
+            TextStyle,
+            Color,
             FontFamily,
-
-            // Outras extensões
             Table.configure({ resizable: true }), 
             TableRow, 
             TableHeader, 
             TableCell,
             YoutubeExtension.configure({ nocookie: true }),
+
+            // Adiciona a extensão de sugestão configurada
+            Suggestion.configure({
+                suggestion: slashCommand,
+            }),
         ],
         content: initialContent || '',
         editorProps: {
