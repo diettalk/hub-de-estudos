@@ -8,7 +8,7 @@ import {
     List, ListOrdered, CheckSquare
 } from 'lucide-react';
 
-// Importações Manuais para substituir o StarterKit
+// Importações Manuais
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -36,9 +36,9 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
 
-// NOVO: Importações para os Comandos de Barra
+// CORREÇÃO: Importa 'Suggestion' como uma exportação padrão (default).
 import Suggestion from '@tiptap/suggestion';
-import { slashCommand } from './SlashCommandList';
+import { slashCommandSuggestion } from './SlashCommandList';
 
 import './TextEditor.css';
 
@@ -177,9 +177,9 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             TableCell,
             YoutubeExtension.configure({ nocookie: true }),
 
-            // Adiciona a extensão de sugestão configurada
+            // Adiciona a extensão de sugestão com a configuração correta
             Suggestion.configure({
-                suggestion: slashCommand,
+                suggestion: slashCommandSuggestion,
             }),
         ],
         content: initialContent || '',

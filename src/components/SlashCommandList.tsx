@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef, forwardRef } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef } from 'react';
 import { Editor } from '@tiptap/react';
-import { suggestion } from '@tiptap/suggestion';
 import {
   Heading1, Heading2, Heading3, Pilcrow, List, ListOrdered, CheckSquare, Table, Youtube
 } from 'lucide-react';
 import {
-  Command, CommandGroup, CommandInput, CommandItem, CommandList
+  Command, CommandGroup, CommandItem, CommandList
 } from "@/components/ui/command";
 import { cn } from '@/lib/utils';
 
-// 1. Define os comandos disponíveis, seus ícones e a ação a ser executada
 const commandItems = [
   {
     title: 'Título 1',
@@ -33,13 +31,6 @@ const commandItems = [
     },
   },
   {
-    title: 'Parágrafo',
-    icon: <Pilcrow className="w-4 h-4" />,
-    command: ({ editor, range }: { editor: Editor, range: any }) => {
-      editor.chain().focus().deleteRange(range).setParagraph().run();
-    },
-  },
-  {
     title: 'Lista',
     icon: <List className="w-4 h-4" />,
     command: ({ editor, range }: { editor: Editor, range: any }) => {
@@ -59,27 +50,9 @@ const commandItems = [
     command: ({ editor, range }: { editor: Editor, range: any }) => {
       editor.chain().focus().deleteRange(range).toggleTaskList().run();
     },
-  },
-  {
-    title: 'Tabela',
-    icon: <Table className="w-4 h-4" />,
-    command: ({ editor, range }: { editor: Editor, range: any }) => {
-        editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-    },
-  },
-  {
-    title: 'YouTube',
-    icon: <Youtube className="w-4 h-4" />,
-    command: ({ editor, range }: { editor: Editor, range: any }) => {
-        const url = prompt('Cole a URL do vídeo do YouTube:');
-        if (url) {
-            editor.chain().focus().deleteRange(range).setYoutubeVideo({ src: url }).run();
-        }
-    },
   }
 ];
 
-// 2. Cria o componente React que renderiza a lista de sugestões
 const CommandListComponent = forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -106,63 +79,74 @@ const CommandListComponent = forwardRef((props: any, ref) => {
       }
       return false;
     };
-    props.editor.view.dom.addEventListener('keydown', onKeyDown);
+    // Adiciona o listener diretamente ao DOM do editor para evitar conflitos de eventos
+    const editorDom = props.editor.view.dom;
+    editorDom.addEventListener('keydown', onKeyDown);
     return () => {
-      props.editor.view.dom.removeEventListener('keydown', onKeyDown);
+      editorDom.removeEventListener('keydown', onKeyDown);
     };
   }, [props, selectedIndex]);
 
   return (
-    <Command ref={ref} className="rounded-lg border shadow-md w-64 bg-card text-card-foreground">
-      <CommandList>
-        <CommandGroup>
-          {props.items.map((item: any, index: number) => (
-            <CommandItem
-              key={item.title}
-              onSelect={() => selectItem(index)}
-              className={cn("flex items-center gap-2", selectedIndex === index && 'bg-accent')}
-            >
-              {item.icon}
-              <span>{item.title}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
-    </Command>
+    <div className="relative">
+      <Command ref={ref} className="rounded-lg border shadow-md w-64 bg-card text-card-foreground absolute">
+        <CommandList>
+          <CommandGroup>
+            {props.items.map((item: any, index: number) => (
+              <CommandItem
+                key={item.title}
+                onSelect={() => selectItem(index)}
+                className={cn("flex items-center gap-2", selectedIndex === index && 'aria-selected:bg-accent')}
+              >
+                {item.icon}
+                <span>{item.title}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </div>
   );
 });
 
 CommandListComponent.displayName = 'CommandList';
 
-// 3. Configura a extensão de sugestão do Tiptap
-export const slashCommand = suggestion({
+// CORREÇÃO: Exporta diretamente o objeto de configuração
+export const slashCommandSuggestion = {
   char: '/',
-  command: ({ editor, range, props }) => {
+  command: ({ editor, range, props }: { editor: Editor, range: any, props: any }) => {
     props.command({ editor, range });
   },
-  items: ({ query }) => {
-    return commandItems.filter(item => item.title.toLowerCase().startsWith(query.toLowerCase()));
+  items: ({ query }: { query: string }) => {
+    return commandItems.filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10);
   },
   render: () => {
     let component: any;
+    // tippy (popup) é uma dependência opcional, mas a estrutura de render do Tiptap espera este objeto
     let popup: any;
+
     return {
-      onStart: props => {
-        component = <CommandListComponent {...props} />;
+      onStart: (props: { editor: Editor, clientRect: DOMRect }) => {
+        // Renderiza o nosso componente React
+        component = React.createElement(CommandListComponent, { ...props, ref: (ref: any) => {} });
       },
-      onUpdate(props) {
-        component = <CommandListComponent {...props} />;
+      onUpdate(props: any) {
+        component.props = { ...component.props, ...props };
       },
-      onKeyDown({ event }) {
-        if (event.key === 'Escape') {
+      onKeyDown({ event }: { event: KeyboardEvent }) {
+        if (event.key === 'Escape' && popup) {
           popup[0].hide();
           return true;
         }
-        return false;
+        // Deixa o nosso componente React (CommandListComponent) tratar as outras teclas
+        return component?.ref?.current?.onKeyDown(event);
       },
       onExit() {
-        // popup[0].destroy(); // Descomente se houver problemas de memória
+        if (popup) {
+          // popup[0].destroy();
+        }
       },
     };
   },
-});
+};
+
