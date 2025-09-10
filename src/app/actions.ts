@@ -511,14 +511,13 @@ export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
   }
 }
 
-// NOVO: Ação para alternar o status de favorito de um item
+// CORRIGIDO: Ação para alternar o status de favorito de um item
 export async function toggleFavoriteStatus(table: TableName, id: number) {
   const supabase = createServerActionClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Utilizador não autenticado." };
 
   try {
-    // Primeiro, obtemos o status atual de 'is_favorite'
     const { data: currentItem, error: fetchError } = await supabase
       .from(table)
       .select('is_favorite')
@@ -527,13 +526,12 @@ export async function toggleFavoriteStatus(table: TableName, id: number) {
       .single();
 
     if (fetchError || !currentItem) {
+      console.error("Erro ao buscar item para favoritar:", fetchError);
       throw new Error("Item não encontrado ou falha ao obter dados.");
     }
 
-    // Invertemos o status atual
     const newFavoriteStatus = !currentItem.is_favorite;
 
-    // Atualizamos o item com o novo status
     const { error: updateError } = await supabase
       .from(table)
       .update({ is_favorite: newFavoriteStatus })
@@ -542,16 +540,15 @@ export async function toggleFavoriteStatus(table: TableName, id: number) {
 
     if (updateError) throw updateError;
 
-    // Revalidamos o path para que a UI seja atualizada
     revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
     return { success: true, isFavorite: newFavoriteStatus };
 
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error("Erro em toggleFavoriteStatus:", message);
     return { error: `Falha ao alternar favorito: ${message}` };
   }
 }
-
 
 // --- AÇÕES PARA TAREFAS ---
 export async function addTarefa(formData: FormData) {

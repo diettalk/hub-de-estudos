@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
 import { updateDocumentoContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
+import { findNodePath } from '@/lib/utils'; // Importa a nova função
 
 interface DocumentosClientProps {
     documentTree: Node[];
@@ -23,8 +26,13 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         setIsMounted(true);
     }, []);
 
-    // ALTERADO: Captura o ID da URL para passar para a sidebar.
     const activeId = searchParams.get('id');
+
+    // Calcula o caminho do breadcrumb
+    const breadcrumbPath = useMemo(() => {
+        if (!activeId) return [];
+        return findNodePath(documentTree, activeId);
+    }, [documentTree, activeId]);
 
     useEffect(() => {
         const id = searchParams.get('id');
@@ -49,12 +57,24 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
                             treeData={documentTree}
                             table="documentos"
                             title="NAVEGAR"
-                            // ALTERADO: Passa o ID ativo para a sidebar.
                             activeId={activeId}
                         />
                     </div>
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex flex-col gap-4">
+                    {/* Componente Breadcrumbs */}
+                    {breadcrumbPath.length > 0 && (
+                        <div className="flex items-center text-sm text-muted-foreground bg-card border rounded-lg p-2 flex-shrink-0">
+                            {breadcrumbPath.map((node, index) => (
+                                <React.Fragment key={node.id}>
+                                    {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
+                                    <Link href={`/documentos?id=${node.id}`} className="hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary">
+                                        {node.title}
+                                    </Link>
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    )}
                     <TextEditor
                         key={selectedDocument.id}
                         initialContent={selectedDocument.content}
@@ -73,10 +93,10 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
                     treeData={documentTree}
                     table="documentos"
                     title="DOCUMENTOS"
-                    // ALTERADO: Passa o ID ativo também nesta visualização.
                     activeId={activeId}
                 />
             </div>
         </div>
     );
 }
+
