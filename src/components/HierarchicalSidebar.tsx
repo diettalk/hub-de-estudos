@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 // ============================================================================
 // --- Componente Node ---
 // ============================================================================
-function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
+function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<NodeType> & { onToggleFavorite: (item: NodeType) => void }) {
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(node.data.title);
     const [, startTransition] = useTransition();
@@ -58,20 +58,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
             refreshView();
         });
     });
-
-    // Função para alternar o status de favorito
-    const handleToggleFavorite = () => {
-        startTransition(() => {
-            toggleFavoriteStatus(table, Number(node.data.id)).then(result => {
-                if (result.error) {
-                    toast.error(result.error);
-                } else {
-                    toast.success(result.isFavorite ? `"${title}" adicionado aos favoritos.` : `"${title}" removido dos favoritos.`);
-                }
-            });
-        });
-    };
-
+    
     const href = table === 'documentos' 
         ? `/documentos?id=${node.data.id}` 
         : `/disciplinas?page=${node.data.id}`;
@@ -127,28 +114,20 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
                             ) : (
                                 <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
                             )}
-
-                            {/* NOVO: Estrela clicável para favoritar/desfavoritar */}
+                            
                             <span
-                                onClick={handleToggleFavorite}
-                                className={cn(
-                                    "ml-auto p-2 cursor-pointer transition-opacity",
-                                    // Se for favorito, está sempre visível. Se não, aparece no hover.
-                                    node.data.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                )}
+                                onClick={() => onToggleFavorite(node.data)}
+                                className={cn("ml-auto p-2 cursor-pointer transition-opacity", node.data.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
                                 title={node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
                             >
-                                <Star className={cn(
-                                    "w-4 h-4 text-muted-foreground hover:text-yellow-500 hover:fill-yellow-400",
-                                    node.data.is_favorite && "fill-yellow-400 text-yellow-500"
-                                )} />
+                                <Star className={cn("w-4 h-4 text-muted-foreground hover:text-yellow-500 hover:fill-yellow-400", node.data.is_favorite && "fill-yellow-400 text-yellow-500")} />
                             </span>
                         </div>
                     </div>
                 </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
-                <ContextMenuItem onClick={handleToggleFavorite}>
+                <ContextMenuItem onClick={() => onToggleFavorite(node.data)}>
                     <Star className={cn("w-4 h-4 mr-2", node.data.is_favorite && "fill-yellow-400 text-yellow-500")} />
                     {node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
                 </ContextMenuItem>
@@ -168,6 +147,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<NodeType>) {
         </ContextMenu>
     );
 }
+
 
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
@@ -227,20 +207,56 @@ export function HierarchicalSidebar({
     setFavoriteItems(favorites);
   }, [treeData]);
 
-  useEffect(() => { /* ...lógica de persistência inalterada... */ }, [storageKey]);
-  useEffect(() => { /* ...lógica de persistência inalterada... */ }, [openIds, isLoadedFromStorage, storageKey]);
-  useEffect(() => { /* ...lógica de scroll inalterada... */ }, [activeId, isLoadedFromStorage]);
-  
-  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => { /* ...código inalterado... */ };
-  const handleCreateRoot = () => { /* ...código inalterado... */ };
+  useEffect(() => {
+    const savedState = localStorage.getItem(storageKey);
+    if (savedState) {
+      try {
+        const savedIds = JSON.parse(savedState);
+        if (Array.isArray(savedIds)) {
+          setOpenIds(savedIds.map(String));
+        }
+      } catch { localStorage.removeItem(storageKey); }
+    }
+    setIsLoadedFromStorage(true);
+  }, [storageKey]);
 
-  // --- (Hooks e Memos permanecem os mesmos) ---
+  useEffect(() => {
+    if (isLoadedFromStorage) {
+      localStorage.setItem(storageKey, JSON.stringify(openIds));
+    }
+  }, [openIds, isLoadedFromStorage, storageKey]);
+
+  useEffect(() => {
+    if (activeId && treeRef.current && isLoadedFromStorage) {
+      const timer = setTimeout(() => { treeRef.current?.scrollTo(activeId); }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeId, isLoadedFromStorage]);
+
+  const handleMove = ({ dragIds, parentId }: { dragIds: string[]; parentId: string | null }) => {
+    const movedItemId = Number(dragIds[0]);
+    const newParentId = parentId ? Number(parentId) : null;
+    startTransition(() => {
+      const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
+      updateItemParent(correctTableName, movedItemId, newParentId).then((result) => {
+        if (result.error) toast.error(result.error);
+        router.refresh();
+      });
+    });
+  };
+
+  const handleCreateRoot = () => {
+    startTransition(() => {
+      const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
+      createItem(correctTableName, null).then(() => {
+        router.refresh();
+      });
+    });
+  };
 
   const handleToggleFavorite = (item: NodeType) => {
     startTransition(() => {
-        // CORREÇÃO: Mapeia o nome da prop 'disciplinas' para o nome real da tabela 'paginas'
         const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
-        
         toggleFavoriteStatus(correctTableName, Number(item.id)).then(result => {
             if (result.error) {
                 toast.error(result.error);
@@ -253,9 +269,16 @@ export function HierarchicalSidebar({
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
-      {/* --- (JSX do Cabeçalho e Pesquisa permanece o mesmo) --- */}
-
-      {/* Secção de Favoritos com a correção no onClick */}
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
+        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar Raiz`}>
+          <Plus className="w-5 h-5" />
+        </button>
+      </div>
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+      </div>
       {favoriteItems.length > 0 && (
           <div className="mb-4">
               <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-2 flex items-center">
@@ -285,9 +308,7 @@ export function HierarchicalSidebar({
               </div>
           </div>
       )}
-
       <div className="border-b border-border/50 my-2"></div>
-      
       <div className="flex-grow flex flex-col min-h-0">
           <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
           <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
@@ -317,50 +338,4 @@ export function HierarchicalSidebar({
     </div>
   );
 }
-
-// ALTERADO: O componente Node agora recebe a função onToggleFavorite como prop
-function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<NodeType> & { onToggleFavorite: (item: NodeType) => void }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [title, setTitle] = useState(node.data.title);
-    const [, startTransition] = useTransition();
-    const router = useRouter();
-    const table = node.data.table as 'documentos' | 'paginas';
-
-    const handleSaveTitle = () => { /* ...código inalterado... */ };
-    const handleCreateChild = () => { /* ...código inalterado... */ };
-    const handleDelete = () => { /* ...código inalterado... */ };
-    
-    const href = table === 'documentos' 
-        ? `/documentos?id=${node.data.id}` 
-        : `/disciplinas?page=${node.data.id}`;
-
-    return (
-        <ContextMenu>
-            <ContextMenuTrigger asChild>
-                <div style={style} className={/* ...classes inalteradas... */}>
-                    {/* ...código do layout inalterado... */}
-                    <div className="relative z-10 bg-card flex items-center h-full w-full">
-                        {/* ...ícones e link inalterados... */}
-                        <span
-                            onClick={() => onToggleFavorite(node.data)}
-                            className={cn("ml-auto p-2 cursor-pointer transition-opacity", node.data.is_favorite ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
-                            title={node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
-                        >
-                            <Star className={cn("w-4 h-4 text-muted-foreground hover:text-yellow-500 hover:fill-yellow-400", node.data.is_favorite && "fill-yellow-400 text-yellow-500")} />
-                        </span>
-                    </div>
-                </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-                <ContextMenuItem onClick={() => onToggleFavorite(node.data)}>
-                    <Star className={cn("w-4 h-4 mr-2", node.data.is_favorite && "fill-yellow-400 text-yellow-500")} />
-                    {node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                {/* ...outras opções do menu... */}
-            </ContextMenuContent>
-        </ContextMenu>
-    );
-}
-
 
