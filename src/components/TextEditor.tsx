@@ -38,7 +38,7 @@ import FontFamily from '@tiptap/extension-font-family';
 
 // CORREÇÃO: Importa 'Suggestion' como uma exportação padrão (default).
 import Suggestion from '@tiptap/suggestion';
-import { slashCommandSuggestion } from './SlashCommandList';
+import { SlashCommand } from './SlashCommandList';
 
 import './TextEditor.css';
 
@@ -176,11 +176,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             TableHeader, 
             TableCell,
             YoutubeExtension.configure({ nocookie: true }),
-
-            // Adiciona a extensão de sugestão com a configuração correta
-            Suggestion.configure({
-                suggestion: slashCommandSuggestion,
-            }),
+            CharacterCount,
+            
+            // CORREÇÃO: Adiciona a nova extensão SlashCommand
+            SlashCommand,
         ],
         content: initialContent || '',
         editorProps: {
@@ -210,4 +209,3 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 }
 
 export default TextEditor;
-
