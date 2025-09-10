@@ -6,69 +6,81 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
-import { updateDocumentoContent } from '@/app/actions';
+import { updatePaginaContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
-import { findNodePath } from '@/lib/utils'; // Importa a nova função
 
-interface DocumentosClientProps {
-    documentTree: Node[];
-    initialDocument: Node | null;
+interface DisciplinasClientProps {
+    paginaTree: Node[];
+    initialPage: Node | null;
 }
 
-export default function DocumentosClient({ documentTree, initialDocument }: DocumentosClientProps) {
+// Função para encontrar o caminho de um nó na árvore (agora local)
+function findNodePath(nodes: Node[], nodeId: string | number): Node[] {
+  const targetId = String(nodeId);
+  function search(currentPath: Node[], currentNodes: Node[]): Node[] | null {
+    for (const node of currentNodes) {
+      const newPath = [...currentPath, node];
+      if (String(node.id) === targetId) return newPath;
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        const foundPath = search(newPath, node.children);
+        if (foundPath) return foundPath;
+      }
+    }
+    return null;
+  }
+  return search([], nodes) || [];
+}
+
+export default function DisciplinasClient({ paginaTree, initialPage }: DisciplinasClientProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [selectedDocument, setSelectedDocument] = useState(initialDocument);
-    
+    const [selectedPage, setSelectedPage] = useState(initialPage);
+
     const [isMounted, setIsMounted] = useState(false);
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    useEffect(() => { setIsMounted(true); }, []);
 
-    const activeId = searchParams.get('id');
+    const activeId = searchParams.get('page');
 
-    // Calcula o caminho do breadcrumb
     const breadcrumbPath = useMemo(() => {
         if (!activeId) return [];
-        return findNodePath(documentTree, activeId);
-    }, [documentTree, activeId]);
+        return findNodePath(paginaTree, activeId);
+    }, [paginaTree, activeId]);
 
     useEffect(() => {
-        const id = searchParams.get('id');
-        if (id && initialDocument && Number(id) === initialDocument.id) {
-            setSelectedDocument(initialDocument);
+        const id = searchParams.get('page');
+        if (id && initialPage && Number(id) === initialPage.id) {
+            setSelectedPage(initialPage);
         } else if (!id) {
-            setSelectedDocument(null);
+            setSelectedPage(null);
         }
-    }, [searchParams, initialDocument]);
+    }, [searchParams, initialPage]);
 
     const handleSave = async (newContent: JSONContent) => {
-        if (!selectedDocument) return;
-        await updateDocumentoContent(selectedDocument.id, newContent);
+        if (!selectedPage) return;
+        await updatePaginaContent(selectedPage.id, newContent);
     };
 
-    if (selectedDocument && isMounted) {
+    if (selectedPage && isMounted) {
         return (
-            <div className="flex gap-4 h-full p-4">
+             <div className="flex gap-4 h-full p-4">
                 <div className="hidden md:block w-[300px] flex-shrink-0">
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
-                            treeData={documentTree}
-                            table="documentos"
+                            treeData={paginaTree}
+                            table="disciplinas"
                             title="NAVEGAR"
                             activeId={activeId}
                         />
                     </div>
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-4">
-                    {/* Componente Breadcrumbs */}
                     {breadcrumbPath.length > 0 && (
                         <div className="flex items-center text-sm text-muted-foreground bg-card border rounded-lg p-2 flex-shrink-0">
                             {breadcrumbPath.map((node, index) => (
                                 <React.Fragment key={node.id}>
                                     {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
-                                    <Link href={`/documentos?id=${node.id}`} className="hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary">
+                                    <Link href={`/disciplinas?page=${node.id}`} className="hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary">
                                         {node.title}
                                     </Link>
                                 </React.Fragment>
@@ -76,10 +88,10 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
                         </div>
                     )}
                     <TextEditor
-                        key={selectedDocument.id}
-                        initialContent={selectedDocument.content}
+                        key={selectedPage.id}
+                        initialContent={selectedPage.content}
                         onSave={handleSave}
-                        onClose={() => router.push('/documentos')}
+                        onClose={() => router.push('/disciplinas')}
                     />
                 </div>
             </div>
@@ -90,9 +102,9 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         <div className="h-full p-4 flex">
             <div className="flex-1 min-w-0">
                 <HierarchicalSidebar 
-                    treeData={documentTree}
-                    table="documentos"
-                    title="DOCUMENTOS"
+                    treeData={paginaTree}
+                    table="disciplinas"
+                    title="DISCIPLINAS"
                     activeId={activeId}
                 />
             </div>

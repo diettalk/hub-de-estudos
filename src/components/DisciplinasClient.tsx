@@ -9,11 +9,27 @@ import TextEditor from '@/components/TextEditor';
 import { updatePaginaContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
-import { findNodePath } from '@/lib/utils'; // Importa a nova função
 
 interface DisciplinasClientProps {
     paginaTree: Node[];
     initialPage: Node | null;
+}
+
+// Função para encontrar o caminho de um nó na árvore (agora local)
+function findNodePath(nodes: Node[], nodeId: string | number): Node[] {
+  const targetId = String(nodeId);
+  function search(currentPath: Node[], currentNodes: Node[]): Node[] | null {
+    for (const node of currentNodes) {
+      const newPath = [...currentPath, node];
+      if (String(node.id) === targetId) return newPath;
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        const foundPath = search(newPath, node.children);
+        if (foundPath) return foundPath;
+      }
+    }
+    return null;
+  }
+  return search([], nodes) || [];
 }
 
 export default function DisciplinasClient({ paginaTree, initialPage }: DisciplinasClientProps) {
@@ -22,13 +38,10 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     const [selectedPage, setSelectedPage] = useState(initialPage);
 
     const [isMounted, setIsMounted] = useState(false);
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    useEffect(() => { setIsMounted(true); }, []);
 
     const activeId = searchParams.get('page');
 
-    // Calcula o caminho do breadcrumb
     const breadcrumbPath = useMemo(() => {
         if (!activeId) return [];
         return findNodePath(paginaTree, activeId);
@@ -62,7 +75,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                     </div>
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-4">
-                    {/* Componente Breadcrumbs */}
                     {breadcrumbPath.length > 0 && (
                         <div className="flex items-center text-sm text-muted-foreground bg-card border rounded-lg p-2 flex-shrink-0">
                             {breadcrumbPath.map((node, index) => (
