@@ -271,7 +271,7 @@ export function HierarchicalSidebar({
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title={`Criar Raiz`}>
+        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title="Criar Raiz">
           <Plus className="w-5 h-5" />
         </button>
       </div>
