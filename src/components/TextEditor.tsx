@@ -35,16 +35,14 @@ import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
+// CORREÇÃO: Importa a extensão 'CharacterCount' que estava em falta
+import CharacterCount from '@tiptap/extension-character-count';
 
-// CORREÇÃO: Importa 'Suggestion' como uma exportação padrão (default).
-import Suggestion from '@tiptap/suggestion';
 import { SlashCommand } from './SlashCommandList';
 
 import './TextEditor.css';
 
-// ============================================================================
-// --- MenuBar (Completo) ---
-// ============================================================================
+// O MenuBar permanece o mesmo
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
@@ -178,7 +176,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             YoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             
-            // CORREÇÃO: Adiciona a nova extensão SlashCommand
+            // Adiciona a extensão de comandos de barra
             SlashCommand,
         ],
         content: initialContent || '',
@@ -209,3 +207,4 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 }
 
 export default TextEditor;
+
