@@ -52,6 +52,8 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
             props.items.map((item, index) => (
               <CommandItem
                 key={`${item.type}-${item.id}`}
+                // CORREÇÃO: Adicionado o evento onClick para garantir a seleção com o rato
+                onClick={() => selectItem(index)}
                 onSelect={() => selectItem(index)}
                 className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
               >
