@@ -1,143 +1,185 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Editor, Range, ReactRenderer } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
-import { Suggestion, SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
-import tippy, { Instance } from 'tippy.js';
-import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { Book, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { searchDocumentsAndPages } from '@/app/actions';
-import { PluginKey } from 'prosemirror-state';
+"use client";
 
-interface SearchItem {
-  id: number;
+import React, { useEffect, useState } from "react";
+import { Editor, Range } from "@tiptap/core";
+import tippy, { Instance as TippyInstance } from "tippy.js";
+import { ReactRenderer } from "@tiptap/react";
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { FileText, Book } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface WikiLinkItem {
+  id: string;
   title: string;
-  type: 'documentos' | 'paginas';
+  type: "documentos" | "disciplinas";
 }
 
-const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((props, ref) => {
+interface WikiLinkSuggestionProps {
+  editor: Editor;
+  range: Range;
+  items: WikiLinkItem[];
+  command: (item: WikiLinkItem) => void;
+  clientRect: () => DOMRect | null;
+}
+
+const WikiLinkListComponent: React.FC<WikiLinkSuggestionProps> = ({
+  items,
+  command,
+  editor,
+  range,
+  clientRect,
+}) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const selectItem = (index: number) => {
-    const item = props.items[index];
+    const item = items[index];
     if (item) {
-      props.command(item);
+      command(item);
     }
   };
 
-  const onKeyDown = ({ event }: SuggestionKeyDownProps) => {
-    if (event.key === 'ArrowUp') {
-      setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
-      return true;
-    }
-    if (event.key === 'ArrowDown') {
-      setSelectedIndex((selectedIndex + 1) % props.items.length);
-      return true;
-    }
-    if (event.key === 'Enter') {
-      selectItem(selectedIndex);
-      return true;
-    }
-    return false;
+  const upHandler = () => {
+    setSelectedIndex((prev) => (prev + items.length - 1) % items.length);
   };
 
-  useEffect(() => setSelectedIndex(0), [props.items]);
-  useImperativeHandle(ref, () => ({ onKeyDown }));
+  const downHandler = () => {
+    setSelectedIndex((prev) => (prev + 1) % items.length);
+  };
+
+  const enterHandler = () => {
+    selectItem(selectedIndex);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowUp") {
+        upHandler();
+        event.preventDefault();
+        return true;
+      }
+      if (event.key === "ArrowDown") {
+        downHandler();
+        event.preventDefault();
+        return true;
+      }
+      if (event.key === "Enter") {
+        enterHandler();
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    };
+
+    editor.on("keydown", onKeyDown);
+    return () => {
+      editor.off("keydown", onKeyDown);
+    };
+  }, [editor, items, selectedIndex]);
 
   return (
-    // CORREÇÃO DEFINITIVA: Adicionamos onMouseDown ao container principal para prevenir o blur
-    <Command
-      onMouseDown={(event) => event.preventDefault()} // <-- A NOVA ABORDAGEM
-      className="rounded-lg border shadow-md w-80 bg-card text-card-foreground"
-    >
+    <Command>
       <CommandList>
-        <CommandGroup>
-          {props.items.length ? (
-            props.items.map((item, index) => (
-              // O CommandItem agora usa onSelect, que será acionado pelo clique
-              // sem que o editor perca o foco.
+        <CommandGroup heading="Links disponíveis">
+          {items.length > 0 ? (
+            items.map((item, index) => (
               <CommandItem
                 key={`${item.type}-${item.id}`}
+                // 🔑 aqui está o fix para não perder o foco
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
                 onSelect={() => selectItem(index)}
-                className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
+                className={cn(
+                  "flex items-center gap-2 cursor-pointer",
+                  selectedIndex === index ? "is-selected bg-accent" : ""
+                )}
               >
-                {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                {item.type === "documentos" ? (
+                  <FileText className="w-4 h-4" />
+                ) : (
+                  <Book className="w-4 h-4" />
+                )}
                 <span>{item.title}</span>
               </CommandItem>
             ))
           ) : (
-            <CommandItem disabled>Nenhum resultado.</CommandItem>
+            <div className="px-2 py-1 text-sm text-muted-foreground">
+              Nenhum resultado encontrado
+            </div>
           )}
         </CommandGroup>
       </CommandList>
     </Command>
   );
-});
-WikiLinkListComponent.displayName = 'WikiLinkList';
+};
 
-export const WikiLinkSuggestion = Extension.create({
-  name: 'wikiLinkSuggestion',
-
-  addProseMirrorPlugins() {
+export const WikiLinkSuggestion = {
+  items: ({ query }: { query: string }) => {
+    if (!query) return [];
     return [
-      Suggestion({
-        pluginKey: new PluginKey('wikiLinkSuggestion'),
-        editor: this.editor,
-        char: '[[',
-        command: ({ editor, range, props }) => {
-          const { id, title, type } = props;
-          const href = type === 'documentos' ? `/documentos?id=${id}` : `/disciplinas?page=${id}`;
-          
-          editor
-            .chain()
-            .focus()
-            .deleteRange(range)
-            .setMark('wikiLink', { href })
-            .insertContent(title)
-            .unsetMark('wikiLink')
-            .insertContent(']] ')
-            .run();
-        },
-        items: async ({ query }) => {
-          return await searchDocumentsAndPages(query);
-        },
-        render: () => {
-          let reactRenderer: ReactRenderer<any>;
-          let popup: Instance[];
-
-          return {
-            onStart: props => {
-              reactRenderer = new ReactRenderer(WikiLinkListComponent, { props, editor: props.editor });
-              popup = tippy('body', {
-                getReferenceClientRect: props.clientRect,
-                appendTo: () => document.body,
-                content: reactRenderer.element,
-                showOnCreate: true,
-                interactive: true,
-                trigger: 'manual',
-                placement: 'bottom-start',
-              });
-            },
-            onUpdate(props) {
-              reactRenderer.updateProps(props);
-              if (!props.clientRect) return;
-              popup[0].setProps({ getReferenceClientRect: props.clientRect });
-            },
-            onKeyDown(props) {
-              if (props.event.key === 'Escape') {
-                popup[0].hide();
-                return true;
-              }
-              return reactRenderer.ref?.onKeyDown(props) ?? false;
-            },
-            onExit() {
-              popup[0].destroy();
-              reactRenderer.destroy();
-            },
-          };
-        },
-      }),
-    ];
+      { id: "1", title: "Introdução à Nutrição", type: "documentos" },
+      { id: "2", title: "Bioquímica Básica", type: "disciplinas" },
+      { id: "3", title: "Fisiologia Humana", type: "disciplinas" },
+      { id: "4", title: "Dietas Especiais", type: "documentos" },
+    ]
+      .filter((item) =>
+        item.title.toLowerCase().includes(query.toLowerCase())
+      )
+      .slice(0, 5);
   },
-});
 
+  render: () => {
+    let component: ReactRenderer<WikiLinkSuggestionProps>;
+    let popup: TippyInstance[];
+
+    return {
+      onStart: (props: WikiLinkSuggestionProps) => {
+        component = new ReactRenderer(WikiLinkListComponent, {
+          props,
+          editor: props.editor,
+        });
+
+        if (!props.clientRect) return;
+
+        popup = tippy("body", {
+          getReferenceClientRect: props.clientRect,
+          appendTo: () => document.body,
+          content: component.element,
+          showOnCreate: true,
+          interactive: true,
+          trigger: "manual",
+          placement: "bottom-start",
+        });
+      },
+
+      onUpdate(props: WikiLinkSuggestionProps) {
+        component.updateProps(props);
+
+        if (!props.clientRect) return;
+
+        popup?.[0]?.setProps({
+          getReferenceClientRect: props.clientRect,
+        });
+      },
+
+      onKeyDown(props: { event: KeyboardEvent }) {
+        if (props.event.key === "Escape") {
+          popup?.[0]?.hide();
+          return true;
+        }
+        return component?.ref?.onKeyDown(props);
+      },
+
+      onExit() {
+        popup?.[0]?.destroy();
+        component?.destroy();
+      },
+    };
+  },
+};
