@@ -20,7 +20,9 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
 
   const selectItem = (index: number) => {
     const item = props.items[index];
-    if (item) props.command(item);
+    if (item) {
+      props.command(item);
+    }
   };
 
   const onKeyDown = ({ event }: SuggestionKeyDownProps) => {
