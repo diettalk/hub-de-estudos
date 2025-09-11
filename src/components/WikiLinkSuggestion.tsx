@@ -50,18 +50,19 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
         <CommandGroup>
           {props.items.length ? (
             props.items.map((item, index) => (
-              <CommandItem
+              // CORREÇÃO: Envolvemos o CommandItem num div que previne o blur do editor
+              <div
                 key={`${item.type}-${item.id}`}
-                // CORREÇÃO: Removemos event.stopPropagation()
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  selectItem(index);
-                }}
-                className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
+                onMouseDown={(event) => event.preventDefault()} // <-- A magia está aqui
               >
-                {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
-                <span>{item.title}</span>
-              </CommandItem>
+                <CommandItem
+                  onSelect={() => selectItem(index)}
+                  className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
+                >
+                  {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                  <span>{item.title}</span>
+                </CommandItem>
+              </div>
             ))
           ) : (
             <CommandItem disabled>Nenhum resultado.</CommandItem>
