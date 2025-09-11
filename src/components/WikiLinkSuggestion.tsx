@@ -1,122 +1,177 @@
-// src/components/WikiLinkSuggestion.tsx
+// src/components/Editor.tsx
 
-import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+'use client';
 
-type Item = {
-  id: number;
-  title: string;
-};
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Bold, Italic, Strikethrough, List, ListOrdered, Heading2 } from 'lucide-react';
+import { useTransition, useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
-type RenderProps = {
-  items: Item[];
-  command: (item: Item) => void;
-  clientRect?: DOMRect;
-};
+// Import do TipTap suggestion
+import Suggestion from '@tiptap/suggestion';
+import { Node } from '@tiptap/core';
+import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 
-export const WikiLinkSuggestion = {
-  render: () => {
-    let component: HTMLDivElement | null = null;
+// 🔗 Extensão WikiLink
+const WikiLink = Node.create({
+  name: 'wikiLink',
+  group: 'inline',
+  inline: true,
+  atom: true,
 
+  addAttributes() {
     return {
-      onStart: (props: RenderProps) => {
-        component = document.createElement("div");
-        document.body.appendChild(component);
-
-        renderReactComponent(props);
-      },
-      onUpdate(props: RenderProps) {
-        renderReactComponent(props);
-      },
-      onKeyDown(props: { event: KeyboardEvent }) {
-        if (props.event.key === "Escape") {
-          destroy();
-          return true;
-        }
-        return false;
-      },
-      onExit() {
-        destroy();
-      },
+      id: { default: null },
+      title: { default: null },
     };
+  },
 
-    function renderReactComponent(props: RenderProps) {
-      if (!component) return;
-      const rect = props.clientRect?.();
-      const style: React.CSSProperties = rect
-        ? {
-            position: "absolute",
-            top: rect.bottom + window.scrollY + 4,
-            left: rect.left + window.scrollX,
-            background: "#1f2937", // bg-gray-800
-            color: "white",
-            border: "1px solid #374151", // border-gray-700
-            borderRadius: "0.5rem",
-            padding: "0.25rem",
-            zIndex: 1000,
-            minWidth: "200px",
-          }
-        : { display: "none" };
+  parseHTML() {
+    return [{ tag: 'a[data-type="wiki-link"]' }];
+  },
 
-      const SuggestionList = () => {
-        const [selectedIndex, setSelectedIndex] = useState(0);
+  renderHTML({ node }) {
+    return [
+      'a',
+      {
+        'data-type': 'wiki-link',
+        'data-id': node.attrs.id,
+        href: `/disciplinas/${node.attrs.id}`,
+        class: 'text-blue-400 underline hover:text-blue-600',
+      },
+      node.attrs.title,
+    ];
+  },
 
-        useEffect(() => {
-          const handler = (e: KeyboardEvent) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setSelectedIndex((prev) =>
-                prev + 1 < props.items.length ? prev + 1 : prev
-              );
-            }
-            if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setSelectedIndex((prev) =>
-                prev - 1 >= 0 ? prev - 1 : prev
-              );
-            }
-            if (e.key === "Enter") {
-              e.preventDefault();
-              props.command(props.items[selectedIndex]);
-            }
-          };
-          window.addEventListener("keydown", handler);
-          return () => window.removeEventListener("keydown", handler);
-        }, [props.items, selectedIndex]);
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => this.editor.commands.blur(),
+    };
+  },
 
-        return (
-          <div style={style}>
-            {props.items.length ? (
-              props.items.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`px-3 py-1 cursor-pointer rounded ${
-                    index === selectedIndex
-                      ? "bg-blue-600 text-white"
-                      : "hover:bg-gray-700"
-                  }`}
-                  onClick={() => props.command(item)}
-                >
-                  {item.title}
-                </div>
-              ))
-            ) : (
-              <div className="px-3 py-1 text-gray-400">
-                Nenhum resultado encontrado
-              </div>
-            )}
-          </div>
-        );
-      };
+  addProseMirrorPlugins() {
+    return [
+      Suggestion({
+        char: '[[',
+        pluginKey: 'wikiLinkSuggestion',
+        items: async ({ query }) => {
+          // 🔎 Por enquanto mockado, mas aqui você pode buscar no Supabase
+          const allItems = [
+            { id: 1, title: 'Matemática' },
+            { id: 2, title: 'Português' },
+            { id: 3, title: 'Direito Constitucional' },
+          ];
+          return allItems.filter(item =>
+            item.title.toLowerCase().includes(query.toLowerCase())
+          );
+        },
+        command: ({ editor, range, props }) => {
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              {
+                type: 'wikiLink',
+                attrs: { id: props.id, title: props.title },
+              },
+            ])
+            .run();
+        },
+        render: WikiLinkSuggestion,
+      }),
+    ];
+  },
+});
 
-      createPortal(<SuggestionList />, component);
-    }
+const Toolbar = ({ editor }: { editor: any }) => {
+  if (!editor) return null;
+  return (
+    <div className="border border-gray-700 rounded-t-lg p-2 flex gap-1 flex-wrap bg-gray-900">
+      <Button onClick={() => editor.chain().focus().toggleBold().run()} variant={editor.isActive('bold') ? 'secondary' : 'ghost'} size="sm"><Bold className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleItalic().run()} variant={editor.isActive('italic') ? 'secondary' : 'ghost'} size="sm"><Italic className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleStrike().run()} variant={editor.isActive('strike') ? 'secondary' : 'ghost'} size="sm"><Strikethrough className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} size="sm"><Heading2 className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleBulletList().run()} variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'} size="sm"><List className="h-4 w-4" /></Button>
+      <Button onClick={() => editor.chain().focus().toggleOrderedList().run()} variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'} size="sm"><ListOrdered className="h-4 w-4" /></Button>
+    </div>
+  );
+};
 
-    function destroy() {
-      if (component) {
-        document.body.removeChild(component);
-        component = null;
+type EditorProps = {
+  pageId: number;
+  title: string;
+  content: any;
+  onSave: (formData: FormData) => Promise<any>;
+};
+
+export function Editor({ pageId, title, content, onSave }: EditorProps) {
+  const [isPending, startTransition] = useTransition();
+  const [currentTitle, setCurrentTitle] = useState(title);
+  const [isDirty, setIsDirty] = useState(false);
+
+  const editor = useEditor({
+    extensions: [StarterKit, WikiLink],
+    content: content || '',
+    onUpdate: () => {
+      setIsDirty(true);
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-invert min-h-[60vh] max-w-none p-4 focus:outline-none bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg',
+      },
+    },
+  });
+
+  useEffect(() => {
+    setCurrentTitle(title);
+    if (editor && editor.isEditable) {
+      const isSameContent = JSON.stringify(editor.getJSON()) === JSON.stringify(content);
+      if (!isSameContent) {
+        editor.commands.setContent(content || '', false);
       }
     }
-  },
-};
+    setIsDirty(false);
+  }, [pageId, title, content, editor]);
+
+  const handleSave = () => {
+    if (!editor) return;
+
+    const formData = new FormData();
+    formData.append('id', String(pageId));
+    formData.append('title', currentTitle);
+    formData.append('content', JSON.stringify(editor.getJSON()));
+
+    startTransition(async () => {
+      await onSave(formData);
+      toast.success("Alterações salvas com sucesso!");
+      setIsDirty(false);
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-900 text-white p-4 rounded-lg">
+      <div className="flex justify-between items-center mb-4">
+        <Input
+          value={currentTitle}
+          onChange={(e) => {
+            setCurrentTitle(e.target.value);
+            setIsDirty(true);
+          }}
+          placeholder="Título do Documento"
+          className="text-2xl font-bold bg-transparent border-none focus:ring-0 p-0 h-auto"
+        />
+        <Button onClick={handleSave} disabled={isPending || !isDirty}>
+          {isPending ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
+      </div>
+
+      <div className="flex-grow">
+        <Toolbar editor={editor} />
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
+}
