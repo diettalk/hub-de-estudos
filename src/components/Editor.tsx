@@ -9,11 +9,19 @@ import { Input } from './ui/input';
 import { Bold, Italic, Strikethrough, List, ListOrdered, Heading2 } from 'lucide-react';
 import { useTransition, useState, useEffect } from 'react';
 import { toast } from 'sonner';
-
+import { WikiLinkExtension } from '@/extensions/WikiLinkExtension'
 import Suggestion from '@tiptap/suggestion';
 import { Node } from '@tiptap/core';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import { supabase } from '@/lib/supabaseClient';
+
+const editor = useEditor({
+  extensions: [
+    StarterKit,
+    WikiLinkExtension,
+    // outras extensões…
+  ],
+})
 
 // 🔗 Extensão WikiLink
 const WikiLink = Node.create({
