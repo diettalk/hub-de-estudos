@@ -1,177 +1,95 @@
-// src/components/Editor.tsx
+// src/components/WikiLinkSuggestion.tsx
 
 'use client';
 
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Bold, Italic, Strikethrough, List, ListOrdered, Heading2 } from 'lucide-react';
-import { useTransition, useState, useEffect } from 'react';
-import { toast } from 'sonner';
+import { useEffect, useState, useRef } from 'react';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
-// Import do TipTap suggestion
-import Suggestion from '@tiptap/suggestion';
-import { Node } from '@tiptap/core';
-import { WikiLinkSuggestion } from './WikiLinkSuggestion';
-
-// 🔗 Extensão WikiLink
-const WikiLink = Node.create({
-  name: 'wikiLink',
-  group: 'inline',
-  inline: true,
-  atom: true,
-
-  addAttributes() {
-    return {
-      id: { default: null },
-      title: { default: null },
-    };
-  },
-
-  parseHTML() {
-    return [{ tag: 'a[data-type="wiki-link"]' }];
-  },
-
-  renderHTML({ node }) {
-    return [
-      'a',
-      {
-        'data-type': 'wiki-link',
-        'data-id': node.attrs.id,
-        href: `/disciplinas/${node.attrs.id}`,
-        class: 'text-blue-400 underline hover:text-blue-600',
-      },
-      node.attrs.title,
-    ];
-  },
-
-  addKeyboardShortcuts() {
-    return {
-      Enter: () => this.editor.commands.blur(),
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      Suggestion({
-        char: '[[',
-        pluginKey: 'wikiLinkSuggestion',
-        items: async ({ query }) => {
-          // 🔎 Por enquanto mockado, mas aqui você pode buscar no Supabase
-          const allItems = [
-            { id: 1, title: 'Matemática' },
-            { id: 2, title: 'Português' },
-            { id: 3, title: 'Direito Constitucional' },
-          ];
-          return allItems.filter(item =>
-            item.title.toLowerCase().includes(query.toLowerCase())
-          );
-        },
-        command: ({ editor, range, props }) => {
-          editor
-            .chain()
-            .focus()
-            .insertContentAt(range, [
-              {
-                type: 'wikiLink',
-                attrs: { id: props.id, title: props.title },
-              },
-            ])
-            .run();
-        },
-        render: WikiLinkSuggestion,
-      }),
-    ];
-  },
-});
-
-const Toolbar = ({ editor }: { editor: any }) => {
-  if (!editor) return null;
-  return (
-    <div className="border border-gray-700 rounded-t-lg p-2 flex gap-1 flex-wrap bg-gray-900">
-      <Button onClick={() => editor.chain().focus().toggleBold().run()} variant={editor.isActive('bold') ? 'secondary' : 'ghost'} size="sm"><Bold className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleItalic().run()} variant={editor.isActive('italic') ? 'secondary' : 'ghost'} size="sm"><Italic className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleStrike().run()} variant={editor.isActive('strike') ? 'secondary' : 'ghost'} size="sm"><Strikethrough className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} size="sm"><Heading2 className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleBulletList().run()} variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'} size="sm"><List className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleOrderedList().run()} variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'} size="sm"><ListOrdered className="h-4 w-4" /></Button>
-    </div>
-  );
+type Props = {
+  items: { id: number; title: string }[];
+  command: (item: { id: number; title: string }) => void;
 };
 
-type EditorProps = {
-  pageId: number;
-  title: string;
-  content: any;
-  onSave: (formData: FormData) => Promise<any>;
-};
+export function WikiLinkSuggestion(props: any) {
+  const { items, command } = props;
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-export function Editor({ pageId, title, content, onSave }: EditorProps) {
-  const [isPending, startTransition] = useTransition();
-  const [currentTitle, setCurrentTitle] = useState(title);
-  const [isDirty, setIsDirty] = useState(false);
-
-  const editor = useEditor({
-    extensions: [StarterKit, WikiLink],
-    content: content || '',
-    onUpdate: () => {
-      setIsDirty(true);
-    },
-    editorProps: {
-      attributes: {
-        class: 'prose prose-invert min-h-[60vh] max-w-none p-4 focus:outline-none bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg',
-      },
-    },
-  });
-
-  useEffect(() => {
-    setCurrentTitle(title);
-    if (editor && editor.isEditable) {
-      const isSameContent = JSON.stringify(editor.getJSON()) === JSON.stringify(content);
-      if (!isSameContent) {
-        editor.commands.setContent(content || '', false);
-      }
+  const selectItem = (index: number) => {
+    const item = items[index];
+    if (item) {
+      command(item);
     }
-    setIsDirty(false);
-  }, [pageId, title, content, editor]);
-
-  const handleSave = () => {
-    if (!editor) return;
-
-    const formData = new FormData();
-    formData.append('id', String(pageId));
-    formData.append('title', currentTitle);
-    formData.append('content', JSON.stringify(editor.getJSON()));
-
-    startTransition(async () => {
-      await onSave(formData);
-      toast.success("Alterações salvas com sucesso!");
-      setIsDirty(false);
-    });
   };
 
-  return (
-    <div className="flex flex-col h-full bg-gray-900 text-white p-4 rounded-lg">
-      <div className="flex justify-between items-center mb-4">
-        <Input
-          value={currentTitle}
-          onChange={(e) => {
-            setCurrentTitle(e.target.value);
-            setIsDirty(true);
-          }}
-          placeholder="Título do Documento"
-          className="text-2xl font-bold bg-transparent border-none focus:ring-0 p-0 h-auto"
-        />
-        <Button onClick={handleSave} disabled={isPending || !isDirty}>
-          {isPending ? 'Salvando...' : 'Salvar Alterações'}
-        </Button>
-      </div>
+  const upHandler = () => {
+    setSelectedIndex((selectedIndex + items.length - 1) % items.length);
+  };
 
-      <div className="flex-grow">
-        <Toolbar editor={editor} />
-        <EditorContent editor={editor} />
-      </div>
-    </div>
+  const downHandler = () => {
+    setSelectedIndex((selectedIndex + 1) % items.length);
+  };
+
+  const enterHandler = () => {
+    selectItem(selectedIndex);
+  };
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [items]);
+
+  useEffect(() => {
+    const keyDownHandler = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowUp') {
+        upHandler();
+        event.preventDefault();
+      }
+      if (event.key === 'ArrowDown') {
+        downHandler();
+        event.preventDefault();
+      }
+      if (event.key === 'Enter') {
+        enterHandler();
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('keydown', keyDownHandler);
+    return () => {
+      document.removeEventListener('keydown', keyDownHandler);
+    };
+  });
+
+  if (!items.length) {
+    return (
+      <Card className="p-2 text-sm bg-gray-800 text-gray-400">
+        Nenhum resultado encontrado
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      ref={containerRef}
+      className="bg-gray-900 border border-gray-700 shadow-lg rounded-md overflow-hidden"
+    >
+      <ul className="max-h-60 overflow-y-auto">
+        {items.map((item: { id: number; title: string }, index: number) => (
+          <li
+            key={item.id}
+            className={cn(
+              'px-3 py-2 cursor-pointer text-sm',
+              index === selectedIndex
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-200 hover:bg-gray-800'
+            )}
+            onClick={() => selectItem(index)}
+          >
+            {item.title}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
