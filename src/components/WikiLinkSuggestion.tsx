@@ -45,24 +45,25 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
   useImperativeHandle(ref, () => ({ onKeyDown }));
 
   return (
-    <Command className="rounded-lg border shadow-md w-80 bg-card text-card-foreground">
+    // CORREÇÃO DEFINITIVA: Adicionamos onMouseDown ao container principal para prevenir o blur
+    <Command
+      onMouseDown={(event) => event.preventDefault()} // <-- A NOVA ABORDAGEM
+      className="rounded-lg border shadow-md w-80 bg-card text-card-foreground"
+    >
       <CommandList>
         <CommandGroup>
           {props.items.length ? (
             props.items.map((item, index) => (
-              // CORREÇÃO: Envolvemos o CommandItem num div que previne o blur do editor
-              <div
+              // O CommandItem agora usa onSelect, que será acionado pelo clique
+              // sem que o editor perca o foco.
+              <CommandItem
                 key={`${item.type}-${item.id}`}
-                onMouseDown={(event) => event.preventDefault()} // <-- A magia está aqui
+                onSelect={() => selectItem(index)}
+                className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
               >
-                <CommandItem
-                  onSelect={() => selectItem(index)}
-                  className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
-                >
-                  {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
-                  <span>{item.title}</span>
-                </CommandItem>
-              </div>
+                {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                <span>{item.title}</span>
+              </CommandItem>
             ))
           ) : (
             <CommandItem disabled>Nenhum resultado.</CommandItem>
