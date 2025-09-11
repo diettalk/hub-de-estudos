@@ -19,6 +19,8 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     .eq('user_id', user.id)
     .order('title'); 
 
+  // A linha de console.log defeituosa foi removida daqui.
+
   const documentTree = buildTree(allDocuments || []);
 
   const selectedId = searchParams.id ? Number(searchParams.id) : null;
@@ -41,3 +43,4 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     />
   );
 }
+
