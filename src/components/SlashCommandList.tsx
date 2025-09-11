@@ -3,29 +3,21 @@ import { Editor, Range, ReactRenderer } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
 import { Suggestion, SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import tippy, { Instance } from 'tippy.js';
-import {
-  Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare
-} from 'lucide-react';
+import { Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare } from 'lucide-react';
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from '@/lib/utils';
 import { PluginKey } from 'prosemirror-state';
 
-interface CommandItemProps {
-  title: string;
-  icon: React.ReactNode;
-  command: ({ editor, range }: { editor: Editor, range: Range }) => void;
-}
-
-const commandItems: CommandItemProps[] = [
-    { title: 'Título 1', icon: <Heading1 className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run(); } },
-    { title: 'Título 2', icon: <Heading2 className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run(); } },
-    { title: 'Título 3', icon: <Heading3 className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run(); } },
-    { title: 'Lista', icon: <List className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).toggleBulletList().run(); } },
-    { title: 'Lista Numerada', icon: <ListOrdered className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).toggleOrderedList().run(); } },
-    { title: 'Lista de Tarefas', icon: <CheckSquare className="w-4 h-4" />, command: ({ editor, range }) => { editor.chain().focus().deleteRange(range).toggleTaskList().run(); } },
+const commandItems = [
+    { title: 'Título 1', icon: <Heading1 className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run(); } },
+    { title: 'Título 2', icon: <Heading2 className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run(); } },
+    { title: 'Título 3', icon: <Heading3 className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run(); } },
+    { title: 'Lista', icon: <List className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).toggleBulletList().run(); } },
+    { title: 'Lista Numerada', icon: <ListOrdered className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).toggleOrderedList().run(); } },
+    { title: 'Lista de Tarefas', icon: <CheckSquare className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).toggleTaskList().run(); } },
 ];
 
-const CommandListComponent = forwardRef<any, SuggestionProps<CommandItemProps>>((props, ref) => {
+const CommandListComponent = forwardRef<any, SuggestionProps>((props: any, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const selectItem = (index: number) => {
@@ -53,11 +45,11 @@ const CommandListComponent = forwardRef<any, SuggestionProps<CommandItemProps>>(
     useImperativeHandle(ref, () => ({ onKeyDown }));
 
     return (
-        <Command className="rounded-lg border shadow-md w-64 bg-card text-card-foreground">
+        <Command onMouseDown={(e) => e.preventDefault()} className="rounded-lg border shadow-md w-64 bg-card text-card-foreground">
             <CommandList>
                 <CommandGroup>
-                    {props.items.length ? props.items.map((item, index) => (
-                        <CommandItem key={item.title} onSelect={() => selectItem(index)} className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}>
+                    {props.items.length ? props.items.map((item: any, index: number) => (
+                        <CommandItem key={item.title} onSelect={() => selectItem(index)} className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}>
                             {item.icon}
                             <span>{item.title}</span>
                         </CommandItem>
@@ -78,9 +70,7 @@ export const SlashCommand = Extension.create({
         editor: this.editor,
         char: '/',
         items: ({ query }) => commandItems.filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10),
-        command: ({ editor, range, props }) => {
-          props.command({ editor, range });
-        },
+        command: ({ editor, range, props }) => { props.command({ editor, range }); },
         render: () => {
           let reactRenderer: ReactRenderer<any>;
           let popup: Instance[];

@@ -1,95 +1,110 @@
-// src/components/WikiLinkSuggestion.tsx
-
-'use client';
-
-import { useEffect, useState, useRef } from 'react';
-import { Card } from '@/components/ui/card';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { Editor, Range, ReactRenderer } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
+import { Suggestion, SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+import tippy, { Instance } from 'tippy.js';
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Book, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { searchDocumentsAndPages } from '@/app/actions';
+import { PluginKey } from 'prosemirror-state';
 
-type Props = {
-  items: { id: number; title: string }[];
-  command: (item: { id: number; title: string }) => void;
-};
+interface SearchItem { id: number; title: string; type: 'documentos' | 'paginas'; }
 
-export function WikiLinkSuggestion(props: any) {
-  const { items, command } = props;
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((props, ref) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const selectItem = (index: number) => {
-    const item = items[index];
-    if (item) {
-      command(item);
-    }
-  };
-
-  const upHandler = () => {
-    setSelectedIndex((selectedIndex + items.length - 1) % items.length);
-  };
-
-  const downHandler = () => {
-    setSelectedIndex((selectedIndex + 1) % items.length);
-  };
-
-  const enterHandler = () => {
-    selectItem(selectedIndex);
-  };
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [items]);
-
-  useEffect(() => {
-    const keyDownHandler = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowUp') {
-        upHandler();
-        event.preventDefault();
-      }
-      if (event.key === 'ArrowDown') {
-        downHandler();
-        event.preventDefault();
-      }
-      if (event.key === 'Enter') {
-        enterHandler();
-        event.preventDefault();
-      }
+    const selectItem = (index: number) => {
+        const item = props.items[index];
+        if (item) props.command(item);
     };
 
-    document.addEventListener('keydown', keyDownHandler);
-    return () => {
-      document.removeEventListener('keydown', keyDownHandler);
+    const onKeyDown = ({ event }: SuggestionKeyDownProps) => {
+        if (event.key === 'ArrowUp') {
+            setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
+            return true;
+        }
+        if (event.key === 'ArrowDown') {
+            setSelectedIndex((selectedIndex + 1) % props.items.length);
+            return true;
+        }
+        if (event.key === 'Enter') {
+            selectItem(selectedIndex);
+            return true;
+        }
+        return false;
     };
-  });
 
-  if (!items.length) {
+    useEffect(() => setSelectedIndex(0), [props.items]);
+    useImperativeHandle(ref, () => ({ onKeyDown }));
+
     return (
-      <Card className="p-2 text-sm bg-gray-800 text-gray-400">
-        Nenhum resultado encontrado
-      </Card>
+        <Command onMouseDown={(e) => e.preventDefault()} className="rounded-lg border shadow-md w-80 bg-card text-card-foreground">
+            <CommandList>
+                <CommandGroup>
+                    {props.items.length ? props.items.map((item, index) => (
+                        <CommandItem key={`${item.type}-${item.id}`} onSelect={() => selectItem(index)} className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}>
+                            {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                            <span>{item.title}</span>
+                        </CommandItem>
+                    )) : <CommandItem disabled>Nenhum resultado.</CommandItem>}
+                </CommandGroup>
+            </CommandList>
+        </Command>
     );
-  }
+});
+WikiLinkListComponent.displayName = 'WikiLinkList';
 
-  return (
-    <Card
-      ref={containerRef}
-      className="bg-gray-900 border border-gray-700 shadow-lg rounded-md overflow-hidden"
-    >
-      <ul className="max-h-60 overflow-y-auto">
-        {items.map((item: { id: number; title: string }, index: number) => (
-          <li
-            key={item.id}
-            className={cn(
-              'px-3 py-2 cursor-pointer text-sm',
-              index === selectedIndex
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-200 hover:bg-gray-800'
-            )}
-            onClick={() => selectItem(index)}
-          >
-            {item.title}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
+export const WikiLinkSuggestion = Extension.create({
+  name: 'wikiLinkSuggestion',
+  addProseMirrorPlugins() {
+    return [
+      Suggestion({
+        pluginKey: new PluginKey('wikiLinkSuggestion'),
+        editor: this.editor,
+        char: '[[',
+        command: ({ editor, range, props }) => {
+          const { id, title, type } = props;
+          const href = type === 'documentos' ? `/documentos?id=${id}` : `/disciplinas?page=${id}`;
+          editor.chain().focus().deleteRange(range).setMark('wikiLink', { href }).insertContent(title).unsetMark('wikiLink').insertContent(']] ').run();
+        },
+        items: async ({ query }) => await searchDocumentsAndPages(query),
+        render: () => {
+          let reactRenderer: ReactRenderer<any>;
+          let popup: Instance[];
+          return {
+            onStart: props => {
+              reactRenderer = new ReactRenderer(WikiLinkListComponent, { props, editor: props.editor });
+              popup = tippy('body', {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: reactRenderer.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: 'manual',
+                placement: 'bottom-start',
+              });
+            },
+            onUpdate(props) {
+              reactRenderer.updateProps(props);
+              if (!props.clientRect) return;
+              popup[0].setProps({ getReferenceClientRect: props.clientRect });
+            },
+            onKeyDown(props) {
+              if (props.event.key === 'Escape') {
+                popup[0].hide();
+                return true;
+              }
+              return reactRenderer.ref?.onKeyDown(props) ?? false;
+            },
+            onExit() {
+              popup[0].destroy();
+              reactRenderer.destroy();
+            },
+          };
+        },
+      }),
+    ];
+  },
+});
+
