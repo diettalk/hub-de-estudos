@@ -1,185 +1,122 @@
-"use client";
+// src/components/WikiLinkSuggestion.tsx
 
 import React, { useEffect, useState } from "react";
-import { Editor, Range } from "@tiptap/core";
-import tippy, { Instance as TippyInstance } from "tippy.js";
-import { ReactRenderer } from "@tiptap/react";
-import {
-  Command,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { FileText, Book } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { createPortal } from "react-dom";
 
-interface WikiLinkItem {
-  id: string;
+type Item = {
+  id: number;
   title: string;
-  type: "documentos" | "disciplinas";
-}
+};
 
-interface WikiLinkSuggestionProps {
-  editor: Editor;
-  range: Range;
-  items: WikiLinkItem[];
-  command: (item: WikiLinkItem) => void;
-  clientRect: () => DOMRect | null;
-}
-
-const WikiLinkListComponent: React.FC<WikiLinkSuggestionProps> = ({
-  items,
-  command,
-  editor,
-  range,
-  clientRect,
-}) => {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
-  const selectItem = (index: number) => {
-    const item = items[index];
-    if (item) {
-      command(item);
-    }
-  };
-
-  const upHandler = () => {
-    setSelectedIndex((prev) => (prev + items.length - 1) % items.length);
-  };
-
-  const downHandler = () => {
-    setSelectedIndex((prev) => (prev + 1) % items.length);
-  };
-
-  const enterHandler = () => {
-    selectItem(selectedIndex);
-  };
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowUp") {
-        upHandler();
-        event.preventDefault();
-        return true;
-      }
-      if (event.key === "ArrowDown") {
-        downHandler();
-        event.preventDefault();
-        return true;
-      }
-      if (event.key === "Enter") {
-        enterHandler();
-        event.preventDefault();
-        return true;
-      }
-      return false;
-    };
-
-    editor.on("keydown", onKeyDown);
-    return () => {
-      editor.off("keydown", onKeyDown);
-    };
-  }, [editor, items, selectedIndex]);
-
-  return (
-    <Command>
-      <CommandList>
-        <CommandGroup heading="Links disponíveis">
-          {items.length > 0 ? (
-            items.map((item, index) => (
-              <CommandItem
-                key={`${item.type}-${item.id}`}
-                // 🔑 aqui está o fix para não perder o foco
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onSelect={() => selectItem(index)}
-                className={cn(
-                  "flex items-center gap-2 cursor-pointer",
-                  selectedIndex === index ? "is-selected bg-accent" : ""
-                )}
-              >
-                {item.type === "documentos" ? (
-                  <FileText className="w-4 h-4" />
-                ) : (
-                  <Book className="w-4 h-4" />
-                )}
-                <span>{item.title}</span>
-              </CommandItem>
-            ))
-          ) : (
-            <div className="px-2 py-1 text-sm text-muted-foreground">
-              Nenhum resultado encontrado
-            </div>
-          )}
-        </CommandGroup>
-      </CommandList>
-    </Command>
-  );
+type RenderProps = {
+  items: Item[];
+  command: (item: Item) => void;
+  clientRect?: DOMRect;
 };
 
 export const WikiLinkSuggestion = {
-  items: ({ query }: { query: string }) => {
-    if (!query) return [];
-    return [
-      { id: "1", title: "Introdução à Nutrição", type: "documentos" },
-      { id: "2", title: "Bioquímica Básica", type: "disciplinas" },
-      { id: "3", title: "Fisiologia Humana", type: "disciplinas" },
-      { id: "4", title: "Dietas Especiais", type: "documentos" },
-    ]
-      .filter((item) =>
-        item.title.toLowerCase().includes(query.toLowerCase())
-      )
-      .slice(0, 5);
-  },
-
   render: () => {
-    let component: ReactRenderer<WikiLinkSuggestionProps>;
-    let popup: TippyInstance[];
+    let component: HTMLDivElement | null = null;
 
     return {
-      onStart: (props: WikiLinkSuggestionProps) => {
-        component = new ReactRenderer(WikiLinkListComponent, {
-          props,
-          editor: props.editor,
-        });
+      onStart: (props: RenderProps) => {
+        component = document.createElement("div");
+        document.body.appendChild(component);
 
-        if (!props.clientRect) return;
-
-        popup = tippy("body", {
-          getReferenceClientRect: props.clientRect,
-          appendTo: () => document.body,
-          content: component.element,
-          showOnCreate: true,
-          interactive: true,
-          trigger: "manual",
-          placement: "bottom-start",
-        });
+        renderReactComponent(props);
       },
-
-      onUpdate(props: WikiLinkSuggestionProps) {
-        component.updateProps(props);
-
-        if (!props.clientRect) return;
-
-        popup?.[0]?.setProps({
-          getReferenceClientRect: props.clientRect,
-        });
+      onUpdate(props: RenderProps) {
+        renderReactComponent(props);
       },
-
       onKeyDown(props: { event: KeyboardEvent }) {
         if (props.event.key === "Escape") {
-          popup?.[0]?.hide();
+          destroy();
           return true;
         }
-        return component?.ref?.onKeyDown(props);
+        return false;
       },
-
       onExit() {
-        popup?.[0]?.destroy();
-        component?.destroy();
+        destroy();
       },
     };
+
+    function renderReactComponent(props: RenderProps) {
+      if (!component) return;
+      const rect = props.clientRect?.();
+      const style: React.CSSProperties = rect
+        ? {
+            position: "absolute",
+            top: rect.bottom + window.scrollY + 4,
+            left: rect.left + window.scrollX,
+            background: "#1f2937", // bg-gray-800
+            color: "white",
+            border: "1px solid #374151", // border-gray-700
+            borderRadius: "0.5rem",
+            padding: "0.25rem",
+            zIndex: 1000,
+            minWidth: "200px",
+          }
+        : { display: "none" };
+
+      const SuggestionList = () => {
+        const [selectedIndex, setSelectedIndex] = useState(0);
+
+        useEffect(() => {
+          const handler = (e: KeyboardEvent) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setSelectedIndex((prev) =>
+                prev + 1 < props.items.length ? prev + 1 : prev
+              );
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setSelectedIndex((prev) =>
+                prev - 1 >= 0 ? prev - 1 : prev
+              );
+            }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              props.command(props.items[selectedIndex]);
+            }
+          };
+          window.addEventListener("keydown", handler);
+          return () => window.removeEventListener("keydown", handler);
+        }, [props.items, selectedIndex]);
+
+        return (
+          <div style={style}>
+            {props.items.length ? (
+              props.items.map((item, index) => (
+                <div
+                  key={item.id}
+                  className={`px-3 py-1 cursor-pointer rounded ${
+                    index === selectedIndex
+                      ? "bg-blue-600 text-white"
+                      : "hover:bg-gray-700"
+                  }`}
+                  onClick={() => props.command(item)}
+                >
+                  {item.title}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-1 text-gray-400">
+                Nenhum resultado encontrado
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      createPortal(<SuggestionList />, component);
+    }
+
+    function destroy() {
+      if (component) {
+        document.body.removeChild(component);
+        component = null;
+      }
+    }
   },
 };

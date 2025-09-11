@@ -4,9 +4,19 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Suggestion from '@tiptap/suggestion';
+import { WikiLinkSuggestion } from '@/components/WikiLinkSuggestion';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Bold, Italic, Strikethrough, List, ListOrdered, Heading2 } from 'lucide-react';
+import {
+  Bold,
+  Italic,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Heading2,
+} from 'lucide-react';
 import { useTransition, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -14,12 +24,50 @@ const Toolbar = ({ editor }: { editor: any }) => {
   if (!editor) return null;
   return (
     <div className="border border-gray-700 rounded-t-lg p-2 flex gap-1 flex-wrap bg-gray-900">
-      <Button onClick={() => editor.chain().focus().toggleBold().run()} variant={editor.isActive('bold') ? 'secondary' : 'ghost'} size="sm"><Bold className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleItalic().run()} variant={editor.isActive('italic') ? 'secondary' : 'ghost'} size="sm"><Italic className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleStrike().run()} variant={editor.isActive('strike') ? 'secondary' : 'ghost'} size="sm"><Strikethrough className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} variant={editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'} size="sm"><Heading2 className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleBulletList().run()} variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'} size="sm"><List className="h-4 w-4" /></Button>
-      <Button onClick={() => editor.chain().focus().toggleOrderedList().run()} variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'} size="sm"><ListOrdered className="h-4 w-4" /></Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        variant={editor.isActive('bold') ? 'secondary' : 'ghost'}
+        size="sm"
+      >
+        <Bold className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        variant={editor.isActive('italic') ? 'secondary' : 'ghost'}
+        size="sm"
+      >
+        <Italic className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        variant={editor.isActive('strike') ? 'secondary' : 'ghost'}
+        size="sm"
+      >
+        <Strikethrough className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        variant={
+          editor.isActive('heading', { level: 2 }) ? 'secondary' : 'ghost'
+        }
+        size="sm"
+      >
+        <Heading2 className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        variant={editor.isActive('bulletList') ? 'secondary' : 'ghost'}
+        size="sm"
+      >
+        <List className="h-4 w-4" />
+      </Button>
+      <Button
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        variant={editor.isActive('orderedList') ? 'secondary' : 'ghost'}
+        size="sm"
+      >
+        <ListOrdered className="h-4 w-4" />
+      </Button>
     </div>
   );
 };
@@ -37,14 +85,51 @@ export function Editor({ pageId, title, content, onSave }: EditorProps) {
   const [isDirty, setIsDirty] = useState(false);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Link.configure({
+        HTMLAttributes: {
+          class: 'text-blue-400 underline hover:text-blue-300',
+        },
+      }),
+      Suggestion.configure({
+        char: '[[',
+        allowSpaces: true,
+        startOfLine: false,
+        decorationClass: 'wikilink-suggestion',
+        command: ({ editor, range, props }) => {
+          // Insere um link clicável
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              {
+                type: 'text',
+                text: props.item.title,
+                marks: [
+                  {
+                    type: 'link',
+                    attrs: {
+                      href: `/disciplinas?page=${props.item.id}`,
+                      target: '_blank',
+                    },
+                  },
+                ],
+              },
+            ])
+            .run();
+        },
+        render: WikiLinkSuggestion.render(),
+      }),
+    ],
     content: content || '',
     onUpdate: () => {
       setIsDirty(true);
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-invert min-h-[60vh] max-w-none p-4 focus:outline-none bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg',
+        class:
+          'prose prose-invert min-h-[60vh] max-w-none p-4 focus:outline-none bg-gray-800 border border-gray-700 border-t-0 rounded-b-lg',
       },
     },
   });
@@ -52,10 +137,11 @@ export function Editor({ pageId, title, content, onSave }: EditorProps) {
   useEffect(() => {
     setCurrentTitle(title);
     if (editor && editor.isEditable) {
-        const isSameContent = JSON.stringify(editor.getJSON()) === JSON.stringify(content);
-        if(!isSameContent) {
-            editor.commands.setContent(content || '', false);
-        }
+      const isSameContent =
+        JSON.stringify(editor.getJSON()) === JSON.stringify(content);
+      if (!isSameContent) {
+        editor.commands.setContent(content || '', false);
+      }
     }
     setIsDirty(false);
   }, [pageId, title, content, editor]);
@@ -67,10 +153,10 @@ export function Editor({ pageId, title, content, onSave }: EditorProps) {
     formData.append('id', String(pageId));
     formData.append('title', currentTitle);
     formData.append('content', JSON.stringify(editor.getJSON()));
-    
+
     startTransition(async () => {
       await onSave(formData);
-      toast.success("Alterações salvas com sucesso!");
+      toast.success('Alterações salvas com sucesso!');
       setIsDirty(false);
     });
   };
