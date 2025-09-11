@@ -150,6 +150,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     }, 1000);
 
     const editor = useEditor({
+        // CORREÇÃO: Adicionada a propriedade para evitar erro de hidratação
+        immediatelyRender: false,
         extensions: [
             Document,
             Paragraph,
