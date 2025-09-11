@@ -52,9 +52,12 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
             props.items.map((item, index) => (
               <CommandItem
                 key={`${item.type}-${item.id}`}
-                // CORREÇÃO: Adicionado o evento onClick para garantir a seleção com o rato
-                onClick={() => selectItem(index)}
-                onSelect={() => selectItem(index)}
+                // CORREÇÃO: Usamos onMouseDown para evitar que o editor perca o foco.
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectItem(index);
+                }}
                 className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index ? 'is-selected bg-accent' : '')}
               >
                 {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
