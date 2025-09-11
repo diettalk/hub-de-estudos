@@ -35,12 +35,18 @@ import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
-// CORREÇÃO: Importa a extensão 'CharacterCount' que estava em falta
+
+// Importações Manuais
+import Document from '@tiptap/extension-document';
+// ... (outras importações de extensões existentes)
 import CharacterCount from '@tiptap/extension-character-count';
 
 import { SlashCommand } from './SlashCommandList';
+// NOVO: Importações para os links bidirecionais
+import { WikiLink, WikiLinkSuggestion } from './WikiLinkSuggestion';
 
 import './TextEditor.css';
+
 
 // O MenuBar permanece o mesmo
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
@@ -177,7 +183,10 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             CharacterCount,
             
             // Adiciona a extensão de comandos de barra
-            SlashCommand,
+            SlashCommand, 
+            // NOVO: Adiciona as novas extensões para os links
+            WikiLink,
+            WikiLinkSuggestion,
         ],
         content: initialContent || '',
         editorProps: {

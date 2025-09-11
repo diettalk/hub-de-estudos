@@ -1008,6 +1008,46 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
     }
 }
 
+// NOVO: Ação para pesquisar documentos e páginas para os links [[...]]
+export async function searchDocumentsAndPages(query: string) {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Se a pesquisa estiver vazia, retorna os 5 mais recentes de cada tipo
+  if (!query) {
+    const [docs, pages] = await Promise.all([
+      supabase.from('documentos').select('id, title').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+      supabase.from('paginas').select('id, title').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5)
+    ]);
+
+    const combinedResults = [
+      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
+      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
+    ];
+    return combinedResults;
+  }
+
+  // Se houver uma pesquisa, procura em ambas as tabelas
+  const searchTerm = `%${query}%`;
+  const [docs, pages] = await Promise.all([
+    supabase.from('documentos').select('id, title').eq('user_id', user.id).ilike('title', searchTerm).limit(5),
+    supabase.from('paginas').select('id, title').eq('user_id', user.id).ilike('title', searchTerm).limit(5)
+  ]);
+
+  if (docs.error || pages.error) {
+    console.error("Erro na pesquisa:", docs.error || pages.error);
+    return [];
+  }
+
+  const combinedResults = [
+      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
+      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
+  ];
+
+  return combinedResults;
+}
+
 // --- FUNÇÕES EM FALTA ADICIONADAS PARA CORRIGIR O BUILD ---
 
 export async function updateConcursosOrdem(updates: { id: number, ordem: number }[]) {
