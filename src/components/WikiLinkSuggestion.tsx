@@ -9,54 +9,69 @@ import { cn } from '@/lib/utils';
 import { searchDocumentsAndPages } from '@/app/actions';
 import { PluginKey } from 'prosemirror-state';
 
-interface SearchItem { id: number; title: string; type: 'documentos' | 'paginas'; }
+interface SearchItem {
+  id: number;
+  title: string;
+  type: 'documentos' | 'paginas';
+}
 
 const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((props, ref) => {
-    const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-    const selectItem = (index: number) => {
-        const item = props.items[index];
-        if (item) props.command(item);
-    };
+  const selectItem = (index: number) => {
+    const item = props.items[index];
+    if (item) {
+      props.command(item);
+    }
+  };
 
-    const onKeyDown = ({ event }: SuggestionKeyDownProps) => {
-        if (event.key === 'ArrowUp') {
-            setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
-            return true;
-        }
-        if (event.key === 'ArrowDown') {
-            setSelectedIndex((selectedIndex + 1) % props.items.length);
-            return true;
-        }
-        if (event.key === 'Enter') {
-            selectItem(selectedIndex);
-            return true;
-        }
-        return false;
-    };
+  const onKeyDown = ({ event }: SuggestionKeyDownProps) => {
+    if (event.key === 'ArrowUp') {
+      setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
+      return true;
+    }
+    if (event.key === 'ArrowDown') {
+      setSelectedIndex((selectedIndex + 1) % props.items.length);
+      return true;
+    }
+    if (event.key === 'Enter') {
+      selectItem(selectedIndex);
+      return true;
+    }
+    return false;
+  };
 
-    useEffect(() => setSelectedIndex(0), [props.items]);
-    useImperativeHandle(ref, () => ({ onKeyDown }));
+  useEffect(() => setSelectedIndex(0), [props.items]);
+  useImperativeHandle(ref, () => ({ onKeyDown }));
 
-    return (
-        <Command onMouseDown={(e) => e.preventDefault()} className="rounded-lg border shadow-md w-80 bg-card text-card-foreground">
-            <CommandList>
-                <CommandGroup>
-                    {props.items.length ? props.items.map((item, index) => (
-                        <CommandItem key={`${item.type}-${item.id}`} onSelect={() => selectItem(index)} className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}>
-                            {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
-                            <span>{item.title}</span>
-                        </CommandItem>
-                    )) : <CommandItem disabled>Nenhum resultado.</CommandItem>}
-                </CommandGroup>
-            </CommandList>
-        </Command>
-    );
+  return (
+    <Command onMouseDown={(e) => e.preventDefault()} className="rounded-lg border shadow-md w-80 bg-card text-card-foreground">
+      <CommandList>
+        <CommandGroup>
+          {props.items.length ? (
+            props.items.map((item, index) => (
+              <CommandItem
+                key={`${item.type}-${item.id}`}
+                onSelect={() => selectItem(index)}
+                className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}
+              >
+                {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                <span>{item.title}</span>
+              </CommandItem>
+            ))
+          ) : (
+            <CommandItem disabled>Nenhum resultado.</CommandItem>
+          )}
+        </CommandGroup>
+      </CommandList>
+    </Command>
+  );
 });
 WikiLinkListComponent.displayName = 'WikiLinkList';
 
 export const WikiLinkSuggestion = Extension.create({
   name: 'wikiLinkSuggestion',
+
   addProseMirrorPlugins() {
     return [
       Suggestion({
@@ -66,7 +81,28 @@ export const WikiLinkSuggestion = Extension.create({
         command: ({ editor, range, props }) => {
           const { id, title, type } = props;
           const href = type === 'documentos' ? `/documentos?id=${id}` : `/disciplinas?page=${id}`;
-          editor.chain().focus().deleteRange(range).setMark('wikiLink', { href }).insertContent(title).unsetMark('wikiLink').insertContent(']] ').run();
+          
+          // CORREÇÃO: Usa um método de inserção mais explícito e robusto
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              {
+                type: 'text',
+                text: title,
+                marks: [
+                  {
+                    type: 'wikiLink',
+                    attrs: { href },
+                  },
+                ],
+              },
+              {
+                  type: 'text',
+                  text: ']] '
+              }
+            ])
+            .run();
         },
         items: async ({ query }) => await searchDocumentsAndPages(query),
         render: () => {
