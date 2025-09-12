@@ -27,37 +27,22 @@ export function MusicPlayer() {
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
 
-  const { theme } = useTheme();
-
-  useEffect(() => {
-    const savedSpotify = localStorage.getItem('hub-player-spotify-url');
-    const savedYoutube = localStorage.getItem('hub-player-youtube-url');
-    if (savedSpotify) {
-      setSpotifyInput(savedSpotify);
-      setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify, theme));
-    }
-    if (savedYoutube) {
-      setYoutubeInput(savedYoutube);
-      setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
-    }
-    // Mostra o input por defeito se nenhum link estiver guardado
-    if (!savedSpotify && !savedYoutube) {
-        setShowInput(true);
-    }
-  }, [theme]);
+  // CORREÇÃO: Usamos 'resolvedTheme' para uma deteção mais fiável
+  const { theme, resolvedTheme } = useTheme();
 
   const generateSpotifyEmbedUrl = (url: string, currentTheme: string | undefined) => {
     try {
       const urlObject = new URL(url);
       if (urlObject.hostname.includes('spotify.com')) {
         const path = urlObject.pathname;
-        const spotifyTheme = currentTheme === 'dark' ? '0' : '1';
+        // CORREÇÃO: Usa 'light' para o tema 1, e o escuro (0) como padrão.
+        const spotifyTheme = currentTheme === 'light' ? '1' : '0';
         return `https://open.spotify.com/embed${path}?utm_source=generator&theme=${spotifyTheme}`;
       }
     } catch (e) { return ''; }
     return '';
   };
-
+  
   const generateYoutubeEmbedUrl = (url: string) => {
     try {
       const urlObject = new URL(url);
@@ -76,9 +61,26 @@ export function MusicPlayer() {
     return '';
   };
 
+  // CORREÇÃO: Este useEffect agora depende do 'resolvedTheme'
+  useEffect(() => {
+    const savedSpotify = localStorage.getItem('hub-player-spotify-url');
+    const savedYoutube = localStorage.getItem('hub-player-youtube-url');
+    if (savedSpotify) {
+      setSpotifyInput(savedSpotify);
+      setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify, resolvedTheme));
+    }
+    if (savedYoutube) {
+      setYoutubeInput(savedYoutube);
+      setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
+    }
+    if (!savedSpotify && !savedYoutube) {
+        setShowInput(true);
+    }
+  }, [resolvedTheme]);
+
   const handleSetSpotify = () => {
     localStorage.setItem('hub-player-spotify-url', spotifyInput);
-    setSpotifyUrl(generateSpotifyEmbedUrl(spotifyInput, theme));
+    setSpotifyUrl(generateSpotifyEmbedUrl(spotifyInput, resolvedTheme));
     if (spotifyInput) {
         setActivePlayer('spotify');
         setShowInput(false);
@@ -115,7 +117,6 @@ export function MusicPlayer() {
 
   return (
     <div className="bg-card/80 backdrop-blur-sm border-b flex p-2 gap-2 items-center transition-all duration-300 ease-in-out">
-      {/* Coluna de Controlo Vertical */}
       <div className="flex flex-col items-center justify-center gap-2">
         <ToggleGroup type="single" value={activePlayer} onValueChange={(value: PlayerType) => value && setActivePlayer(value)} size="sm" orientation="vertical">
             <ToggleGroupItem value="spotify" aria-label="Spotify" className="rounded-full h-8 w-8">
@@ -127,9 +128,7 @@ export function MusicPlayer() {
         </ToggleGroup>
       </div>
 
-      {/* Área Principal do Player */}
       <div className="flex-grow flex flex-col min-w-0">
-          {/* O player está sempre aqui, mas pode estar vazio */}
           <div className={cn(
             "rounded-md overflow-hidden transition-all duration-300 ease-in-out",
             hasContent ? (activePlayer === 'spotify' ? 'h-[80px]' : 'max-h-[200px] aspect-video') : 'h-0'
@@ -137,7 +136,6 @@ export function MusicPlayer() {
             <PlayerFrame type={activePlayer} />
           </div>
           
-          {/* O input só aparece se não houver conteúdo ou se for ativado */}
           {(!hasContent || showInput) && (
             <div className={cn("flex gap-2 items-center", hasContent && "mt-2")}>
               {activePlayer === 'spotify' && (
@@ -156,11 +154,10 @@ export function MusicPlayer() {
           )}
       </div>
 
-       {/* Botão para mostrar/esconder o input de link */}
        {hasContent && (
          <div className="flex items-start">
           <Button variant="ghost" size="icon" onClick={() => setShowInput(!showInput)} title={showInput ? "Esconder Link" : "Mudar Link"}>
-            {showInput ? <ChevronUp className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            {showInput ? <ChevronUp className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
           </Button>
          </div>
        )}
