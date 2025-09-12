@@ -1096,3 +1096,26 @@ export async function updateAnkiDeck(deckId: number, title: string, cards: Flash
     return { success: true };
 }
 
+// NOVO: Ação para buscar todos os itens para a Paleta de Comandos
+export async function getAllSearchableItems() {
+  const supabase = createServerActionClient({ cookies });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const [docs, pages] = await Promise.all([
+    supabase.from('documentos').select('id, title').eq('user_id', user.id),
+    supabase.from('paginas').select('id, title').eq('user_id', user.id)
+  ]);
+
+  if (docs.error || pages.error) {
+    console.error("Erro ao buscar itens para a paleta de comandos:", docs.error || pages.error);
+    return [];
+  }
+
+  const combinedResults = [
+      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
+      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
+  ];
+
+  return combinedResults;
+}

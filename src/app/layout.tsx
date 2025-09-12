@@ -1,4 +1,3 @@
-// src/app/layout.tsx
 import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
@@ -8,6 +7,10 @@ import { Toaster } from 'sonner'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { PageTransition } from '@/components/PageTransition'
+// NOVO: Importações para a Paleta de Comandos
+import { CommandPalette } from '@/components/CommandPalette'
+import { getAllSearchableItems } from './actions'
+
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -26,7 +29,6 @@ function LayoutClientManager({ children }: { children: React.ReactNode }) {
   )
 }
 
-// 1. DEFINIR UM TIPO SIMPLES PARA O PERFIL PARA MANTER O CÓDIGO ORGANIZADO
 type Profile = {
   full_name: string | null;
   avatar_url: string | null;
@@ -41,23 +43,29 @@ export default async function RootLayout({
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
 
-  // 2. BUSCAR OS DADOS DO PERFIL SE O USUÁRIO ESTIVER LOGADO
   let profile: Profile = null;
+  // NOVO: Variável para guardar os itens da paleta
+  let commandPaletteItems = [];
+
   if (user) {
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('full_name, avatar_url')
-      .eq('id', user.id)
-      .single();
-    profile = profileData;
+    // Busca o perfil e os itens da paleta em paralelo para otimizar o carregamento
+    const [profileResult, itemsResult] = await Promise.all([
+        supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single(),
+        getAllSearchableItems()
+    ]);
+    
+    profile = profileResult.data;
+    commandPaletteItems = itemsResult;
   }
 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+          {/* NOVO: Renderiza a Paleta de Comandos */}
+          {user && <CommandPalette initialItems={commandPaletteItems} />}
+          
           <div className="flex h-screen bg-background text-foreground">
-            {/* 3. PASSAR OS DADOS DO PERFIL (profile) COMO PROP PARA A SIDEBAR */}
             {user && <MainSidebar user={user} profile={profile} />}
             <main className="flex-1 flex flex-col overflow-y-auto">
               <LayoutClientManager>
