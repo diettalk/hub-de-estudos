@@ -101,13 +101,10 @@ export function MusicPlayer() {
     );
   };
 
-  const hasContent = spotifyUrl || youtubeUrl;
-
   return (
     <div className="bg-card/80 backdrop-blur-sm border-b flex transition-all duration-300 ease-in-out">
       {/* Coluna de Controlo Vertical */}
       <div className="flex flex-col items-center justify-center p-2 border-r gap-2">
-        <Music2 className="w-5 h-5 text-primary" />
         <ToggleGroup type="single" value={activePlayer} onValueChange={(value: PlayerType) => value && setActivePlayer(value)} size="sm" orientation="vertical">
             <ToggleGroupItem value="spotify" aria-label="Spotify" className="rounded-full h-8 w-8">
                 <SpotifyIcon className="w-4 h-4" />
@@ -138,9 +135,9 @@ export function MusicPlayer() {
           
           {/* Container do Iframe (NÃO é removido ao minimizar) */}
           <div className={cn(
-            "flex-grow rounded-md overflow-hidden mt-2 transition-all duration-300 ease-in-out",
-            isExpanded ? "h-[80px]" : "h-0",
-            activePlayer === 'youtube' && isExpanded && "h-auto max-h-[240px] aspect-video"
+            "rounded-md overflow-hidden mt-2 transition-all duration-300 ease-in-out",
+            isExpanded ? "h-[80px]" : "h-0 opacity-0",
+            activePlayer === 'youtube' && isExpanded && "h-auto max-h-[240px] opacity-100 aspect-video"
           )}>
             <PlayerFrame type={activePlayer} />
           </div>
@@ -148,7 +145,7 @@ export function MusicPlayer() {
 
        {/* Botão de Expandir/Recolher */}
        <div className="p-2 flex items-start">
-        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} title={isExpanded ? "Recolher" : "Expandir Player"}>
+        <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} title={isExpanded ? "Recolher Player" : "Expandir Player"}>
           {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
        </div>
