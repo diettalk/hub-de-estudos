@@ -1,4 +1,4 @@
-// src/app/page.tsx
+// src/app/page.tsx oi
 
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
