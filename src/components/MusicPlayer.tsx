@@ -1,22 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Music2, X, Youtube, Grab } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Music2, X, Youtube, ChevronDown, ChevronUp, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useTheme } from 'next-themes';
 
 export function MusicPlayer() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 30, y: window.innerHeight - 250 });
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  
-  // Guarda o link no localStorage para persistir entre sessões
+  const [isInputVisible, setIsInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [playerUrl, setPlayerUrl] = useState('');
+  const { theme } = useTheme();
 
+  // Carrega a última URL guardada quando o componente é montado
   useEffect(() => {
     const savedUrl = localStorage.getItem('hub-player-url');
     if (savedUrl) {
@@ -31,20 +28,23 @@ export function MusicPlayer() {
       const urlObject = new URL(url);
       if (urlObject.hostname.includes('spotify.com')) {
         const path = urlObject.pathname;
-        embedUrl = `https://open.spotify.com/embed${path}`;
+        // O tema do embed do Spotify pode ser 0 (escuro) ou 1 (claro)
+        const spotifyTheme = theme === 'dark' ? '0' : '1';
+        embedUrl = `https://open.spotify.com/embed${path}?utm_source=generator&theme=${spotifyTheme}`;
       } else if (urlObject.hostname.includes('youtube.com')) {
         if (urlObject.pathname === '/watch') {
           const videoId = urlObject.searchParams.get('v');
           embedUrl = `https://www.youtube.com/embed/${videoId}`;
-        } else if (urlObject.pathname === '/playlist') {
+        } else if (urlObject.pathname.includes('/playlist')) {
           const listId = urlObject.searchParams.get('list');
           embedUrl = `https://www.youtube.com/embed/videoseries?list=${listId}`;
         }
       }
     } catch (error) {
-      // URL inválida, não faz nada
+      console.error("URL inválida:", error);
     }
     setPlayerUrl(embedUrl);
+    if(embedUrl) setIsInputVisible(false);
   };
 
   const handleSetUrl = () => {
@@ -52,102 +52,67 @@ export function MusicPlayer() {
     handleUrlChange(inputValue);
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
-    });
-  };
+  const handleStop = () => {
+    setPlayerUrl('');
+    setInputValue('');
+    localStorage.removeItem('hub-player-url');
+    setIsInputVisible(false);
+  }
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isDragging) {
-      setPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    } else {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging]);
+  // O player só é renderizado se tiver uma URL para tocar
+  if (!playerUrl) {
+    return (
+      <div className="bg-card/50 backdrop-blur-sm border-b p-2 flex items-center gap-2">
+        <Music2 className="w-5 h-5 text-muted-foreground" />
+        <Input
+          placeholder="Cole um link do Spotify ou YouTube para ouvir música"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSetUrl()}
+          className="h-8 flex-grow bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
+        <Button onClick={handleSetUrl} size="sm">Tocar</Button>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {/* Botão Flutuante */}
-      {!isOpen && (
-        <Button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-8 right-8 z-50 rounded-full h-14 w-14 shadow-lg"
-          aria-label="Abrir Player de Música"
-        >
-          <Music2 className="h-6 w-6" />
-        </Button>
+    <div className="bg-card/50 backdrop-blur-sm border-b flex flex-col transition-all duration-300">
+      <div className="flex items-center p-1">
+        <div className="flex-grow h-20 rounded-md overflow-hidden">
+          <iframe
+            key={playerUrl} // Força a recriação do iframe quando a URL muda
+            src={playerUrl}
+            width="100%"
+            height="100%"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+            className="border-0"
+          ></iframe>
+        </div>
+        <div className="flex flex-col ml-2">
+           <Button variant="ghost" size="icon" onClick={() => setIsInputVisible(!isInputVisible)} title={isInputVisible ? "Esconder" : "Mudar link"}>
+            {isInputVisible ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleStop} title="Parar e fechar player">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      {isInputVisible && (
+        <div className="p-2 border-t flex items-center gap-2">
+          <Link2 className="w-5 h-5 text-muted-foreground" />
+          <Input
+            placeholder="Cole um novo link..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSetUrl()}
+            className="h-8 flex-grow bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+          <Button onClick={handleSetUrl} size="sm">Tocar</Button>
+        </div>
       )}
-
-      {/* Janela do Player */}
-      {isOpen && (
-        <Card 
-          className="fixed z-50 w-[350px] h-[480px] shadow-2xl flex flex-col"
-          style={{ top: position.y, left: position.x }}
-        >
-          <CardHeader 
-            className="flex flex-row items-center justify-between py-2 px-4 border-b"
-            onMouseDown={handleMouseDown}
-            style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-          >
-            <CardTitle className="text-base flex items-center gap-2">
-              <Grab className="w-4 h-4 text-muted-foreground" />
-              Player
-            </CardTitle>
-            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8">
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-4 flex-grow flex flex-col gap-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Cole um link do Spotify ou YouTube"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-              />
-              <Button onClick={handleSetUrl}>Tocar</Button>
-            </div>
-            
-            <div className="flex-grow rounded-md overflow-hidden border">
-              {playerUrl ? (
-                <iframe
-                  src={playerUrl}
-                  width="100%"
-                  height="100%"
-                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                  loading="lazy"
-                  className="bg-secondary"
-                ></iframe>
-              ) : (
-                <div className="h-full flex items-center justify-center bg-secondary text-muted-foreground text-sm">
-                  Cole um link para começar a ouvir.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </>
+    </div>
   );
 }
+

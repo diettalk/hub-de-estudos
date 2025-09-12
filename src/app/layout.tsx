@@ -9,7 +9,6 @@ import { cookies } from 'next/headers'
 import { PageTransition } from '@/components/PageTransition'
 import { CommandPalette } from '@/components/CommandPalette'
 import { getAllSearchableItems } from './actions'
-// NOVO: Importação do Player de Música
 import { MusicPlayer } from '@/components/MusicPlayer'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -21,19 +20,13 @@ export const metadata: Metadata = {
 
 function LayoutClientManager({ children }: { children: React.ReactNode }) {
   'use client' 
-  
-  return (
-    <PageTransition>
-      {children}
-    </PageTransition>
-  )
+  return ( <PageTransition> {children} </PageTransition> )
 }
 
 type Profile = {
   full_name: string | null;
   avatar_url: string | null;
 } | null;
-
 
 export default async function RootLayout({
   children,
@@ -61,16 +54,22 @@ export default async function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           {user && <CommandPalette initialItems={commandPaletteItems} />}
-          {/* NOVO: Renderiza o Player de Música se o usuário estiver logado */}
-          {user && <MusicPlayer />}
           
           <div className="flex h-screen bg-background text-foreground">
             {user && <MainSidebar user={user} profile={profile} />}
-            <main className="flex-1 flex flex-col overflow-y-auto">
-              <LayoutClientManager>
-                {children}
-              </LayoutClientManager>
-            </main>
+            
+            {/* NOVO: Wrapper para o conteúdo principal e o player */}
+            <div className="flex-1 flex flex-col">
+              {/* O Player agora fica aqui, no topo da área de conteúdo */}
+              {user && <MusicPlayer />}
+              
+              <main className="flex-1 overflow-y-auto">
+                <LayoutClientManager>
+                  {children}
+                </LayoutClientManager>
+              </main>
+            </div>
+
           </div>
           <Toaster richColors position="top-right" />
         </ThemeProvider>
