@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Link2, Youtube as YoutubeIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Link2, Youtube as YoutubeIcon, X, Music2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ type PlayerType = 'spotify' | 'youtube';
 export function MusicPlayer() {
   const [activePlayer, setActivePlayer] = useState<PlayerType>('spotify');
   const [showInput, setShowInput] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true); // Controla a visibilidade da barra inteira
   
   const [spotifyInput, setSpotifyInput] = useState('');
   const [youtubeInput, setYoutubeInput] = useState('');
@@ -27,15 +28,30 @@ export function MusicPlayer() {
   const [spotifyUrl, setSpotifyUrl] = useState('');
   const [youtubeUrl, setYoutubeUrl] = useState('');
 
-  // CORREÇÃO: Usamos 'resolvedTheme' para uma deteção mais fiável
-  const { theme, resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    const savedSpotify = localStorage.getItem('hub-player-spotify-url');
+    const savedYoutube = localStorage.getItem('hub-player-youtube-url');
+    if (savedSpotify) {
+      setSpotifyInput(savedSpotify);
+      setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify, resolvedTheme));
+    }
+    if (savedYoutube) {
+      setYoutubeInput(savedYoutube);
+      setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
+    }
+    if (!savedSpotify && !savedYoutube) {
+      setShowInput(true);
+      setIsMinimized(false);
+    }
+  }, [resolvedTheme]);
 
   const generateSpotifyEmbedUrl = (url: string, currentTheme: string | undefined) => {
     try {
       const urlObject = new URL(url);
       if (urlObject.hostname.includes('spotify.com')) {
         const path = urlObject.pathname;
-        // CORREÇÃO: Usa 'light' para o tema 1, e o escuro (0) como padrão.
         const spotifyTheme = currentTheme === 'light' ? '1' : '0';
         return `https://open.spotify.com/embed${path}?utm_source=generator&theme=${spotifyTheme}`;
       }
@@ -60,23 +76,6 @@ export function MusicPlayer() {
     } catch (e) { return ''; }
     return '';
   };
-
-  // CORREÇÃO: Este useEffect agora depende do 'resolvedTheme'
-  useEffect(() => {
-    const savedSpotify = localStorage.getItem('hub-player-spotify-url');
-    const savedYoutube = localStorage.getItem('hub-player-youtube-url');
-    if (savedSpotify) {
-      setSpotifyInput(savedSpotify);
-      setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify, resolvedTheme));
-    }
-    if (savedYoutube) {
-      setYoutubeInput(savedYoutube);
-      setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
-    }
-    if (!savedSpotify && !savedYoutube) {
-        setShowInput(true);
-    }
-  }, [resolvedTheme]);
 
   const handleSetSpotify = () => {
     localStorage.setItem('hub-player-spotify-url', spotifyInput);
@@ -115,8 +114,22 @@ export function MusicPlayer() {
   
   const hasContent = spotifyUrl || youtubeUrl;
 
+  // Se estiver totalmente minimizado, mostra apenas o botão flutuante
+  if (isMinimized) {
+    return (
+      <Button
+        onClick={() => setIsMinimized(false)}
+        className="fixed bottom-8 right-8 z-50 rounded-full h-14 w-14 shadow-lg animate-fade-in"
+        aria-label="Abrir Player de Música"
+      >
+        <Music2 className="h-6 w-6" />
+      </Button>
+    )
+  }
+
+  // A barra completa
   return (
-    <div className="bg-card/80 backdrop-blur-sm border-b flex p-2 gap-2 items-center transition-all duration-300 ease-in-out">
+    <div className="bg-card/80 backdrop-blur-sm border-b flex p-2 gap-2 items-center transition-all duration-300 ease-in-out animate-fade-in">
       <div className="flex flex-col items-center justify-center gap-2">
         <ToggleGroup type="single" value={activePlayer} onValueChange={(value: PlayerType) => value && setActivePlayer(value)} size="sm" orientation="vertical">
             <ToggleGroupItem value="spotify" aria-label="Spotify" className="rounded-full h-8 w-8">
@@ -136,7 +149,7 @@ export function MusicPlayer() {
             <PlayerFrame type={activePlayer} />
           </div>
           
-          {(!hasContent || showInput) && (
+          {showInput && (
             <div className={cn("flex gap-2 items-center", hasContent && "mt-2")}>
               {activePlayer === 'spotify' && (
                   <>
@@ -154,13 +167,16 @@ export function MusicPlayer() {
           )}
       </div>
 
-       {hasContent && (
-         <div className="flex items-start">
-          <Button variant="ghost" size="icon" onClick={() => setShowInput(!showInput)} title={showInput ? "Esconder Link" : "Mudar Link"}>
-            {showInput ? <ChevronUp className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+       <div className="flex flex-col items-start">
+          <Button variant="ghost" size="icon" onClick={() => setIsMinimized(true)} title="Minimizar Player">
+            <X className="h-4 w-4" />
           </Button>
-         </div>
-       )}
+          {hasContent && (
+            <Button variant="ghost" size="icon" onClick={() => setShowInput(!showInput)} title={showInput ? "Esconder Link" : "Mudar Link"}>
+              {showInput ? <ChevronUp className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            </Button>
+          )}
+       </div>
     </div>
   );
 }
