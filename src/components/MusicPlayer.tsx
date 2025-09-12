@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Music2, ChevronDown, ChevronUp, Link2 } from 'lucide-react';
+import { Music2, ChevronDown, ChevronUp, Link2, Play, Pause, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -27,12 +27,12 @@ export function MusicPlayer() {
     const savedSpotify = localStorage.getItem('hub-player-spotify-url');
     const savedYoutube = localStorage.getItem('hub-player-youtube-url');
     if (savedSpotify) {
-        setSpotifyInput(savedSpotify);
-        setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify));
+      setSpotifyInput(savedSpotify);
+      setSpotifyUrl(generateSpotifyEmbedUrl(savedSpotify));
     }
     if (savedYoutube) {
-        setYoutubeInput(savedYoutube);
-        setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
+      setYoutubeInput(savedYoutube);
+      setYoutubeUrl(generateYoutubeEmbedUrl(savedYoutube));
     }
   }, []);
 
@@ -42,6 +42,7 @@ export function MusicPlayer() {
       if (urlObject.hostname.includes('spotify.com')) {
         const path = urlObject.pathname;
         const spotifyTheme = theme === 'dark' ? '0' : '1';
+        // Usamos a versão compacta de 80px de altura
         return `https://open.spotify.com/embed${path}?utm_source=generator&theme=${spotifyTheme}`;
       }
     } catch (e) { return ''; }
@@ -82,26 +83,27 @@ export function MusicPlayer() {
 
   const PlayerFrame = ({ type }: { type: PlayerType }) => {
     const url = type === 'spotify' ? spotifyUrl : youtubeUrl;
-    const aspectRatio = type === 'youtube' ? '16/9' : undefined;
-    const height = type === 'spotify' ? '152px' : undefined;
 
-    if (!url) return null;
+    if (!url) {
+      return (
+        <div className="flex h-full items-center justify-center bg-secondary text-muted-foreground text-sm p-4 rounded-md">
+          Cole um link acima para começar.
+        </div>
+      );
+    }
     
     return (
         <iframe
             key={url}
             src={url}
             width="100%"
-            height={height}
-            style={{ aspectRatio }}
+            height="100%"
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
             className="border-0 bg-secondary rounded-md"
         ></iframe>
     );
   };
-
-  const hasContent = spotifyUrl || youtubeUrl;
 
   return (
     <div className={cn(
@@ -131,7 +133,10 @@ export function MusicPlayer() {
                     <Input placeholder="Cole um link de playlist/álbum do Spotify" value={spotifyInput} onChange={e => setSpotifyInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSetSpotify()} className="h-8"/>
                     <Button onClick={handleSetSpotify} size="sm">Tocar</Button>
                 </div>
-                {spotifyUrl && <PlayerFrame type="spotify" />}
+                {/* Altura fixa e menor para o player do Spotify */}
+                <div className="h-[80px] rounded-md overflow-hidden">
+                    <PlayerFrame type="spotify" />
+                </div>
             </div>
           )}
           {activePlayer === 'youtube' && (
@@ -140,7 +145,10 @@ export function MusicPlayer() {
                     <Input placeholder="Cole um link de vídeo/playlist do YouTube" value={youtubeInput} onChange={e => setYoutubeInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSetYoutube()} className="h-8"/>
                     <Button onClick={handleSetYoutube} size="sm">Tocar</Button>
                 </div>
-                {youtubeUrl && <PlayerFrame type="youtube" />}
+                {/* Altura máxima para o player do YouTube, para não dominar o ecrã */}
+                <div className="rounded-md overflow-hidden max-h-[360px]">
+                    <PlayerFrame type="youtube" />
+                </div>
             </div>
           )}
         </div>
