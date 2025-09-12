@@ -7,10 +7,10 @@ import { Toaster } from 'sonner'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { PageTransition } from '@/components/PageTransition'
-// NOVO: Importações para a Paleta de Comandos
 import { CommandPalette } from '@/components/CommandPalette'
 import { getAllSearchableItems } from './actions'
-
+// NOVO: Importação do Player de Música
+import { MusicPlayer } from '@/components/MusicPlayer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -44,11 +44,9 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   let profile: Profile = null;
-  // NOVO: Variável para guardar os itens da paleta
   let commandPaletteItems = [];
 
   if (user) {
-    // Busca o perfil e os itens da paleta em paralelo para otimizar o carregamento
     const [profileResult, itemsResult] = await Promise.all([
         supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single(),
         getAllSearchableItems()
@@ -62,8 +60,9 @@ export default async function RootLayout({
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          {/* NOVO: Renderiza a Paleta de Comandos */}
           {user && <CommandPalette initialItems={commandPaletteItems} />}
+          {/* NOVO: Renderiza o Player de Música se o usuário estiver logado */}
+          {user && <MusicPlayer />}
           
           <div className="flex h-screen bg-background text-foreground">
             {user && <MainSidebar user={user} profile={profile} />}
@@ -79,3 +78,4 @@ export default async function RootLayout({
     </html>
   )
 }
+
