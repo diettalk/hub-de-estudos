@@ -5,8 +5,7 @@ import React, { useState, useTransition, useMemo, useRef, useEffect } from 'reac
 import { useRouter } from 'next/navigation';
 import { 
     ChevronDown, FileText, Plus, GripVertical, Search, 
-    FilePlus2, Pencil, Trash, Star,
-    ChevronsLeft, ChevronsRight
+    FilePlus2, Pencil, Trash, Star
 } from 'lucide-react';
 import { Input } from '@/components/ui/input'; 
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
@@ -17,7 +16,6 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent, toggleFavori
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 
 // ============================================================================
 // --- Componente Node ---
@@ -123,7 +121,11 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     onBlur={handleSaveTitle}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+                                    // CORREÇÃO: Impede que o "Espaço" se propague para a árvore
+                                    onKeyDown={(e) => {
+                                        if (e.key === ' ') e.stopPropagation();
+                                        if (e.key === 'Enter') handleSaveTitle();
+                                    }}
                                     className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
                                 />
                             ) : (
@@ -162,7 +164,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
         </ContextMenu>
     );
 }
-
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
 // ============================================================================
