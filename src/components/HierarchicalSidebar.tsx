@@ -5,7 +5,8 @@ import React, { useState, useTransition, useMemo, useRef, useEffect } from 'reac
 import { useRouter } from 'next/navigation';
 import { 
     ChevronDown, FileText, Plus, GripVertical, Search, 
-    FilePlus2, Pencil, Trash, Star
+    FilePlus2, Pencil, Trash, Star,
+    ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import { Input } from '@/components/ui/input'; 
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
@@ -16,6 +17,7 @@ import { createItem, updateItemTitle, deleteItem, updateItemParent, toggleFavori
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 // ============================================================================
 // --- Componente Node ---
@@ -30,6 +32,14 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     const [, startTransition] = useTransition();
     const router = useRouter();
     const table = node.data.table as 'documentos' | 'disciplinas';
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isEditing) {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+        }
+    }, [isEditing]);
 
     const refreshView = () => router.refresh();
 
@@ -108,13 +118,13 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                             )}
                             {isEditing ? (
                                 <input
+                                    ref={inputRef}
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     onBlur={handleSaveTitle}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
                                     className="bg-input text-foreground rounded px-2 py-1 flex-grow text-sm h-8"
-                                    autoFocus
                                 />
                             ) : (
                                 <Link href={href} className="flex-grow truncate py-1.5 text-sm">{node.data.title}</Link>
@@ -137,7 +147,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                     {node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                {/* CORREÇÃO: Adiciona um timeout para evitar o conflito de foco */}
                 <ContextMenuItem onClick={() => setTimeout(() => setEditingId(String(node.data.id)), 50)}>
                     <Pencil className="w-4 h-4 mr-2" /> Renomear
                 </ContextMenuItem>
@@ -154,7 +163,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     );
 }
 
-
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
 // ============================================================================
@@ -163,11 +171,15 @@ export function HierarchicalSidebar({
   table,
   title,
   activeId,
+  isMinimized,
+  onToggleMinimize,
 }: {
   treeData: NodeType[];
   table: 'documentos' | 'disciplinas';
   title: string;
   activeId?: string | null;
+  isMinimized: boolean;
+  onToggleMinimize: () => void;
 }) {
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -276,88 +288,106 @@ export function HierarchicalSidebar({
 
   return (
     <div className="bg-card p-4 rounded-lg h-full flex flex-col border">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold uppercase tracking-wider">{title}</h2>
-        <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title="Criar Raiz">
-          <Plus className="w-5 h-5" />
-        </button>
+      <div className={cn("flex items-center mb-4 transition-all duration-300", isMinimized ? "justify-center" : "justify-between")}>
+        {!isMinimized && (
+            <h2 className="text-lg font-bold uppercase tracking-wider animate-fade-in">
+                {title}
+            </h2>
+        )}
+        
+        {title === "NAVEGAR" && (
+            <Button variant="ghost" size="icon" onClick={onToggleMinimize} className="h-8 w-8">
+                {isMinimized ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            </Button>
+        )}
+        
+        {!isMinimized && title !== "NAVEGAR" && (
+            <button onClick={handleCreateRoot} className="p-2 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-full" title="Criar Raiz">
+                <Plus className="w-5 h-5" />
+            </button>
+        )}
       </div>
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
-      </div>
-      {favoriteItems.length > 0 && (
-          <div className="mb-4">
-              <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-2 flex items-center">
-                  <Star className="w-4 h-4 mr-2 fill-yellow-400 text-yellow-500" />
-                  Favoritos
-              </h3>
-              <div className="flex flex-col gap-1">
-                  {favoriteItems.map(item => {
-                      const href = table === 'documentos' 
-                          ? `/documentos?id=${item.id}` 
-                          : `/disciplinas?page=${item.id}`;
-                      return (
-                          <ContextMenu key={item.id}>
-                              <ContextMenuTrigger asChild>
-                                  <div className={cn("group flex items-center justify-between p-2 rounded-md hover:bg-secondary", String(item.id) === activeId && "bg-primary/20")}>
-                                      <Link href={href} className="text-sm truncate flex-grow">
-                                          {item.title}
-                                      </Link>
-                                      <span
-                                          onClick={() => handleToggleFavorite(item)}
-                                          className="ml-2 cursor-pointer opacity-75 group-hover:opacity-100"
-                                          title="Desfavoritar"
-                                      >
-                                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-500 hover:opacity-70 transition-opacity" />
-                                      </span>
-                                  </div>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent>
-                                  <ContextMenuItem onClick={() => handleToggleFavorite(item)}>
-                                      <Star className="w-4 h-4 mr-2" /> Desfavoritar
-                                  </ContextMenuItem>
-                                  {/* CORREÇÃO: Adiciona um timeout aqui também */}
-                                  <ContextMenuItem onClick={() => {
-                                      setTimeout(() => {
-                                        setEditingId(String(item.id));
-                                        treeRef.current?.scrollTo(String(item.id));
-                                      }, 50)
-                                  }}>
-                                      <Pencil className="w-4 h-4 mr-2" /> Renomear
-                                  </ContextMenuItem>
-                              </ContextMenuContent>
-                          </ContextMenu>
-                      )
-                  })}
-              </div>
+
+      <div className={cn("transition-opacity duration-300", isMinimized ? "opacity-0 h-0 overflow-hidden" : "opacity-100 flex-grow flex flex-col min-h-0")}>
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
           </div>
-      )}
-      <div className="border-b border-border/50 my-2"></div>
-      <div className="flex-grow flex flex-col min-h-0">
-          <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
-          <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
-            {processedData.length > 0 ? (
-              isLoadedFromStorage && (
-                <Tree<NodeType>
-                  ref={treeRef}
-                  data={processedData}
-                  onMove={handleMove}
-                  width="100%"
-                  rowHeight={40}
-                  indent={24}
-                  openByDefault={false}
-                  openIds={openIds}
-                  onOpenChange={(ids) => setOpenIds(ids.map(String))}
-                  getId={(node) => String(node.id)}
-                  searchTerm={searchTerm}
-                >
-                  {(props) => <Node {...props} onToggleFavorite={handleToggleFavorite} editingId={editingId} setEditingId={setEditingId} />}
-                </Tree>
-              )
-            ) : (
-              <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum item. Clique em '+' para criar.</p></div>
-            )}
+          
+          {favoriteItems.length > 0 && (
+              <div className="mb-4">
+                  <h3 className="text-sm font-semibold uppercase text-muted-foreground mb-2 flex items-center">
+                      <Star className="w-4 h-4 mr-2 fill-yellow-400 text-yellow-500" />
+                      Favoritos
+                  </h3>
+                  <div className="flex flex-col gap-1">
+                      {favoriteItems.map(item => {
+                          const href = table === 'documentos' 
+                              ? `/documentos?id=${item.id}` 
+                              : `/disciplinas?page=${item.id}`;
+                          return (
+                              <ContextMenu key={item.id}>
+                                  <ContextMenuTrigger asChild>
+                                      <div className={cn("group flex items-center justify-between p-2 rounded-md hover:bg-secondary", String(item.id) === activeId && "bg-primary/20")}>
+                                          <Link href={href} className="text-sm truncate flex-grow">
+                                              {item.title}
+                                          </Link>
+                                          <span
+                                              onClick={() => handleToggleFavorite(item)}
+                                              className="ml-2 cursor-pointer opacity-75 group-hover:opacity-100"
+                                              title="Desfavoritar"
+                                          >
+                                            <Star className="w-4 h-4 fill-yellow-400 text-yellow-500 hover:opacity-70 transition-opacity" />
+                                          </span>
+                                      </div>
+                                  </ContextMenuTrigger>
+                                  <ContextMenuContent>
+                                      <ContextMenuItem onClick={() => handleToggleFavorite(item)}>
+                                          <Star className="w-4 h-4 mr-2" /> Desfavoritar
+                                      </ContextMenuItem>
+                                      <ContextMenuItem onClick={() => {
+                                          setTimeout(() => {
+                                            setEditingId(String(item.id));
+                                            treeRef.current?.scrollTo(String(item.id));
+                                          }, 50)
+                                      }}>
+                                          <Pencil className="w-4 h-4 mr-2" /> Renomear
+                                      </ContextMenuItem>
+                                  </ContextMenuContent>
+                              </ContextMenu>
+                          )
+                      })}
+                  </div>
+              </div>
+          )}
+
+          <div className="border-b border-border/50 my-2"></div>
+          
+          <div className="flex-grow flex flex-col min-h-0">
+              <div ref={topScrollRef} className="overflow-x-auto overflow-y-hidden scrollbar-thin"><div ref={contentWidthRef} style={{ height: '1px' }}></div></div>
+              <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
+                {processedData.length > 0 ? (
+                  isLoadedFromStorage && (
+                    <Tree<NodeType>
+                      ref={treeRef}
+                      data={processedData}
+                      onMove={handleMove}
+                      width="100%"
+                      rowHeight={40}
+                      indent={24}
+                      openByDefault={false}
+                      openIds={openIds}
+                      onOpenChange={(ids) => setOpenIds(ids.map(String))}
+                      getId={(node) => String(node.id)}
+                      searchTerm={searchTerm}
+                    >
+                      {(props) => <Node {...props} onToggleFavorite={handleToggleFavorite} editingId={editingId} setEditingId={setEditingId} />}
+                    </Tree>
+                  )
+                ) : (
+                  <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum item. Clique em '+' para criar.</p></div>
+                )}
+              </div>
           </div>
       </div>
     </div>

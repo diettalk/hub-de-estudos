@@ -9,13 +9,13 @@ import TextEditor from '@/components/TextEditor';
 import { updatePaginaContent } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 interface DisciplinasClientProps {
     paginaTree: Node[];
     initialPage: Node | null;
 }
 
-// Função para encontrar o caminho de um nó na árvore (agora local)
 function findNodePath(nodes: Node[], nodeId: string | number): Node[] {
   const targetId = String(nodeId);
   function search(currentPath: Node[], currentNodes: Node[]): Node[] | null {
@@ -39,6 +39,9 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => { setIsMounted(true); }, []);
+
+    // NOVO: Estado para controlar a visibilidade da sidebar
+    const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
     const activeId = searchParams.get('page');
 
@@ -64,13 +67,20 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     if (selectedPage && isMounted) {
         return (
              <div className="flex gap-4 h-full p-4">
-                <div className="hidden md:block w-[300px] flex-shrink-0">
+                {/* Container da Sidebar com largura dinâmica */}
+                <div className={cn(
+                    "hidden md:block flex-shrink-0 transition-all duration-300 ease-in-out",
+                    isSidebarMinimized ? "w-16" : "w-[300px]"
+                )}>
                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                         <HierarchicalSidebar 
                             treeData={paginaTree}
                             table="disciplinas"
                             title="NAVEGAR"
                             activeId={activeId}
+                            // NOVO: Passa o estado e a função de controlo para a sidebar
+                            isMinimized={isSidebarMinimized}
+                            onToggleMinimize={() => setIsSidebarMinimized(!isSidebarMinimized)}
                         />
                     </div>
                 </div>
@@ -106,6 +116,8 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                     table="disciplinas"
                     title="DISCIPLINAS"
                     activeId={activeId}
+                    isMinimized={false} // Nesta vista, a sidebar nunca está minimizada
+                    onToggleMinimize={() => {}} // Não precisa de função aqui
                 />
             </div>
         </div>
