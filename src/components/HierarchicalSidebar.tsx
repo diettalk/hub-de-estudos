@@ -20,8 +20,12 @@ import { cn } from '@/lib/utils';
 // ============================================================================
 // --- Componente Node ---
 // ============================================================================
-function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<NodeType> & { onToggleFavorite: (item: NodeType) => void }) {
-    const [isEditing, setIsEditing] = useState(false);
+function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditingId }: NodeRendererProps<NodeType> & { 
+    onToggleFavorite: (item: NodeType) => void;
+    editingId: string | null;
+    setEditingId: (id: string | null) => void;
+}) {
+    const isEditing = String(node.data.id) === editingId;
     const [title, setTitle] = useState(node.data.title);
     const [, startTransition] = useTransition();
     const router = useRouter();
@@ -32,17 +36,15 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
     const handleSaveTitle = () => {
         if (title.trim() && title !== node.data.title) {
             startTransition(() => {
-                // CORREÇÃO: Mapeia o nome da prop 'disciplinas' para o nome real da tabela 'paginas'
                 const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
-                
                 updateItemTitle(correctTableName, Number(node.data.id), title).then(result => {
                     if (result.error) toast.error(result.error);
-                    setIsEditing(false);
+                    setEditingId(null);
                     refreshView();
                 });
             });
         } else {
-            setIsEditing(false);
+            setEditingId(null);
             setTitle(node.data.title);
         }
     };
@@ -85,7 +87,6 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
                     </span>
 
                     <div className="relative flex-1 flex items-center h-full">
-                        {/* Guias Visuais */}
                         {node.parent && node.parent.level > 0 && Array.from({ length: node.parent.level }).map((_, i) => (
                             <div key={i} className="absolute left-0 top-0 h-full w-[24px]" style={{ transform: `translateX(-${(i + 1) * 24}px)` }}>
                                 <div className="h-full w-px bg-slate-700/50 mx-auto"></div>
@@ -96,7 +97,6 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
                             <div className="h-px w-1/2 bg-slate-700/50 absolute bottom-0 right-0"></div>
                         </div>
 
-                        {/* Conteúdo do Nó */}
                         <div className="relative z-10 bg-card flex items-center h-full w-full">
                             {node.isLeaf ? (
                                 <FileText className="w-4 h-4 mx-2 text-muted-foreground flex-shrink-0" />
@@ -137,7 +137,7 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
                     {node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => setIsEditing(true)}>
+                <ContextMenuItem onClick={() => setEditingId(String(node.data.id))}>
                     <Pencil className="w-4 h-4 mr-2" /> Renomear
                 </ContextMenuItem>
                 {!node.isLeaf && (
@@ -152,7 +152,6 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
         </ContextMenu>
     );
 }
-
 
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
@@ -180,6 +179,7 @@ export function HierarchicalSidebar({
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [isLoadedFromStorage, setIsLoadedFromStorage] = useState(false);
   const [favoriteItems, setFavoriteItems] = useState<NodeType[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const storageKey = `openFolders_${table}`;
 
   const processedData = useMemo(() => {
@@ -296,18 +296,33 @@ export function HierarchicalSidebar({
                           ? `/documentos?id=${item.id}` 
                           : `/disciplinas?page=${item.id}`;
                       return (
-                          <div key={item.id} className={cn("group flex items-center justify-between p-2 rounded-md hover:bg-secondary", String(item.id) === activeId && "bg-primary/20")}>
-                              <Link href={href} className="text-sm truncate flex-grow">
-                                  {item.title}
-                              </Link>
-                              <span
-                                  onClick={() => handleToggleFavorite(item)}
-                                  className="ml-2 cursor-pointer opacity-75 group-hover:opacity-100"
-                                  title="Desfavoritar"
-                              >
-                                <Star className="w-4 h-4 fill-yellow-400 text-yellow-500 hover:opacity-70 transition-opacity" />
-                              </span>
-                          </div>
+                          <ContextMenu key={item.id}>
+                              <ContextMenuTrigger asChild>
+                                  <div className={cn("group flex items-center justify-between p-2 rounded-md hover:bg-secondary", String(item.id) === activeId && "bg-primary/20")}>
+                                      <Link href={href} className="text-sm truncate flex-grow">
+                                          {item.title}
+                                      </Link>
+                                      <span
+                                          onClick={() => handleToggleFavorite(item)}
+                                          className="ml-2 cursor-pointer opacity-75 group-hover:opacity-100"
+                                          title="Desfavoritar"
+                                      >
+                                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-500 hover:opacity-70 transition-opacity" />
+                                      </span>
+                                  </div>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                  <ContextMenuItem onClick={() => handleToggleFavorite(item)}>
+                                      <Star className="w-4 h-4 mr-2" /> Desfavoritar
+                                  </ContextMenuItem>
+                                  <ContextMenuItem onClick={() => {
+                                      setEditingId(String(item.id));
+                                      setTimeout(() => treeRef.current?.scrollTo(String(item.id)), 100);
+                                  }}>
+                                      <Pencil className="w-4 h-4 mr-2" /> Renomear
+                                  </ContextMenuItem>
+                              </ContextMenuContent>
+                          </ContextMenu>
                       )
                   })}
               </div>
@@ -332,7 +347,7 @@ export function HierarchicalSidebar({
                   getId={(node) => String(node.id)}
                   searchTerm={searchTerm}
                 >
-                  {(props) => <Node {...props} onToggleFavorite={handleToggleFavorite} />}
+                  {(props) => <Node {...props} onToggleFavorite={handleToggleFavorite} editingId={editingId} setEditingId={setEditingId} />}
                 </Tree>
               )
             ) : (
