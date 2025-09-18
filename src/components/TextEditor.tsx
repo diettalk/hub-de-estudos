@@ -30,6 +30,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { useDebouncedCallback } from 'use-debounce';
 import { Button } from '@/components/ui/button';
+import YoutubeExtension from '@tiptap/extension-youtube';
 import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -39,7 +40,6 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { SlashCommand } from './SlashCommandList';
 import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
-import { CustomYoutubeExtension } from './CustomYoutubeExtension';
 
 import './TextEditor.css';
 

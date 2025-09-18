@@ -4,8 +4,26 @@ import { redirect } from 'next/navigation';
 import { buildTree } from '@/lib/utils';
 import DocumentosClient from '@/components/DocumentosClient';
 import { type Node } from '@/lib/types';
+import { type JSONContent } from '@tiptap/react';
 
 export const dynamic = 'force-dynamic';
+
+// NOVO: Função para limpar o conteúdo do Tiptap de "vídeos fantasma"
+function sanitizeTiptapContent(node: JSONContent | null): JSONContent | null {
+  if (!node || !Array.isArray(node.content)) {
+    return node;
+  }
+
+  // Filtra os nós de conteúdo, removendo vídeos do YouTube inválidos
+  const sanitizedContent = node.content.filter(childNode => {
+    if (childNode.type === 'youtube') {
+      return typeof childNode.attrs?.src === 'string' && childNode.attrs.src.trim() !== '';
+    }
+    return true;
+  }).map(childNode => sanitizeTiptapContent(childNode)); // Limpa recursivamente os filhos
+
+  return { ...node, content: sanitizedContent };
+}
 
 export default async function DocumentosPage({ searchParams }: { searchParams: { id?: string } }) {
   const supabase = createServerComponentClient({ cookies });
@@ -16,7 +34,7 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
     .from('documentos')
     .select('*') 
     .eq('user_id', user.id)
-    .order('title'); // Ordenar por título como fallback
+    .order('title'); 
 
   const documentTree = buildTree(allDocuments || []);
 
@@ -30,7 +48,12 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
       .eq('id', selectedId)
       .eq('user_id', user.id)
       .single();
-    initialDocument = docData as Node | null;
+    
+    if (docData) {
+        // CORREÇÃO: Limpa o conteúdo antes de o enviar para o cliente
+        docData.content = sanitizeTiptapContent(docData.content);
+        initialDocument = docData as Node | null;
+    }
   }
   
   return (
