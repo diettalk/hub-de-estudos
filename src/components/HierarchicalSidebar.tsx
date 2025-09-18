@@ -137,7 +137,8 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                     {node.data.is_favorite ? "Desfavoritar" : "Favoritar"}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => setEditingId(String(node.data.id))}>
+                {/* CORREÇÃO: Adiciona um timeout para evitar o conflito de foco */}
+                <ContextMenuItem onClick={() => setTimeout(() => setEditingId(String(node.data.id)), 50)}>
                     <Pencil className="w-4 h-4 mr-2" /> Renomear
                 </ContextMenuItem>
                 {!node.isLeaf && (
@@ -152,6 +153,7 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
         </ContextMenu>
     );
 }
+
 
 // ============================================================================
 // --- Componente HierarchicalSidebar ---
@@ -315,9 +317,12 @@ export function HierarchicalSidebar({
                                   <ContextMenuItem onClick={() => handleToggleFavorite(item)}>
                                       <Star className="w-4 h-4 mr-2" /> Desfavoritar
                                   </ContextMenuItem>
+                                  {/* CORREÇÃO: Adiciona um timeout aqui também */}
                                   <ContextMenuItem onClick={() => {
-                                      setEditingId(String(item.id));
-                                      setTimeout(() => treeRef.current?.scrollTo(String(item.id)), 100);
+                                      setTimeout(() => {
+                                        setEditingId(String(item.id));
+                                        treeRef.current?.scrollTo(String(item.id));
+                                      }, 50)
                                   }}>
                                       <Pencil className="w-4 h-4 mr-2" /> Renomear
                                   </ContextMenuItem>
