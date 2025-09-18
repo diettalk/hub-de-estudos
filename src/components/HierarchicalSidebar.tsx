@@ -25,14 +25,17 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
     const [title, setTitle] = useState(node.data.title);
     const [, startTransition] = useTransition();
     const router = useRouter();
-    const table = node.data.table as 'documentos' | 'paginas';
+    const table = node.data.table as 'documentos' | 'disciplinas';
 
     const refreshView = () => router.refresh();
 
     const handleSaveTitle = () => {
         if (title.trim() && title !== node.data.title) {
             startTransition(() => {
-                updateItemTitle(table, Number(node.data.id), title).then(result => {
+                // CORREÇÃO: Mapeia o nome da prop 'disciplinas' para o nome real da tabela 'paginas'
+                const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
+                
+                updateItemTitle(correctTableName, Number(node.data.id), title).then(result => {
                     if (result.error) toast.error(result.error);
                     setIsEditing(false);
                     refreshView();
@@ -45,14 +48,16 @@ function Node({ node, style, dragHandle, onToggleFavorite }: NodeRendererProps<N
     };
 
     const handleCreateChild = () => startTransition(() => {
-        createItem(table, Number(node.data.id)).then(() => {
+        const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
+        createItem(correctTableName, Number(node.data.id)).then(() => {
             if (!node.isOpen) node.toggle();
             refreshView();
         });
     });
 
     const handleDelete = () => startTransition(() => {
-        deleteItem(table, Number(node.data.id)).then(res => {
+        const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
+        deleteItem(correctTableName, Number(node.data.id)).then(res => {
             if (res.error) toast.error(res.error);
             else toast.success(`"${node.data.title}" foi excluído.`);
             refreshView();
