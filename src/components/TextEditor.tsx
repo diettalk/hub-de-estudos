@@ -37,7 +37,6 @@ import FontFamily from '@tiptap/extension-font-family';
 import CharacterCount from '@tiptap/extension-character-count';
 
 import { SlashCommand } from './SlashCommandList';
-// CORREÇÃO: Importa as extensões dos seus ficheiros corretos e separados
 import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import { CustomYoutubeExtension } from './CustomYoutubeExtension';
@@ -70,7 +69,9 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 
     const addYoutubeVideo = useCallback(() => {
         const url = prompt('Cole a URL do vídeo do YouTube:');
-        if (url) editor.commands.setYoutubeVideo({ src: url });
+        if (url) {
+            editor.commands.setYoutubeVideo({ src: url });
+        }
     }, [editor]);
 
     const activeClass = "bg-accent text-accent-foreground";
@@ -146,9 +147,7 @@ interface TextEditorProps {
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const [isEditorReady, setIsEditorReady] = useState(false);
     const debouncedSave = useDebouncedCallback((editor: Editor) => {
-        if (editor && !editor.isDestroyed) {
-            onSave(editor.getJSON());
-        }
+        if (editor && !editor.isDestroyed) onSave(editor.getJSON());
     }, 1000);
 
     const editor = useEditor({
@@ -166,8 +165,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             CustomYoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             SlashCommand,
-            WikiLink, // Registra a Mark do link
-            WikiLinkSuggestion, // Registra o plugin de sugestão
+            WikiLink,
+            WikiLinkSuggestion,
         ],
         content: initialContent || '',
         editorProps: {
@@ -188,7 +187,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
-            <style jsx global>{`
+             <style jsx global>{`
                 .prose .wiki-link {
                   text-decoration: none;
                   border-bottom: 1px dashed hsl(var(--primary));
@@ -199,13 +198,11 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                   transition: all 0.2s;
                   cursor: pointer;
                 }
-
                 .prose .wiki-link:hover {
                   background-color: hsl(var(--primary) / 0.2);
                   border-bottom-style: solid;
                 }
             `}</style>
-            
             {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>

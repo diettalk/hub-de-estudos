@@ -1,5 +1,8 @@
 import { Node, nodeInputRule, mergeAttributes } from '@tiptap/core'
 
+// --- Esta é uma cópia da extensão oficial @tiptap/extension-youtube ---
+// --- com uma correção crucial para evitar o crash com URLs nulas. ---
+
 export interface YoutubeOptions {
   addPasteHandler: boolean,
   allowFullscreen: boolean,
