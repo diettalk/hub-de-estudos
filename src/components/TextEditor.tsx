@@ -24,7 +24,6 @@ import Link from '@tiptap/extension-link';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import YoutubeExtension from '@tiptap/extension-youtube';
 import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
@@ -41,6 +40,7 @@ import { SlashCommand } from './SlashCommandList';
 // CORREÇÃO: Importa as extensões dos seus ficheiros corretos e separados
 import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
+import { CustomYoutubeExtension } from './CustomYoutubeExtension';
 
 import './TextEditor.css';
 
@@ -163,7 +163,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             Highlight.configure({ multicolor: true }), 
             TextStyle, Color, FontFamily,
             Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
-            YoutubeExtension.configure({ nocookie: true }),
+            CustomYoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             SlashCommand,
             WikiLink, // Registra a Mark do link
