@@ -19,8 +19,12 @@ function sanitizeTiptapContent(node: JSONContent | null): JSONContent | null {
     if (childNode.type === 'youtube') {
       return typeof childNode.attrs?.src === 'string' && childNode.attrs.src.trim() !== '';
     }
+    // Limpa recursivamente os filhos de nós que podem ter conteúdo
+    if (childNode.content) {
+        childNode.content = sanitizeTiptapContent(childNode as any)?.content || [];
+    }
     return true;
-  }).map(childNode => sanitizeTiptapContent(childNode)); // Limpa recursivamente os filhos
+  });
 
   return { ...node, content: sanitizedContent };
 }

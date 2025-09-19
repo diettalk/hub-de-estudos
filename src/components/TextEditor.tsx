@@ -28,9 +28,10 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+// CORREÇÃO: Volta a importar a extensão oficial do YouTube
+import YoutubeExtension from '@tiptap/extension-youtube';
 import { useDebouncedCallback } from 'use-debounce';
 import { Button } from '@/components/ui/button';
-import YoutubeExtension from '@tiptap/extension-youtube';
 import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -40,6 +41,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { SlashCommand } from './SlashCommandList';
 import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
+// REMOVIDO: A importação da extensão personalizada foi removida
 
 import './TextEditor.css';
 
@@ -162,7 +164,8 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             Highlight.configure({ multicolor: true }), 
             TextStyle, Color, FontFamily,
             Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
-            CustomYoutubeExtension.configure({ nocookie: true }),
+            // CORREÇÃO: Usa a extensão oficial e estável do YouTube
+            YoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             SlashCommand,
             WikiLink,
