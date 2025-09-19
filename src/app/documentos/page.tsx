@@ -8,26 +8,37 @@ import { type JSONContent } from '@tiptap/react';
 
 export const dynamic = 'force-dynamic';
 
-// NOVO: Função para limpar o conteúdo do Tiptap de "vídeos fantasma"
-function sanitizeTiptapContent(node: JSONContent | null): JSONContent | null {
+// NOVO: Função de sanitização robusta para o conteúdo do Tiptap
+function sanitizeTiptapContent(node: JSONContent | null | undefined): JSONContent | null {
   if (!node || !Array.isArray(node.content)) {
-    return node;
+    return node || null;
   }
 
-  // Filtra os nós de conteúdo, removendo vídeos do YouTube inválidos
-  const sanitizedContent = node.content.filter(childNode => {
-    if (childNode.type === 'youtube') {
+  // 1. Mapeia e limpa recursivamente todos os nós filhos primeiro
+  const processedChildren = node.content.map(childNode => {
+    if (childNode && childNode.content) {
+      // Cria um novo nó filho com o seu conteúdo já sanitizado
+      return {
+        ...childNode,
+        content: sanitizeTiptapContent(childNode as any)?.content || [],
+      };
+    }
+    return childNode;
+  });
+
+  // 2. Filtra os nós inválidos do YouTube APÓS a limpeza recursiva
+  const sanitizedContent = processedChildren.filter(childNode => {
+    if (childNode && childNode.type === 'youtube') {
+      // Mantém o vídeo apenas se 'src' for uma string não vazia
       return typeof childNode.attrs?.src === 'string' && childNode.attrs.src.trim() !== '';
     }
-    // Limpa recursivamente os filhos de nós que podem ter conteúdo
-    if (childNode.content) {
-        childNode.content = sanitizeTiptapContent(childNode as any)?.content || [];
-    }
+    // Mantém todos os outros tipos de nós
     return true;
   });
 
-  return { ...node, content: sanitizedContent };
+  return { ...node, content: sanitizedContent as JSONContent[] };
 }
+
 
 export default async function DocumentosPage({ searchParams }: { searchParams: { id?: string } }) {
   const supabase = createServerComponentClient({ cookies });
