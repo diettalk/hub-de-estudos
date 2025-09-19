@@ -82,15 +82,22 @@ export async function createPagina(parentId: number | null, title: string, emoji
 }
 
 export async function updatePaginaContent(id: number, content: JSONContent) {
-    if (isNaN(id)) return { error: "ID da página inválido." };
-    const supabase = createServerActionClient({ cookies });
-    const { error } = await supabase.from('paginas').update({ content }).eq('id', id);
-    if (error) {
-        console.error("Erro ao salvar conteúdo da página:", error);
-        return { error: error.message };
-    }
-    // Não revalidamos aqui para o auto-save ser mais rápido
-    return { success: true };
+  if (isNaN(id)) return { error: "ID da página inválido." };
+
+  const supabase = createServerActionClient({ cookies });
+
+  // Salva direto como jsonb
+  const { error } = await supabase
+    .from('paginas')
+    .update({ content })
+    .eq('id', id);
+
+  if (error) {
+    console.error("Erro ao salvar conteúdo da página:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
 }
 
 export async function deletePagina(id: number) {
@@ -402,13 +409,24 @@ export async function addDocumento(formData: FormData) {
 }
 
 export async function updateDocumentoContent(id: number, content: JSONContent) {
-    if (isNaN(id)) return { error: "ID inválido." };
-    const supabase = createServerActionClient({ cookies });
-    const { error } = await supabase.from('documentos').update({ content }).eq('id', id);
-    if (error) return { error: error.message };
-    // Não revalidamos aqui para uma experiência de salvamento mais suave
-    return { success: true };
+  if (isNaN(id)) return { error: "ID inválido." };
+
+  const supabase = createServerActionClient({ cookies });
+
+  // Salva direto como jsonb
+  const { error } = await supabase
+    .from('documentos')
+    .update({ content })
+    .eq('id', id);
+
+  if (error) {
+    console.error("Erro ao salvar conteúdo do documento:", error);
+    return { error: error.message };
+  }
+
+  return { success: true };
 }
+
 
 export async function deleteDocumento(id: number) {
   if (isNaN(id)) {
@@ -441,15 +459,20 @@ export async function createItem(table: TableName, parentId: number | null) {
     title: 'Novo Item',
     user_id: user.id,
     parent_id: parentId,
+    content: { type: 'doc', content: [{ type: 'paragraph' }] } // garante json válido
   };
 
-  if (table === 'paginas' || table === 'documentos') {
-    newItemData.content = { type: 'doc', content: [{ type: 'paragraph' }] };
-    if (table === 'paginas') newItemData.emoji = '📄';
+  if (table === 'paginas') {
+    newItemData.emoji = '📄';
   }
 
   try {
-    const { data, error } = await supabase.from(table).insert(newItemData).select('id').single();
+    const { data, error } = await supabase
+      .from(table)
+      .insert(newItemData)
+      .select('id')
+      .single();
+
     if (error) throw error;
     revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
     return { success: true, newItem: data };
@@ -459,6 +482,7 @@ export async function createItem(table: TableName, parentId: number | null) {
     return { error: `Falha ao criar: ${message}` };
   }
 }
+
 
 export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
   const supabase = createServerActionClient({ cookies });
