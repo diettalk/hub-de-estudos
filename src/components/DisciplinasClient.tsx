@@ -6,7 +6,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
-import { updatePaginaContent } from '@/app/actions';
+// CORREÇÃO: A importação correta está aqui no topo
+import { updatePaginaContent } from '@/app/actions'; 
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -40,7 +41,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     const [isMounted, setIsMounted] = useState(false);
     useEffect(() => { setIsMounted(true); }, []);
 
-    // NOVO: Estado para controlar a visibilidade da sidebar
     const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
 
     const activeId = searchParams.get('page');
@@ -59,52 +59,58 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         }
     }, [searchParams, initialPage]);
 
+    // CORREÇÃO: A função handleSave foi movida para dentro do componente.
     const handleSave = async (newContent: JSONContent) => {
+        // CORREÇÃO: Usando a variável 'selectedPage' que é a correta neste componente.
         if (!selectedPage) return;
-        await updatePaginaContent(selectedPage.id, newContent);
+
+        // 1. Converte o objeto para uma string JSON
+        const contentAsString = JSON.stringify(newContent);
+        
+        // 2. Envia a string para a Server Action correta (`updatePaginaContent`)
+        await updatePaginaContent(selectedPage.id, contentAsString);
     };
 
     if (selectedPage && isMounted) {
         return (
              <div className="flex gap-4 h-full p-4">
-                {/* Container da Sidebar com largura dinâmica */}
-                <div className={cn(
-                    "hidden md:block flex-shrink-0 transition-all duration-300 ease-in-out",
-                    isSidebarMinimized ? "w-16" : "w-[300px]"
-                )}>
-                    <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
-                        <HierarchicalSidebar 
-                            treeData={paginaTree}
-                            table="disciplinas"
-                            title="NAVEGAR"
-                            activeId={activeId}
-                            // NOVO: Passa o estado e a função de controlo para a sidebar
-                            isMinimized={isSidebarMinimized}
-                            onToggleMinimize={() => setIsSidebarMinimized(!isSidebarMinimized)}
-                        />
-                    </div>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col gap-4">
-                    {breadcrumbPath.length > 0 && (
-                        <div className="flex items-center text-sm text-muted-foreground bg-card border rounded-lg p-2 flex-shrink-0">
-                            {breadcrumbPath.map((node, index) => (
-                                <React.Fragment key={node.id}>
-                                    {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
-                                    <Link href={`/disciplinas?page=${node.id}`} className="hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary">
-                                        {node.title}
-                                    </Link>
-                                </React.Fragment>
-                            ))}
-                        </div>
-                    )}
-                    <TextEditor
-                        key={selectedPage.id}
-                        initialContent={selectedPage.content}
-                        onSave={handleSave}
-                        onClose={() => router.push('/disciplinas')}
-                    />
-                </div>
-            </div>
+                 {/* Container da Sidebar com largura dinâmica */}
+                 <div className={cn(
+                     "hidden md:block flex-shrink-0 transition-all duration-300 ease-in-out",
+                     isSidebarMinimized ? "w-16" : "w-[300px]"
+                 )}>
+                     <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
+                         <HierarchicalSidebar 
+                             treeData={paginaTree}
+                             table="paginas" // CORREÇÃO: A tabela correta é 'paginas'
+                             title="NAVEGAR"
+                             activeId={activeId}
+                             isMinimized={isSidebarMinimized}
+                             onToggleMinimize={() => setIsSidebarMinimized(!isSidebarMinimized)}
+                         />
+                     </div>
+                 </div>
+                 <div className="flex-1 min-w-0 flex flex-col gap-4">
+                     {breadcrumbPath.length > 0 && (
+                         <div className="flex items-center text-sm text-muted-foreground bg-card border rounded-lg p-2 flex-shrink-0">
+                             {breadcrumbPath.map((node, index) => (
+                                 <React.Fragment key={node.id}>
+                                     {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
+                                     <Link href={`/disciplinas?page=${node.id}`} className="hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary">
+                                         {node.title}
+                                     </Link>
+                                 </React.Fragment>
+                             ))}
+                         </div>
+                     )}
+                     <TextEditor
+                         key={selectedPage.id}
+                         initialContent={selectedPage.content}
+                         onSave={handleSave}
+                         onClose={() => router.push('/disciplinas')}
+                     />
+                 </div>
+             </div>
         );
     }
 
@@ -113,14 +119,13 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
             <div className="flex-1 min-w-0">
                 <HierarchicalSidebar 
                     treeData={paginaTree}
-                    table="disciplinas"
+                    table="paginas" // CORREÇÃO: A tabela correta é 'paginas'
                     title="DISCIPLINAS"
                     activeId={activeId}
-                    isMinimized={false} // Nesta vista, a sidebar nunca está minimizada
-                    onToggleMinimize={() => {}} // Não precisa de função aqui
+                    isMinimized={false}
+                    onToggleMinimize={() => {}}
                 />
             </div>
         </div>
     );
 }
-

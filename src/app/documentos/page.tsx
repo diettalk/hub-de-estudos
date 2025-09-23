@@ -53,7 +53,8 @@ export default async function DocumentosPage({ searchParams }: { searchParams: {
 
   const documentTree = buildTree(allDocuments || []);
 
-  const selectedId = searchParams.id ? Number(searchParams.id) : null;
+  const idParam = searchParams.id;
+  const selectedId = idParam ? Number(idParam) : null;
   let initialDocument: Node | null = null;
   
   if (selectedId) {

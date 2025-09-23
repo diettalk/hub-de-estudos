@@ -81,15 +81,19 @@ export async function createPagina(parentId: number | null, title: string, emoji
   return { data };
 }
 
-export async function updatePaginaContent(id: number, content: JSONContent) {
+// 1. Altere o tipo do parâmetro 'content' para 'string'
+export async function updatePaginaContent(id: number, content: string) {
   if (isNaN(id)) return { error: "ID da página inválido." };
+
+  // 2. Converta a string de volta para um objeto JSON
+  const parsedContent: JSONContent = JSON.parse(content);
 
   const supabase = createServerActionClient({ cookies });
 
-  // Salva direto como jsonb
   const { error } = await supabase
     .from('paginas')
-    .update({ content })
+    // 3. Use o objeto já convertido para salvar no banco de dados
+    .update({ content: parsedContent })
     .eq('id', id);
 
   if (error) {
@@ -408,15 +412,20 @@ export async function addDocumento(formData: FormData) {
   return { data }; 
 }
 
-export async function updateDocumentoContent(id: number, content: JSONContent) {
+// A função agora espera uma STRING como segundo parâmetro
+export async function updateDocumentoContent(id: number, content: string) {
+  
   if (isNaN(id)) return { error: "ID inválido." };
 
-  const supabase = createServerActionClient({ cookies });
+  // CONVERTE A STRING DE VOLTA PARA UM OBJETO JSON
+  const parsedContent: JSONContent = JSON.parse(content);
 
-  // Salva direto como jsonb
+  const supabase = createServerActionClient({ cookies });
+  
   const { error } = await supabase
     .from('documentos')
-    .update({ content })
+    // Salva o objeto já parseado
+    .update({ content: parsedContent })
     .eq('id', id);
 
   if (error) {
@@ -426,7 +435,6 @@ export async function updateDocumentoContent(id: number, content: JSONContent) {
 
   return { success: true };
 }
-
 
 export async function deleteDocumento(id: number) {
   if (isNaN(id)) {

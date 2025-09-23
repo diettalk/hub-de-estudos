@@ -61,10 +61,15 @@ export default function DocumentosClient({ documentTree, initialDocument }: Docu
         }
     }, [searchParams, initialDocument]);
 
-    const handleSave = async (newContent: JSONContent) => {
-        if (!selectedDocument) return;
-        await updateDocumentoContent(selectedDocument.id, newContent);
-    };
+const handleSave = async (newContent: JSONContent) => {
+    if (!selectedDocument) return;
+
+    // CONVERTE O OBJETO PARA STRING ANTES DE ENVIAR
+    const contentAsString = JSON.stringify(newContent);
+    
+    // Envia a string em vez do objeto
+    await updateDocumentoContent(selectedDocument.id, contentAsString);
+};
 
     // Vista principal com editor e sidebar
     if (selectedDocument && isMounted) {

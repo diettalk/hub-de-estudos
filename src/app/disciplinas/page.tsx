@@ -41,7 +41,8 @@ export default async function DisciplinasPage({ searchParams }: { searchParams: 
 
   const paginaTree = buildTree(allPaginas || []);
   
-  const selectedId = searchParams.page ? Number(searchParams.page) : null;
+ const idParam = searchParams.page; // Renomeado para evitar conflitos de nome, mantendo a lógica
+  const selectedId = idParam ? Number(idParam) : null;
   let initialPage: Node | null = null;
 
   if (selectedId) {
