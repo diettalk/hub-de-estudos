@@ -2,25 +2,22 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import { toast } from 'sonner';
+// VERIFIQUE: Garanta que todas estas funções estão exportadas em @/app/actions.ts
 import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo, toggleFinalizarSessao } from '@/app/actions';
 import { type SessaoEstudo, type Disciplina, type Node as DisciplinaNode } from '@/lib/types';
 import { useDebounce } from '@/lib/hooks';
 import { Checkbox } from '@/components/ui/checkbox';
-// REMOVIDO: Input
-// import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Trash2, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 import { DisciplinaCombobox } from './DisciplinaCombobox';
-// NOVO: Importa o componente de textarea auto-ajustável
+// CORREÇÃO: Certifique-se que o caminho está correto e o componente é exportado em AutoResizeTextarea.tsx
 import { AutoResizeTextarea } from './AutoResizeTextarea'; 
-// NOVO: Importa o Input padrão, pois ainda o usamos para datas e números
 import { Input } from '@/components/ui/input'; 
 
 interface CicloTableRowProps {
   sessao: SessaoEstudo;
   disciplinaTree: DisciplinaNode[];
-  // NOVAS PROPS para seleção
   isSelected: boolean;
   onToggleSelect: (id: number) => void;
 }
@@ -48,7 +45,8 @@ export function CicloTableRow({
   const debouncedRowData = useDebounce(rowData, 1500);
 
   useEffect(() => {
-    if (JSON.stringify(debouncedRowData) !== JSON.stringify(sessao)) {
+    // Evita salvar se os dados debounced forem os mesmos que a prop original
+    if (JSON.stringify(debouncedRowData) !== JSON.stringify(sessao)) { 
       const {
         id,
         foco_sugerido,
@@ -56,17 +54,21 @@ export function CicloTableRow({
         questoes_acertos,
         questoes_total,
       } = debouncedRowData;
-      startTransition(() =>
-        updateSessaoEstudo({
-          id,
-          foco_sugerido,
-          diario_de_bordo,
-          questoes_acertos,
-          questoes_total,
-        })
-      );
+      // Garante que só salva se o componente não estiver sendo desmontado ou em pending
+      if(!isPending) { 
+        startTransition(() =>
+          updateSessaoEstudo({
+            id,
+            foco_sugerido,
+            diario_de_bordo,
+            questoes_acertos,
+            questoes_total,
+          })
+        );
+      }
     }
-  }, [debouncedRowData, sessao]);
+  // Adiciona isPending como dependência para evitar chamadas enquanto uma transição está ativa
+  }, [debouncedRowData, sessao, isPending]); 
 
   const handleSelectDisciplina = (disciplina: Disciplina | null) => {
     startTransition(async () => {
@@ -83,15 +85,18 @@ export function CicloTableRow({
     });
   };
 
-  const handleToggleConclusao = (isCompleting: boolean) => {
-    startTransition(async () => {
-      const result = await toggleConclusaoSessao(sessao.id, isCompleting);
-      if (result?.error) toast.error(result.error);
-      else
-        toast.success(
-          isCompleting ? 'Estudo concluído! Revisões agendadas.' : 'Estudo revertido.'
-        );
-    });
+  const handleToggleConclusao = (checked: boolean | 'indeterminate') => {
+    // Garante que só chama a action se não for indeterminado
+    if (typeof checked === 'boolean') {
+      startTransition(async () => {
+        const result = await toggleConclusaoSessao(sessao.id, checked);
+        if (result?.error) toast.error(result.error);
+        else
+          toast.success(
+            checked ? 'Estudo concluído! Revisões agendadas.' : 'Estudo revertido.'
+          );
+      });
+    }
   };
 
   const handleDateChange = (
@@ -106,30 +111,32 @@ export function CicloTableRow({
   };
 
   const handleDelete = () => {
-    // MODIFICADO: Removido o 'window.confirm' para um modal mais limpo no futuro,
-    // mas mantendo a lógica. Se preferir o confirm, pode voltar:
-    // if(window.confirm(`Tem a certeza de que deseja deletar a sessão ${sessao.ordem}?`)) {
     startTransition(async () => {
       await deleteSessaoCiclo(sessao.id);
       toast.success('Sessão deletada.');
-      // Nota: A linha não desaparecerá automaticamente sem um 'refresh'
-      // ou sem mover o estado 'sessoes' para o componente pai.
-      // A nova `CicloTabelaClient` já resolve isso.
+      // A UI será atualizada pelo CicloTabelaClient que remove a sessão do estado
     });
-    // }
   };
 
-  const handleToggleFinalizada = (checked: boolean) => {
-    startTransition(async () => {
-      await toggleFinalizarSessao(sessao.id, checked);
-      toast.success('Status de finalização alterado.');
-    });
+  const handleToggleFinalizada = (checked: boolean | 'indeterminate') => {
+     if (typeof checked === 'boolean') {
+        startTransition(async () => {
+          // Passa o estado booleano diretamente
+          await toggleFinalizarSessao(sessao.id, checked); 
+          toast.success('Status de finalização alterado.');
+        });
+     }
   };
 
   const formatDateForInput = (dateString: string | null) => {
     if (!dateString) return '';
     try {
-      return new Date(dateString).toISOString().split('T')[0];
+      // Cria a data considerando UTC para evitar problemas de timezone no input date
+      const date = new Date(dateString);
+      const year = date.getUTCFullYear();
+      const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+      const day = date.getUTCDate().toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
     } catch {
       return '';
     }
@@ -144,7 +151,6 @@ export function CicloTableRow({
       className={`border-b border-border ${isSelected ? 'bg-blue-900/50' : 'hover:bg-secondary/50'}`}
       data-state={isSelected ? 'selected' : undefined}
     >
-      {/* NOVO: Célula do Checkbox de Seleção */}
       <td className="p-3 text-center">
         <Checkbox
           checked={isSelected}
@@ -163,7 +169,7 @@ export function CicloTableRow({
       <td className="p-3 text-center">
         <Checkbox
           checked={rowData.materia_finalizada}
-          onCheckedChange={(checked) => handleToggleFinalizada(!!checked)}
+          onCheckedChange={handleToggleFinalizada} // Corrigido
         />
       </td>
       <td className="p-3 font-mono text-center">
@@ -182,23 +188,24 @@ export function CicloTableRow({
             />
           </div>
           {rowData.disciplina_id && (
+            // CORREÇÃO: Removido legacyBehavior e <a> interno
             <Link
               href={`/disciplinas?page=${rowData.disciplina_id}`}
-              passHref
-              legacyBehavior
+              target="_blank" 
+              rel="noopener noreferrer" 
+              title="Abrir disciplina em nova aba"
+              className="flex-shrink-0" // Adicionado para manter o layout
             >
-              <a target="_blank" rel="noopener noreferrer" title="Abrir disciplina em nova aba">
-                <Button variant="ghost" size="icon" disabled={isPending} className="flex-shrink-0">
-                  <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
-                </Button>
-              </a>
+              <Button variant="ghost" size="icon" disabled={isPending} asChild={false}> {/* asChild=false para Link não passar props para Button */}
+                <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+              </Button>
             </Link>
           )}
         </div>
       </td>
 
-      {/* MODIFICADO: <Input> trocado por <AutoResizeTextarea> */}
       <td className="p-2">
+        {/* Garanta que AutoResizeTextarea está sendo importado corretamente */}
         <AutoResizeTextarea
           value={rowData.foco_sugerido || ''}
           onChange={(e) => handleInputChange('foco_sugerido', e.target.value)}
@@ -206,7 +213,6 @@ export function CicloTableRow({
           disabled={isPending}
         />
       </td>
-      {/* MODIFICADO: <Input> trocado por <AutoResizeTextarea> */}
       <td className="p-2">
         <AutoResizeTextarea
           value={rowData.diario_de_bordo || ''}
@@ -219,20 +225,19 @@ export function CicloTableRow({
       
       <td className="p-2">
         <div className="flex items-center gap-1">
-          <Input type="number" value={rowData.questoes_acertos || ''} onChange={(e) => handleInputChange('questoes_acertos', e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="C" />
+          <Input type="number" value={rowData.questoes_acertos ?? ''} onChange={(e) => handleInputChange('questoes_acertos', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="C" />
           <span className="text-muted-foreground">/</span>
-          <Input type="number" value={rowData.questoes_total || ''} onChange={(e) => handleInputChange('questoes_total', e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="T" />
+          <Input type="number" value={rowData.questoes_total ?? ''} onChange={(e) => handleInputChange('questoes_total', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="T" />
           {total > 0 && <span className="text-xs text-muted-foreground ml-2">{percAcerto}%</span>}
         </div>
       </td>
-      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(rowData.data_estudo)} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" value={formatDateForInput(rowData.data_estudo)} onChange={(e) => handleDateChange('data_estudo', e.target.value)} className="bg-input h-8" /></td>
       
-      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(rowData.data_revisao_1)} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(rowData.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
-      <td className="p-2"><Input type="date" defaultValue={formatDateForInput(rowData.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" value={formatDateForInput(rowData.data_revisao_1)} onChange={(e) => handleDateChange('data_revisao_1', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" value={formatDateForInput(rowData.data_revisao_2)} onChange={(e) => handleDateChange('data_revisao_2', e.target.value)} className="bg-input h-8" /></td>
+      <td className="p-2"><Input type="date" value={formatDateForInput(rowData.data_revisao_3)} onChange={(e) => handleDateChange('data_revisao_3', e.target.value)} className="bg-input h-8" /></td>
 
       <td className="p-3 text-center">
-        {/* MODIFICADO: Removido o 'confirm' daqui */}
         <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}>
           <Trash2 className="w-4 h-4 text-destructive" />
         </Button>
@@ -240,3 +245,4 @@ export function CicloTableRow({
     </tr>
   );
 }
+
