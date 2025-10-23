@@ -6,7 +6,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
-// CORREÇÃO: A importação correta está aqui no topo
 import { updatePaginaContent } from '@/app/actions'; 
 import { type JSONContent } from '@tiptap/react';
 import { type Node } from '@/lib/types';
@@ -59,15 +58,9 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         }
     }, [searchParams, initialPage]);
 
-    // CORREÇÃO: A função handleSave foi movida para dentro do componente.
     const handleSave = async (newContent: JSONContent) => {
-        // CORREÇÃO: Usando a variável 'selectedPage' que é a correta neste componente.
         if (!selectedPage) return;
-
-        // 1. Converte o objeto para uma string JSON
         const contentAsString = JSON.stringify(newContent);
-        
-        // 2. Envia a string para a Server Action correta (`updatePaginaContent`)
         await updatePaginaContent(selectedPage.id, contentAsString);
     };
 
@@ -82,7 +75,8 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                      <div className="sticky top-4 max-h-[calc(100vh-2rem)]">
                          <HierarchicalSidebar 
                              treeData={paginaTree}
-                             table="paginas" // CORREÇÃO: A tabela correta é 'paginas'
+                             // CORRIGIDO: Sempre 'paginas'
+                             table="paginas" 
                              title="NAVEGAR"
                              activeId={activeId}
                              isMinimized={isSidebarMinimized}
@@ -114,12 +108,14 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         );
     }
 
+    // Vista apenas com a sidebar (quando nenhuma disciplina está selecionada)
     return (
         <div className="h-full p-4 flex">
             <div className="flex-1 min-w-0">
                 <HierarchicalSidebar 
                     treeData={paginaTree}
-                    table="paginas" // CORREÇÃO: A tabela correta é 'paginas'
+                    // CORRIGIDO: Sempre 'paginas'
+                    table="paginas" 
                     title="DISCIPLINAS"
                     activeId={activeId}
                     isMinimized={false}
@@ -129,3 +125,4 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         </div>
     );
 }
+
