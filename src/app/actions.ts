@@ -307,35 +307,31 @@ export async function deleteSessaoCiclo(id: number) {
   revalidatePath('/ciclo');
 }
 
-export async function toggleFinalizarSessao(sessaoId: number, novoStatus: boolean) {
+// NOVO: Ação para excluir múltiplas sessões
+export async function deleteSessoesEmMassa(ids: number[]) {
+  if (!ids || ids.length === 0) {
+    return { error: 'Nenhum ID fornecido para exclusão.' };
+  }
+
   const supabase = createServerActionClient({ cookies });
-  if (isNaN(sessaoId)) return { error: 'ID da sessão inválido.' };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
-    if (novoStatus) {
-      await supabase.from('ciclo_sessoes').update({ 
-        materia_finalizada: true,
-        concluida: false,
-        data_estudo: null, 
-        data_revisao_1: null, 
-        data_revisao_2: null, 
-        data_revisao_3: null,
-      }).eq('id', sessaoId);
-      
-      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
-    } else {
-      await supabase.from('ciclo_sessoes').update({ materia_finalizada: false }).eq('id', sessaoId);
-    }
-    
-    revalidatePath('/ciclo');
-    revalidatePath('/revisoes');
-    revalidatePath('/calendario');
-    return { success: true };
+    const { error } = await supabase
+      .from('ciclo_sessoes')
+      .delete()
+      .in('id', ids) // Exclui todos os IDs no array
+      .eq('user_id', user.id); // Garante que o usuário só pode excluir suas próprias sessoes
 
+    if (error) throw error;
+
+    revalidatePath('/ciclo');
+    return { success: true };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-    console.error("Erro ao finalizar sessão:", errorMessage);
-    return { error: errorMessage };
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Falha ao excluir sessoes em massa:', message);
+    return { error: message };
   }
 }
 
