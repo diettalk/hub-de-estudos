@@ -1,15 +1,15 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react'; // Removido Node que não é mais necessário
+import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
 import {
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon,
     Underline, Palette, X,
     List, ListOrdered, CheckSquare,
-    AlignLeft, AlignCenter, AlignRight, // Removido ChevronsUpDown
+    AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 
-// Importações Tiptap Core e Extensões Existentes
+// Importações Manuais
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -26,12 +26,12 @@ import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 
-// === REATIVADAS: Importações de Tabela ===
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
-// ==========================================
+// === CORREÇÃO: Importações Nomeadas da Tabela ===
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+// ===============================================
 
 import YoutubeExtension from '@tiptap/extension-youtube';
 import TaskList from '@tiptap/extension-task-list';
@@ -50,11 +50,7 @@ import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import './TextEditor.css';
 
 // ============================================================================
-// --- EXTENSÃO PERSONALIZADA REMOVIDA ---
-// ============================================================================
-
-// ============================================================================
-// --- MenuBar (Atualizado) ---
+// --- MenuBar (Botão Tabela Reativado) ---
 // ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
     // ... (useState, useCallback para highlightColor, currentColor - sem alterações) ...
@@ -83,20 +79,17 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
     const addYoutubeVideo = useCallback(() => {
         const url = prompt('Cole a URL do vídeo do YouTube:');
         if (url) {
-            // Usa setYoutubeVideo que vem da extensão oficial
             editor.chain().focus().setYoutubeVideo({ src: url }).run();
         }
     }, [editor]);
 
-    // REMOVIDO: useCallback para addFoldableBlock
 
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-             {/* ... (Selects, Botões B/I/U, Alinhamento, Listas - sem alterações) ... */}
-              {/* Select de Estilo e Fonte */}
+             {/* Select de Estilo e Fonte */}
              <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
@@ -159,14 +152,12 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                         className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                 </div>
-                {/* === REATIVADO: Botão Tabela === */}
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
-                {/* ============================== */}
+                 {/* Botão Tabela REATIVADO */}
+                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
-                {/* REMOVIDO: Botão Bloco Recolhível */}
             </div>
 
-            {/* ... (Espaçador e Botão Fechar - sem alterações) ... */}
+            {/* Espaçador e Botão Fechar */}
             <div className="flex-grow"></div>
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar"><X className="w-5 h-5" /></Button>
         </div>
@@ -175,7 +166,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 MenuBar.displayName = 'MenuBar';
 
 // ============================================================================
-// --- Componente TextEditor (Atualizado) ---
+// --- Componente TextEditor (Importações Corrigidas) ---
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -192,31 +183,29 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
+            // Mantém as extensões que estavam funcionando
             Document, Paragraph, Text, History,
             Heading.configure({ levels: [1, 2, 3] }),
             BulletList, OrderedList, ListItem,
-            TaskList, TaskItem.configure({ nested: true }), // Certifique-se que estas extensões são compatíveis com 3.1.0 se ainda estiver usando
+            TaskList, TaskItem.configure({ nested: true }),
             BoldExtension, ItalicExtension, UnderlineExtension,
             Link.configure({ openOnClick: false }),
             Highlight.configure({ multicolor: true }),
-            TextStyle, Color, FontFamily, // Certifique-se que FontFamily é compatível
-
-            // === REATIVADAS: Extensões de Tabela ===
-             Table.configure({ resizable: true }),
-             TableRow,
-             TableHeader,
-             TableCell,
-            // =======================================
-
+            TextStyle, Color, FontFamily,
             YoutubeExtension.configure({ nocookie: true }),
-            CharacterCount, // Certifique-se que é compatível
+            CharacterCount,
             SlashCommand,
             WikiLink,
             WikiLinkSuggestion,
             TextAlign.configure({
-                types: ['heading', 'paragraph'], // Removido 'summary' que não existe mais
+                types: ['heading', 'paragraph'],
             }),
-            // REMOVIDAS: Extensões Summary e FoldableBlock
+            // === Extensões de Tabela REATIVADAS ===
+             Table.configure({ resizable: true }), // Agora deve funcionar com a importação nomeada
+             TableRow,
+             TableHeader,
+             TableCell,
+            // ====================================
         ],
         content: initialContent || '',
         editorProps: {
@@ -233,24 +222,18 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
      useEffect(() => {
         if (editor && initialContent) {
             try {
-                // Tenta fazer parse se for string, senão usa diretamente
                 const initialContentJSON = typeof initialContent === 'string'
                     ? JSON.parse(initialContent)
                     : initialContent;
-
-                // Compara com o conteúdo atual para evitar atualizações desnecessárias
                 const currentContentJSON = editor.getJSON();
                 if (JSON.stringify(currentContentJSON) !== JSON.stringify(initialContentJSON)) {
-                    // Define o conteúdo (ou vazio se initialContentJSON for nulo/inválido)
                     editor.commands.setContent(initialContentJSON || '', false);
                 }
             } catch (error) {
                 console.error("Erro ao processar ou definir conteúdo inicial:", error);
-                // Define como vazio em caso de erro no parse
                 editor.commands.setContent('', false);
             }
         } else if (editor && !initialContent) {
-             // Garante que o editor fique vazio se initialContent for null/undefined
              editor.commands.setContent('', false);
         }
     }, [initialContent, editor]);
@@ -262,9 +245,6 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 /* Estilos WikiLink */
                 .prose .wiki-link { text-decoration: none; border-bottom: 1px dashed hsl(var(--primary)); color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.1); padding: 0 2px; border-radius: 3px; transition: all 0.2s; cursor: pointer; }
                 .prose .wiki-link:hover { background-color: hsl(var(--primary) / 0.2); border-bottom-style: solid; }
-
-                /* REMOVIDOS: Estilos Bloco Recolhível */
-
              `}</style>
              {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
              <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
