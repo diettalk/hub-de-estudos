@@ -2,10 +2,12 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
-import { 
-    Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon, 
+import {
+    Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon,
     Underline, Palette, X,
-    List, ListOrdered, CheckSquare
+    List, ListOrdered, CheckSquare,
+    // NOVOS ÍCONES:
+    AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 
 // Importações Manuais
@@ -24,29 +26,34 @@ import Link from '@tiptap/extension-link';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { Table } from '@tiptap/extension-table';
+import Table from '@tiptap/extension-table'; // Certifique-se que a importação está correta
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-// CORREÇÃO: Volta a importar a extensão oficial do YouTube
 import YoutubeExtension from '@tiptap/extension-youtube';
-import { useDebouncedCallback } from 'use-debounce';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
 import CharacterCount from '@tiptap/extension-character-count';
 
+// NOVA EXTENSÃO:
+import TextAlign from '@tiptap/extension-text-align';
+
+// Outras importações
+import { useDebouncedCallback } from 'use-debounce';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { SlashCommand } from './SlashCommandList';
 import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
-// REMOVIDO: A importação da extensão personalizada foi removida
-
 import './TextEditor.css';
 
-// O MenuBar permanece o mesmo
+
+// ============================================================================
+// --- MenuBar (Atualizado com botões de alinhamento) ---
+// ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
+    // ... (useState, useCallback para highlightColor, currentColor, setLink, addYoutubeVideo - sem alterações) ...
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
 
@@ -72,7 +79,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
     const addYoutubeVideo = useCallback(() => {
         const url = prompt('Cole a URL do vídeo do YouTube:');
         if (url) {
-            editor.commands.setYoutubeVideo({ src: url });
+            editor.chain().focus().setYoutubeVideo({ src: url }).run();
         }
     }, [editor]);
 
@@ -81,7 +88,8 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-            <select
+             {/* Select de Estilo e Fonte */}
+             <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
                 onChange={(e) => {
@@ -108,31 +116,46 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                 <option value="serif">Serif</option>
                 <option value="monospace">Mono</option>
             </select>
+
+            {/* Negrito, Itálico, Sublinhado */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn(editor.isActive('bold') && activeClass)} title="Negrito"><Bold className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn(editor.isActive('italic') && activeClass)} title="Itálico"><Italic className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
+
+             {/* NOVO GRUPO: Alinhamento */}
+            <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={cn(editor.isActive({ textAlign: 'left' }) && activeClass)} title="Alinhar à Esquerda"><AlignLeft className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setTextAlign('center').run()} className={cn(editor.isActive({ textAlign: 'center' }) && activeClass)} title="Centralizar"><AlignCenter className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setTextAlign('right').run()} className={cn(editor.isActive({ textAlign: 'right' }) && activeClass)} title="Alinhar à Direita"><AlignRight className="w-4 h-4" /></Button>
+            </div>
+
+            {/* Listas */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn(editor.isActive('bulletList') && activeClass)} title="Lista"><List className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn(editor.isActive('orderedList') && activeClass)} title="Lista Numerada"><ListOrdered className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
+
+            {/* Link, Highlight, Cor, Tabela, Youtube */}
             <div className="flex items-center gap-2">
-                 <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
-                 <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
-                 <div className="flex items-center rounded border">
+                <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
+                <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
+                <div className="flex items-center rounded border">
                     <Palette className="w-4 h-4 mx-1 text-muted-foreground" />
-                    <input 
-                      type="color" 
-                      onInput={(e) => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()}
-                      value={currentColor}
-                      className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
+                    <input
+                        type="color"
+                        onInput={(e) => editor.chain().focus().setColor((e.target as HTMLInputElement).value).run()}
+                        value={currentColor}
+                        className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
-                 </div>
-                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
-                 <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
             </div>
+
+            {/* Espaçador e Botão Fechar */}
             <div className="flex-grow"></div>
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar"><X className="w-5 h-5" /></Button>
         </div>
@@ -140,6 +163,9 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 });
 MenuBar.displayName = 'MenuBar';
 
+// ============================================================================
+// --- Componente TextEditor (Atualizado com extensão TextAlign) ---
+// ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
   onSave: (newContent: JSONContent) => Promise<any>;
@@ -161,53 +187,60 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             TaskList, TaskItem.configure({ nested: true }),
             BoldExtension, ItalicExtension, UnderlineExtension,
             Link.configure({ openOnClick: false }),
-            Highlight.configure({ multicolor: true }), 
+            Highlight.configure({ multicolor: true }),
             TextStyle, Color, FontFamily,
             Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
-            // CORREÇÃO: Usa a extensão oficial e estável do YouTube
             YoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             SlashCommand,
             WikiLink,
             WikiLinkSuggestion,
+            // NOVA EXTENSÃO ADICIONADA:
+            TextAlign.configure({
+                types: ['heading', 'paragraph'], // Aplica alinhamento a títulos e parágrafos
+            }),
         ],
         content: initialContent || '',
         editorProps: {
             attributes: {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
+                spellcheck: 'true', // Mantém ou ajusta conforme preferência
             },
         },
         onUpdate: ({ editor }) => { debouncedSave(editor); },
         onCreate: () => setIsEditorReady(true),
     });
-    
-    useEffect(() => {
+
+    // ... (useEffect para setContent - sem alterações) ...
+     useEffect(() => {
         if (editor && initialContent) {
-            const isSame = JSON.stringify(editor.getJSON()) === JSON.stringify(initialContent);
-            if (!isSame) editor.commands.setContent(initialContent, false);
+            try {
+                const initialContentJSON = typeof initialContent === 'string'
+                    ? JSON.parse(initialContent)
+                    : initialContent;
+                const currentContentJSON = editor.getJSON();
+                if (JSON.stringify(currentContentJSON) !== JSON.stringify(initialContentJSON)) {
+                    editor.commands.setContent(initialContentJSON || '', false);
+                }
+            } catch (error) {
+                console.error("Erro ao processar ou definir conteúdo inicial:", error);
+                editor.commands.setContent('', false);
+            }
+        } else if (editor && !initialContent) {
+             editor.commands.setContent('', false);
         }
     }, [initialContent, editor]);
+
 
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
              <style jsx global>{`
-                .prose .wiki-link {
-                  text-decoration: none;
-                  border-bottom: 1px dashed hsl(var(--primary));
-                  color: hsl(var(--primary));
-                  background-color: hsl(var(--primary) / 0.1);
-                  padding: 0 2px;
-                  border-radius: 3px;
-                  transition: all 0.2s;
-                  cursor: pointer;
-                }
-                .prose .wiki-link:hover {
-                  background-color: hsl(var(--primary) / 0.2);
-                  border-bottom-style: solid;
-                }
-            `}</style>
-            {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
-            <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
+                /* Estilos WikiLink */
+                .prose .wiki-link { text-decoration: none; border-bottom: 1px dashed hsl(var(--primary)); color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.1); padding: 0 2px; border-radius: 3px; transition: all 0.2s; cursor: pointer; }
+                .prose .wiki-link:hover { background-color: hsl(var(--primary) / 0.2); border-bottom-style: solid; }
+             `}</style>
+             {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
+             <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
         </div>
     );
 }
