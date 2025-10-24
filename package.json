@@ -30,6 +30,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.50.0",
+    "@tiptap/core": "^3.7.2",
     "@tiptap/extension-bold": "^3.1.0",
     "@tiptap/extension-bullet-list": "^3.1.0",
     "@tiptap/extension-character-count": "^3.1.0",
@@ -92,4 +93,3 @@
     "typescript": "^5"
   }
 }
-

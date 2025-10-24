@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor, JSONContent, Node } from '@tiptap/react';
+// Removido findParentNode
 import {
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon,
     Underline, Palette, X,
     List, ListOrdered, CheckSquare,
-    AlignLeft, AlignCenter, AlignRight
+    AlignLeft, AlignCenter, AlignRight,
+    ChevronsUpDown
 } from 'lucide-react';
 
 // Importações Manuais
@@ -26,12 +28,11 @@ import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 
-// === CORREÇÃO: Importações Nomeadas da Tabela ===
+// Importações Nomeadas da Tabela
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
-// ===============================================
 
 import YoutubeExtension from '@tiptap/extension-youtube';
 import TaskList from '@tiptap/extension-task-list';
@@ -50,46 +51,141 @@ import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import './TextEditor.css';
 
 // ============================================================================
-// --- MenuBar (Botão Tabela Reativado) ---
+// --- EXTENSÃO PERSONALIZADA: Bloco Recolhível ---
+// ============================================================================
+
+// Nó para o <summary>
+const Summary = Node.create({
+    name: 'summary',
+    group: 'summary',
+    content: 'inline*', // Permite conteúdo editável DENTRO do summary
+    editable: false,   // <<< ADICIONADO: Marca o próprio nó summary como não editável
+    parseHTML() {
+        return [{ tag: 'summary' }];
+    },
+    renderHTML({ HTMLAttributes }) {
+        // Sem onclick customizado, confiando no handleDOMEvents
+        return ['summary', { ...HTMLAttributes, class: 'foldable-summary' }, 0];
+    },
+    selectable: false,
+    draggable: false,
+});
+
+// Nó para o <details> (sem alterações)
+const FoldableBlock = Node.create({
+    name: 'foldableBlock',
+    group: 'block',
+    content: 'summary block+',
+    defining: true,
+    addAttributes() {
+        return {
+            open: {
+                default: true,
+                parseHTML: element => element.hasAttribute('open'),
+                renderHTML: attributes => (attributes.open ? { open: '' } : {}),
+            },
+        };
+    },
+    parseHTML() {
+        return [{ tag: 'details' }];
+    },
+    renderHTML({ HTMLAttributes }) {
+        return ['details', HTMLAttributes, 0];
+    },
+    addKeyboardShortcuts() {
+        return {
+            'Shift-Enter': ({ editor }) => {
+                const { state } = editor;
+                const { selection } = state;
+                const { $from } = selection;
+                if ($from.parent.type.name === 'summary') {
+                    return editor.chain().insertContentAt($from.after($from.depth - 1), { type: 'paragraph' }).focus().run();
+                }
+                return false;
+            },
+            'Enter': ({ editor }) => {
+                 const { state } = editor;
+                 const { selection } = state;
+                 const { $from } = selection;
+                 if ($from.parent.type.name === 'summary') {
+                    const parentPos = $from.before($from.depth - 1);
+                    const parentNodeSize = $from.node($from.depth - 1).nodeSize;
+                    const nextPos = parentPos + parentNodeSize;
+                    return editor.chain().insertContentAt(nextPos, { type: 'paragraph' }).focus(nextPos + 1).run();
+                 }
+                 return false;
+            }
+        }
+    },
+});
+
+// ============================================================================
+// --- MenuBar ---
 // ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
-    // ... (useState, useCallback para highlightColor, currentColor - sem alterações) ...
+    // ... (Hooks useState, useCallback, useEffect - sem alterações) ...
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
-    const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
+    const [currentColor, setCurrentColor] = useState('#ffffff');
 
     const updateListener = useCallback(() => {
-        setCurrentColor(editor.getAttributes('textStyle').color || '#ffffff');
+        if(editor && !editor.isDestroyed) {
+          setCurrentColor(editor.getAttributes('textStyle').color || '#ffffff');
+        }
     }, [editor]);
 
-    useEffect(() => {
+     useEffect(() => {
+        if (!editor) return;
+         setCurrentColor(editor.getAttributes('textStyle').color || '#ffffff');
+
         editor.on('transaction', updateListener);
         editor.on('selectionUpdate', updateListener);
         return () => {
-            editor.off('transaction', updateListener);
-            editor.off('selectionUpdate', updateListener);
+             if (editor && !editor.isDestroyed) {
+                editor.off('transaction', updateListener);
+                editor.off('selectionUpdate', updateListener);
+             }
         };
     }, [editor, updateListener]);
 
+
     const setLink = useCallback(() => {
+         if (!editor) return;
         if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
         const url = window.prompt('URL', editor.getAttributes('link').href || '');
         if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }, [editor]);
 
     const addYoutubeVideo = useCallback(() => {
+         if (!editor) return;
         const url = prompt('Cole a URL do vídeo do YouTube:');
         if (url) {
             editor.chain().focus().setYoutubeVideo({ src: url }).run();
         }
     }, [editor]);
 
+    const addFoldableBlock = useCallback(() => {
+        if (!editor) return;
+        editor.chain().focus().insertContent({
+            type: 'foldableBlock',
+            attrs: { open: true },
+            content: [
+                { type: 'summary', content: [{ type: 'text', text: 'Título Recolhível' }] },
+                { type: 'paragraph', content: [{ type: 'text', text: 'Conteúdo aqui...' }] },
+            ],
+        }).run();
+    }, [editor]);
+
+     if (!editor) {
+        return null;
+     }
 
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-             {/* Select de Estilo e Fonte */}
+            {/* ... (Todo o JSX da MenuBar permanece o mesmo) ... */}
+              {/* Select de Estilo e Fonte */}
              <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
@@ -139,7 +235,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
 
-            {/* Link, Highlight, Cor, Tabela(REATIVADO), Youtube */}
+            {/* Link, Highlight, Cor, Tabela, Youtube, Bloco Recolhível */}
             <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                 <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
@@ -152,10 +248,11 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                         className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                 </div>
-                 {/* Botão Tabela REATIVADO */}
                  <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={addFoldableBlock} title="Bloco Recolhível"><ChevronsUpDown className="w-4 h-4" /></Button>
             </div>
+
 
             {/* Espaçador e Botão Fechar */}
             <div className="flex-grow"></div>
@@ -166,7 +263,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 MenuBar.displayName = 'MenuBar';
 
 // ============================================================================
-// --- Componente TextEditor (Importações Corrigidas) ---
+// --- Componente TextEditor ---
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -175,15 +272,17 @@ interface TextEditorProps {
 }
 
 function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
+    // ... (Hooks useState, useDebouncedCallback) ...
     const [isEditorReady, setIsEditorReady] = useState(false);
     const debouncedSave = useDebouncedCallback((editor: Editor) => {
-        if (editor && !editor.isDestroyed) onSave(editor.getJSON());
+        if (editor && !editor.isDestroyed) {
+             onSave(editor.getJSON());
+        }
     }, 1000);
 
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
-            // Mantém as extensões que estavam funcionando
             Document, Paragraph, Text, History,
             Heading.configure({ levels: [1, 2, 3] }),
             BulletList, OrderedList, ListItem,
@@ -198,14 +297,14 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             WikiLink,
             WikiLinkSuggestion,
             TextAlign.configure({
-                types: ['heading', 'paragraph'],
+                types: ['heading', 'paragraph', 'summary'],
             }),
-            // === Extensões de Tabela REATIVADAS ===
-             Table.configure({ resizable: true }), // Agora deve funcionar com a importação nomeada
-             TableRow,
-             TableHeader,
-             TableCell,
-            // ====================================
+            Table.configure({ resizable: true }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            Summary, // Extensão Summary (agora com editable: false)
+            FoldableBlock, // Extensão FoldableBlock
         ],
         content: initialContent || '',
         editorProps: {
@@ -213,14 +312,28 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
                 spellcheck: 'true',
             },
+            // MODIFICADO: handleDOMEvents (sem console.log e stopImmediatePropagation)
+             handleDOMEvents: {
+                 click: (view, event) => {
+                     const target = event.target as HTMLElement;
+                     const summaryElement = target.closest('summary.foldable-summary');
+
+                     if (summaryElement) {
+                         // Retorna false para indicar ao ProseMirror/Tiptap para NÃO lidar com este evento
+                         return false;
+                     }
+                     // Deixa o Tiptap lidar com outros cliques
+                     return undefined;
+                 },
+             },
         },
         onUpdate: ({ editor }) => { debouncedSave(editor); },
         onCreate: () => setIsEditorReady(true),
     });
 
-    // ... (useEffect para setContent - sem alterações) ...
+    // ... (useEffect para setContent) ...
      useEffect(() => {
-        if (editor && initialContent) {
+        if (editor && !editor.isDestroyed && initialContent) {
             try {
                 const initialContentJSON = typeof initialContent === 'string'
                     ? JSON.parse(initialContent)
@@ -233,7 +346,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 console.error("Erro ao processar ou definir conteúdo inicial:", error);
                 editor.commands.setContent('', false);
             }
-        } else if (editor && !initialContent) {
+        } else if (editor && !editor.isDestroyed && !initialContent) {
              editor.commands.setContent('', false);
         }
     }, [initialContent, editor]);
@@ -242,9 +355,68 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     return (
         <div className="h-full flex flex-col border rounded-lg bg-card shadow-lg">
              <style jsx global>{`
+                {/* ... (Estilos CSS - sem alterações) ... */}
                 /* Estilos WikiLink */
                 .prose .wiki-link { text-decoration: none; border-bottom: 1px dashed hsl(var(--primary)); color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.1); padding: 0 2px; border-radius: 3px; transition: all 0.2s; cursor: pointer; }
                 .prose .wiki-link:hover { background-color: hsl(var(--primary) / 0.2); border-bottom-style: solid; }
+
+                /* Estilos Bloco Recolhível */
+                .prose details {
+                    border: 1px solid hsl(var(--border));
+                    border-radius: 0.5rem;
+                    margin-bottom: 1em;
+                    overflow: hidden;
+                }
+                .prose summary.foldable-summary {
+                    cursor: pointer;
+                    padding: 0.5em 1em;
+                    background-color: hsl(var(--secondary) / 0.5);
+                    font-weight: 600;
+                    display: list-item; /* Importante para o ::before funcionar como marcador */
+                    position: relative;
+                    padding-left: 2.2em; /* Mais espaço para o ícone */
+                    list-style: none; /* Esconde marcador padrão */
+                    transition: background-color 0.2s;
+                    user-select: none;
+                }
+                 /* Ícone de seta usando ::before */
+                .prose summary.foldable-summary::before {
+                    content: '';
+                    display: inline-block; /* Mudado para inline-block */
+                    width: 1em;
+                    height: 1em;
+                    /* CORRIGIDO: URL SVG corretamente codificada */
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E");
+                    background-size: contain;
+                    background-position: center; /* Centraliza o ícone */
+                    background-repeat: no-repeat;
+                    position: absolute;
+                    left: 0.75em;
+                    top: 50%;
+                    transform: translateY(-50%) rotate(0deg);
+                    transition: transform 0.2s ease-in-out;
+                    filter: invert(0.6) brightness(0.9);
+                    pointer-events: none;
+                }
+                .prose details[open] > summary.foldable-summary::before {
+                    transform: translateY(-50%) rotate(90deg);
+                }
+                 .prose details[open] > summary.foldable-summary {
+                    border-bottom: 1px solid hsl(var(--border));
+                }
+                .prose summary.foldable-summary:hover {
+                    background-color: hsl(var(--secondary));
+                }
+                .prose details > :not(summary) {
+                     padding: 1em;
+                }
+                .prose details > :not(summary):first-of-type {
+                    margin-top: 0;
+                }
+                .prose details > :not(summary):last-of-type {
+                    margin-bottom: 0;
+                }
+
              `}</style>
              {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
              <EditorContent editor={editor} className="flex-grow overflow-y-auto" />
