@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { useEditor, EditorContent, Editor, JSONContent, Node } from '@tiptap/react'; // Import Node
+import { useEditor, EditorContent, Editor, JSONContent } from '@tiptap/react'; // Removido Node que não é mais necessário
 import {
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon,
     Underline, Palette, X,
     List, ListOrdered, CheckSquare,
-    AlignLeft, AlignCenter, AlignRight, ChevronsUpDown, // Removido CornerDownRight, ChevronRight que não estavam sendo usados aqui
+    AlignLeft, AlignCenter, AlignRight, // Removido ChevronsUpDown
 } from 'lucide-react';
 
 // Importações Tiptap Core e Extensões Existentes
@@ -26,12 +26,12 @@ import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 
-// === REABILITADAS: Importações de Tabela ===
+// === REATIVADAS: Importações de Tabela ===
 import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
-// ===========================================
+// ==========================================
 
 import YoutubeExtension from '@tiptap/extension-youtube';
 import TaskList from '@tiptap/extension-task-list';
@@ -50,75 +50,14 @@ import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import './TextEditor.css';
 
 // ============================================================================
-// --- EXTENSÃO PERSONALIZADA: Bloco Recolhível (Foldable Block) ---
+// --- EXTENSÃO PERSONALIZADA REMOVIDA ---
 // ============================================================================
-
-// Nó para o <summary>
-const Summary = Node.create({
-    name: 'summary',
-    group: 'summary', // Grupo específico para garantir que só pode estar dentro de 'foldableBlock'
-    content: 'inline*', // Permite texto e outras marcas inline
-    parseHTML() {
-        return [{ tag: 'summary' }];
-    },
-    renderHTML({ HTMLAttributes }) {
-        // Adicionamos classe para estilização e conteúdo (0)
-        return ['summary', { ...HTMLAttributes, class: 'foldable-summary' }, 0];
-    },
-    selectable: false, // O summary em si não deve ser selecionável como um bloco
-    draggable: false, // Não deve ser arrastável separadamente
-});
-
-// Nó para o <details> (o bloco recolhível)
-const FoldableBlock = Node.create({
-    name: 'foldableBlock',
-    group: 'block',
-    content: 'summary block+', // Deve conter um 'summary' seguido por um ou mais blocos
-    defining: true, // Garante que o conteúdo corresponda estritamente a 'summary block+'
-
-    addAttributes() {
-        return {
-            open: {
-                default: true, // Começa aberto por padrão
-                parseHTML: element => element.hasAttribute('open'),
-                renderHTML: attributes => (attributes.open ? { open: '' } : {}),
-            },
-        };
-    },
-
-    parseHTML() {
-        return [{ tag: 'details' }];
-    },
-
-    // CORREÇÃO: Simplificado renderHTML para usar um único 'content hole' (0)
-    // O Tiptap mapeará 'summary' para o primeiro elemento e 'block+' para o restante dentro de <details>
-    renderHTML({ HTMLAttributes }) {
-        return ['details', HTMLAttributes, 0];
-    },
-
-    // Atalho para facilitar a saída do <summary>
-    addKeyboardShortcuts() {
-        return {
-            'Shift-Enter': ({ editor }) => {
-                const { state } = editor;
-                const { selection } = state;
-                const { $from } = selection;
-                // Se o cursor estiver dentro de um 'summary'
-                if ($from.parent.type.name === 'summary') {
-                    // Insere um novo parágrafo *depois* do <details> (nó FoldableBlock)
-                    return editor.chain().insertContentAt($from.after($from.depth - 1), { type: 'paragraph' }).focus().run();
-                }
-                return false; // Deixa o Shift-Enter funcionar normalmente em outros contextos
-            },
-        }
-    },
-});
-
 
 // ============================================================================
 // --- MenuBar (Atualizado) ---
 // ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
+    // ... (useState, useCallback para highlightColor, currentColor - sem alterações) ...
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
 
@@ -144,35 +83,20 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
     const addYoutubeVideo = useCallback(() => {
         const url = prompt('Cole a URL do vídeo do YouTube:');
         if (url) {
-            editor.commands.setYoutubeVideo({ src: url });
+            // Usa setYoutubeVideo que vem da extensão oficial
+            editor.chain().focus().setYoutubeVideo({ src: url }).run();
         }
     }, [editor]);
 
-    // Função para adicionar o bloco recolhível
-    const addFoldableBlock = useCallback(() => {
-        editor.chain().focus().insertContent({
-            type: 'foldableBlock',
-            attrs: { open: true }, // Começa aberto
-            content: [
-                {
-                    type: 'summary',
-                    content: [{ type: 'text', text: 'Título Recolhível' }]
-                },
-                {
-                    type: 'paragraph', // Conteúdo inicial
-                    content: [{ type: 'text', text: 'Conteúdo aqui...' }]
-                },
-            ],
-        }).run();
-    }, [editor]);
-
+    // REMOVIDO: useCallback para addFoldableBlock
 
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
     return (
         <div className="p-2 bg-card border-b rounded-t-lg flex flex-wrap gap-2 items-center sticky top-0 z-10">
-             {/* Select de Estilo e Fonte */}
+             {/* ... (Selects, Botões B/I/U, Alinhamento, Listas - sem alterações) ... */}
+              {/* Select de Estilo e Fonte */}
              <select
                 className={cn(selectClass, "w-[120px]")}
                 value={ editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p' }
@@ -222,7 +146,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
 
-            {/* Link, Highlight, Cor, Tabela, Youtube, Bloco Recolhível */}
+            {/* Link, Highlight, Cor, Tabela(REATIVADO), Youtube */}
             <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                 <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
@@ -235,13 +159,14 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                         className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                 </div>
-                {/* REABILITADO: Botão Tabela */}
+                {/* === REATIVADO: Botão Tabela === */}
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
+                {/* ============================== */}
                 <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={addFoldableBlock} title="Bloco Recolhível"><ChevronsUpDown className="w-4 h-4" /></Button>
+                {/* REMOVIDO: Botão Bloco Recolhível */}
             </div>
 
-            {/* Espaçador e Botão Fechar */}
+            {/* ... (Espaçador e Botão Fechar - sem alterações) ... */}
             <div className="flex-grow"></div>
             <Button variant="ghost" size="icon" onClick={onClose} title="Fechar"><X className="w-5 h-5" /></Button>
         </div>
@@ -270,43 +195,42 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             Document, Paragraph, Text, History,
             Heading.configure({ levels: [1, 2, 3] }),
             BulletList, OrderedList, ListItem,
-            TaskList, TaskItem.configure({ nested: true }),
+            TaskList, TaskItem.configure({ nested: true }), // Certifique-se que estas extensões são compatíveis com 3.1.0 se ainda estiver usando
             BoldExtension, ItalicExtension, UnderlineExtension,
             Link.configure({ openOnClick: false }),
             Highlight.configure({ multicolor: true }),
-            TextStyle, Color, FontFamily,
+            TextStyle, Color, FontFamily, // Certifique-se que FontFamily é compatível
 
-            // === REABILITADAS: Extensões de Tabela ===
-            Table.configure({ resizable: true }),
-            TableRow,
-            TableHeader,
-            TableCell,
+            // === REATIVADAS: Extensões de Tabela ===
+             Table.configure({ resizable: true }),
+             TableRow,
+             TableHeader,
+             TableCell,
             // =======================================
 
             YoutubeExtension.configure({ nocookie: true }),
-            CharacterCount,
+            CharacterCount, // Certifique-se que é compatível
             SlashCommand,
             WikiLink,
             WikiLinkSuggestion,
             TextAlign.configure({
-                types: ['heading', 'paragraph', 'summary'], // Aplica alinhamento a estes tipos
+                types: ['heading', 'paragraph'], // Removido 'summary' que não existe mais
             }),
-            Summary,       // Adiciona a extensão Summary
-            FoldableBlock, // Adiciona a extensão FoldableBlock
+            // REMOVIDAS: Extensões Summary e FoldableBlock
         ],
         content: initialContent || '',
         editorProps: {
             attributes: {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
-                spellcheck: 'true', // Habilita verificação ortográfica do navegador
+                spellcheck: 'true',
             },
         },
         onUpdate: ({ editor }) => { debouncedSave(editor); },
         onCreate: () => setIsEditorReady(true),
     });
 
-    // useEffect para setContent (com tratamento de erro para JSON inválido)
-    useEffect(() => {
+    // ... (useEffect para setContent - sem alterações) ...
+     useEffect(() => {
         if (editor && initialContent) {
             try {
                 // Tenta fazer parse se for string, senão usa diretamente
@@ -339,70 +263,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                 .prose .wiki-link { text-decoration: none; border-bottom: 1px dashed hsl(var(--primary)); color: hsl(var(--primary)); background-color: hsl(var(--primary) / 0.1); padding: 0 2px; border-radius: 3px; transition: all 0.2s; cursor: pointer; }
                 .prose .wiki-link:hover { background-color: hsl(var(--primary) / 0.2); border-bottom-style: solid; }
 
-                /* Estilos Bloco Recolhível */
-                .prose details {
-                    border: 1px solid hsl(var(--border));
-                    border-radius: 0.5rem; /* rounded-lg */
-                    margin-bottom: 1em;
-                    overflow: hidden; /* Para conter bordas arredondadas */
-                }
-                .prose summary.foldable-summary {
-                    cursor: pointer;
-                    padding: 0.5em 1em;
-                    background-color: hsl(var(--secondary) / 0.5);
-                    font-weight: 600;
-                    display: list-item; /* Necessário para o marcador padrão ou ::before */
-                    position: relative; /* Para posicionar o ::before */
-                    padding-left: 2em; /* Espaço para o ícone */
-                    list-style: none; /* Remove o marcador padrão do browser */
-                    transition: background-color 0.2s;
-                }
-                 /* Ícone de seta usando ::before */
-                .prose summary.foldable-summary::before {
-                    content: '';
-                    display: inline-block;
-                    width: 1em;
-                    height: 1em;
-                     /* SVG da seta ChevronRight (cor ajustada via filter) */
-                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E");
-                    background-size: contain;
-                    background-repeat: no-repeat;
-                    position: absolute;
-                    left: 0.75em; /* Posiciona o ícone */
-                    top: 50%;
-                    transform: translateY(-50%) rotate(0deg); /* Estado inicial (fechado) */
-                    transition: transform 0.2s ease-in-out;
-                     /* Ajuste a cor do ícone SVG. invert(0.5) deixa cinza claro. ajuste conforme necessário */
-                    filter: invert(0.6) brightness(0.9);
-                }
-                /* Rotaciona a seta quando o details está aberto */
-                .prose details[open] > summary.foldable-summary::before {
-                    transform: translateY(-50%) rotate(90deg);
-                }
-                /* Adiciona borda inferior ao summary quando aberto */
-                 .prose details[open] > summary.foldable-summary {
-                    border-bottom: 1px solid hsl(var(--border));
-                }
-                .prose summary.foldable-summary:hover {
-                    background-color: hsl(var(--secondary));
-                }
-                 /* Estiliza a área de conteúdo dentro do details */
-                .prose details > div[data-content-wrapper] { /* Seleciona o wrapper se estiver usando */
-                     padding: 1em;
-                }
-                /* Remove margens extras do primeiro/último filho dentro do conteúdo */
-                 .prose details > div[data-content-wrapper] > :first-child,
-                 .prose details > :not(summary):first-of-type { /* Fallback se não usar wrapper */
-                    margin-top: 0;
-                }
-                .prose details > div[data-content-wrapper] > :last-child,
-                 .prose details > :not(summary):last-of-type { /* Fallback se não usar wrapper */
-                    margin-bottom: 0;
-                }
-                 /* Remove padding do wrapper do summary, se estiver usando */
-                .prose details > div[data-summary-wrapper] {
-                     padding: 0;
-                }
+                /* REMOVIDOS: Estilos Bloco Recolhível */
 
              `}</style>
              {editor && isEditorReady && <MenuBar editor={editor} onClose={onClose} />}
