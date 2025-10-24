@@ -6,7 +6,6 @@ import {
     Italic, Bold, Link as LinkIcon, Youtube, Highlighter, Table as TableIcon,
     Underline, Palette, X,
     List, ListOrdered, CheckSquare,
-    // NOVOS ÍCONES:
     AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 
@@ -26,17 +25,19 @@ import Link from '@tiptap/extension-link';
 import Highlight from '@tiptap/extension-highlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import Table from '@tiptap/extension-table'; // Certifique-se que a importação está correta
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
+
+// === CORREÇÃO: Importações Nomeadas da Tabela ===
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+// ===============================================
+
 import YoutubeExtension from '@tiptap/extension-youtube';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import FontFamily from '@tiptap/extension-font-family';
 import CharacterCount from '@tiptap/extension-character-count';
-
-// NOVA EXTENSÃO:
 import TextAlign from '@tiptap/extension-text-align';
 
 // Outras importações
@@ -48,12 +49,11 @@ import { WikiLink } from './WikiLink';
 import { WikiLinkSuggestion } from './WikiLinkSuggestion';
 import './TextEditor.css';
 
-
 // ============================================================================
-// --- MenuBar (Atualizado com botões de alinhamento) ---
+// --- MenuBar (Botão Tabela Reativado) ---
 // ============================================================================
 const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () => void; }) => {
-    // ... (useState, useCallback para highlightColor, currentColor, setLink, addYoutubeVideo - sem alterações) ...
+    // ... (useState, useCallback para highlightColor, currentColor - sem alterações) ...
     const [highlightColor, setHighlightColor] = useState('#ffcc00');
     const [currentColor, setCurrentColor] = useState(editor.getAttributes('textStyle').color || '#ffffff');
 
@@ -82,6 +82,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
             editor.chain().focus().setYoutubeVideo({ src: url }).run();
         }
     }, [editor]);
+
 
     const activeClass = "bg-accent text-accent-foreground";
     const selectClass = "h-9 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
@@ -124,7 +125,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} className={cn(editor.isActive('underline') && activeClass)} title="Sublinhado"><Underline className="w-4 h-4" /></Button>
             </div>
 
-             {/* NOVO GRUPO: Alinhamento */}
+             {/* Alinhamento */}
             <div className="flex items-center gap-1">
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setTextAlign('left').run()} className={cn(editor.isActive({ textAlign: 'left' }) && activeClass)} title="Alinhar à Esquerda"><AlignLeft className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().setTextAlign('center').run()} className={cn(editor.isActive({ textAlign: 'center' }) && activeClass)} title="Centralizar"><AlignCenter className="w-4 h-4" /></Button>
@@ -138,7 +139,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleTaskList().run()} className={cn(editor.isActive('taskList') && activeClass)} title="Lista de Tarefas"><CheckSquare className="w-4 h-4" /></Button>
             </div>
 
-            {/* Link, Highlight, Cor, Tabela, Youtube */}
+            {/* Link, Highlight, Cor, Tabela(REATIVADO), Youtube */}
             <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={setLink} className={cn(editor.isActive('link') && activeClass)} title="Link"><LinkIcon className="w-4 h-4" /></Button>
                 <div className="flex items-center rounded border"><Button variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleHighlight({ color: highlightColor }).run()} className={cn(editor.isActive('highlight') && activeClass)} title="Marca Texto"><Highlighter className="w-4 h-4" /></Button><input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"/></div>
@@ -151,7 +152,8 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
                         className="w-6 h-6 p-0 bg-transparent border-none cursor-pointer"
                     />
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
+                 {/* Botão Tabela REATIVADO */}
+                 <Button variant="ghost" size="sm" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Tabela"><TableIcon className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="sm" onClick={addYoutubeVideo} title="YouTube"><Youtube className="w-4 h-4" /></Button>
             </div>
 
@@ -164,7 +166,7 @@ const MenuBar = React.memo(({ editor, onClose }: { editor: Editor; onClose: () =
 MenuBar.displayName = 'MenuBar';
 
 // ============================================================================
-// --- Componente TextEditor (Atualizado com extensão TextAlign) ---
+// --- Componente TextEditor (Importações Corrigidas) ---
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
@@ -181,6 +183,7 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
     const editor = useEditor({
         immediatelyRender: false,
         extensions: [
+            // Mantém as extensões que estavam funcionando
             Document, Paragraph, Text, History,
             Heading.configure({ levels: [1, 2, 3] }),
             BulletList, OrderedList, ListItem,
@@ -189,22 +192,26 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
             Link.configure({ openOnClick: false }),
             Highlight.configure({ multicolor: true }),
             TextStyle, Color, FontFamily,
-            Table.configure({ resizable: true }), TableRow, TableHeader, TableCell,
             YoutubeExtension.configure({ nocookie: true }),
             CharacterCount,
             SlashCommand,
             WikiLink,
             WikiLinkSuggestion,
-            // NOVA EXTENSÃO ADICIONADA:
             TextAlign.configure({
-                types: ['heading', 'paragraph'], // Aplica alinhamento a títulos e parágrafos
+                types: ['heading', 'paragraph'],
             }),
+            // === Extensões de Tabela REATIVADAS ===
+             Table.configure({ resizable: true }), // Agora deve funcionar com a importação nomeada
+             TableRow,
+             TableHeader,
+             TableCell,
+            // ====================================
         ],
         content: initialContent || '',
         editorProps: {
             attributes: {
                 class: 'prose dark:prose-invert max-w-none p-4 focus:outline-none flex-grow',
-                spellcheck: 'true', // Mantém ou ajusta conforme preferência
+                spellcheck: 'true',
             },
         },
         onUpdate: ({ editor }) => { debouncedSave(editor); },
