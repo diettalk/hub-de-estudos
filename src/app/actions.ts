@@ -18,6 +18,18 @@ async function getAuth() {
   return { supabase, user };
 }
 
+async function isOwnedParent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: 'paginas' | 'documentos' | 'resources',
+  parentId: number | null,
+  userId: string,
+): Promise<boolean> {
+  if (parentId === null) return true;
+  if (!Number.isInteger(parentId)) return false;
+  const { data } = await supabase.from(table).select('id').eq('id', parentId).eq('user_id', userId).maybeSingle();
+  return !!data;
+}
+
 // --- AÇÕES DE CONCURSOS ---
 export async function addConcurso(formData: FormData) {
   const supabase = await createClient();
@@ -81,6 +93,9 @@ export async function createPagina(parentId: number | null, title: string, emoji
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
+  if (!(await isOwnedParent(supabase, 'paginas', parentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
   const { data, error } = await supabase
     .from('paginas')
@@ -426,6 +441,9 @@ export async function addDocumento(formData: FormData) {
   if (!user) {
     return { error: 'Usuário não autenticado.' };
   }
+  if (!(await isOwnedParent(supabase, 'documentos', parentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
   const { data, error } = await supabase
     .from('documentos')
@@ -512,6 +530,9 @@ export async function createItem(table: TableName, parentId: number | null) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
+  if (!(await isOwnedParent(supabase, table, parentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
   const newItemData: any = {
     title: 'Novo Item',
@@ -696,6 +717,9 @@ export async function updateItemParent(table: 'documentos' | 'paginas' | 'resour
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
+  if (newParentId === itemId || !(await isOwnedParent(supabase, table, newParentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
   try {
     const { error } = await supabase
@@ -1022,6 +1046,9 @@ export async function createResource(formData: FormData) {
       const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
       if (folderId) parent_id = folderId;
   }
+  if (!(await isOwnedParent(supabase, 'resources', parent_id, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
   const resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
 
@@ -1056,6 +1083,9 @@ export async function updateResource(formData: FormData) {
     if (disciplina_id && disciplina_id !== currentResource.disciplina_id && currentResource.type !== 'folder') {
         const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
         if (folderId) parent_id = folderId;
+    }
+    if (parent_id === id || !(await isOwnedParent(supabase, 'resources', parent_id, user.id))) {
+        return { error: 'Pasta de destino inválida.' };
     }
     
     const { error } = await supabase.from('resources').update({ title, description, url, parent_id, disciplina_id }).eq('id', id).eq('user_id', user.id);
@@ -1104,6 +1134,15 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Usuário não autenticado.' };
+    if (updates.some(item => item.parent_id === item.id)) {
+        return { error: 'Pasta de destino inválida.' };
+    }
+    const parentIds = new Set(updates.map(item => item.parent_id).filter((parentId): parentId is number => parentId !== null));
+    for (const parentId of parentIds) {
+        if (!(await isOwnedParent(supabase, 'resources', parentId, user.id))) {
+            return { error: 'Pasta de destino inválida.' };
+        }
+    }
 
     try {
         const updatePromises = updates.map(item => 
