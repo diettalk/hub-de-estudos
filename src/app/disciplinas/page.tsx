@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { buildTree } from '@/lib/utils';
 import DisciplinasClient from '@/components/DisciplinasClient';
@@ -30,9 +29,7 @@ function sanitizeTiptapContent(node: JSONContent | null | undefined): JSONConten
 
 // CORREÇÃO 1: searchParams agora deve ser tipado como uma Promise
 export default async function DisciplinasPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  // CORREÇÃO 2: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');

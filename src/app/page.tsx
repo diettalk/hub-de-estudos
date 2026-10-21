@@ -1,7 +1,6 @@
 // src/app/page.tsx
 
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardClient } from '@/components/DashboardClient';
 import { startOfToday, isToday, parseISO } from 'date-fns';
@@ -9,9 +8,7 @@ import { startOfToday, isToday, parseISO } from 'date-fns';
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  // CORREÇÃO 1: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   // CORREÇÃO 2: Uso do getUser() recomendado pelo Supabase
   const { data: { user } } = await supabase.auth.getUser();

@@ -1,7 +1,7 @@
 // src/components/AuthButton.tsx
 'use client';
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 import { useEffect, useState } from 'react';
 import { type Session } from '@supabase/supabase-js';
 import { Button } from './ui/button';
@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 export function AuthButton() {
   const [session, setSession] = useState<Session | null>(null);
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   useEffect(() => {
     const getSession = async () => {

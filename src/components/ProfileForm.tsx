@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ interface ProfileFormProps {
 }
 
 export function ProfileForm({ user, profile }: ProfileFormProps) {
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
   const [isPending, startTransition] = useTransition();
 
   const [fullName, setFullName] = useState(profile?.full_name || '');

@@ -4,8 +4,7 @@ import { Inter } from 'next/font/google'
 import { ThemeProvider } from 'next-themes'
 import { MainSidebar } from '@/components/MainSidebar'
 import { Toaster } from 'sonner'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 import { LayoutClientManager } from '@/components/LayoutClientManager'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -25,9 +24,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  // CORREÇÃO: Aguardamos a promise dos cookies antes de usar
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
 

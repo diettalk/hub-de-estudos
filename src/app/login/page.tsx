@@ -1,14 +1,13 @@
 // src/app/login/page.tsx
 'use client';
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Github, Mail } from 'lucide-react';
 
 export default function LoginPage() {
-  // Para arquivos com 'use client', inicializamos o Supabase assim, sem cookies()
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   const handleSignIn = async (provider: 'github' | 'google') => {
     await supabase.auth.signInWithOAuth({

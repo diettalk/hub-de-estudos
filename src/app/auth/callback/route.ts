@@ -1,7 +1,6 @@
 // src/app/auth/callback/route.ts
 
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -12,9 +11,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
 
   if (code) {
-    // CORREÇÃO: Aguardamos a promise dos cookies antes de passar para o Supabase
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = await createClient();
     
     // A troca do código pela sessão estabelece o cookie de login
     await supabase.auth.exchangeCodeForSession(code);

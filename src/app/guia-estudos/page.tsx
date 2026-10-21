@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ConcursosClient } from '@/components/ConcursosClient';
 // 1. Importar os tipos corretos do nosso arquivo central
@@ -8,9 +7,7 @@ import { type Concurso, type Disciplina } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 export default async function GuiaDeEstudosPage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   // CORREÇÃO: Usando getUser() em vez de getSession()
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,6 +19,7 @@ export default async function GuiaDeEstudosPage() {
     .from('concursos')
     .select('*, concurso_paginas(paginas(*))') // 'paginas' é o nome da tabela de disciplinas
     .eq('user_id', user.id)
+    .eq('concurso_paginas.paginas.user_id', user.id)
     .order('data_prova', { ascending: true });
     
   // Busca todas as disciplinas disponíveis para oferecer no modal de vínculo

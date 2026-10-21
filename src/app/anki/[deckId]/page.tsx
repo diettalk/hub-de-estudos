@@ -1,6 +1,5 @@
 // src/app/anki/[deckId]/page.tsx
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DeckViewClient } from '@/components/DeckViewClient';
 import Link from 'next/link';
@@ -16,9 +15,7 @@ type PageProps = {
 };
 
 export default async function AnkiDeckPage({ params }: PageProps) {
-  // CORREÇÃO 2: Await nos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

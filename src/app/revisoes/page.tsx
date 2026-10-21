@@ -1,6 +1,5 @@
 // src/app/revisoes/page.tsx oi
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { RevisoesClient } from '@/components/RevisoesClient';
 import { type Revisao } from '@/lib/types';
@@ -9,9 +8,7 @@ import { startOfToday, isBefore, isToday, isWithinInterval, addDays, parseISO } 
 export const dynamic = 'force-dynamic';
 
 export default async function RevisoesPage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');

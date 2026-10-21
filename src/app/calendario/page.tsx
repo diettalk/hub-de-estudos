@@ -1,6 +1,5 @@
 // src/app/calendario/page.tsx
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { CalendarioClient } from '@/components/CalendarioClient';
 import { type Lembrete, type Revisao } from '@/lib/types';
@@ -8,9 +7,7 @@ import { type Lembrete, type Revisao } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 export default async function CalendarioPage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');

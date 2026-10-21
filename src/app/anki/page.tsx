@@ -1,6 +1,5 @@
 // src/app/anki/page.tsx
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { AnkiGeneratorClient } from '@/components/AnkiGeneratorClient';
 import { AnkiDecksList } from '@/components/AnkiDecksList';
@@ -8,9 +7,7 @@ import { AnkiDecksList } from '@/components/AnkiDecksList';
 export const dynamic = 'force-dynamic';
 
 export default async function AnkiPage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

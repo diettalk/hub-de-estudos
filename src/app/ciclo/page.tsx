@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { seedFase1Ciclo } from '@/app/actions';
 import { ProgressoCicloCard } from '@/components/ProgressoCicloCard';
@@ -40,9 +39,7 @@ const buildTree = (disciplinas: Disciplina[]): Node[] => {
 };
 
 export default async function CicloPage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -55,7 +52,7 @@ export default async function CicloPage() {
     sessoes = novasSessoes;
   }
   
-  const { data: disciplinas } = await supabase.from('paginas').select('*').order('title');
+  const { data: disciplinas } = await supabase.from('paginas').select('*').eq('user_id', user.id).order('title');
   const legendaDefault = `LP: Língua Portuguesa\nRLM: Raciocínio Lógico\nG.GOV: Gestão Governamental\nP.PUB: Políticas Públicas`;
 
   const disciplinaTree = buildTree((disciplinas as Disciplina[]) || []);

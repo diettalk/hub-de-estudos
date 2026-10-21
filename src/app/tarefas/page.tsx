@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { TarefasClient } from '@/components/TarefasClient';
 import { type Tarefa } from '@/lib/types';
@@ -7,9 +6,7 @@ import { type Tarefa } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 
 export default async function TarefasPage() {
-  // CORREÇÃO 1: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   // CORREÇÃO 2: Usar getUser() no lugar de getSession()
   const { data: { user } } = await supabase.auth.getUser();

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/lib/supabase/client';
 
 // 1. IMPORTAR O ÍCONE DA BIBLIOTECA
 import {
@@ -50,7 +50,7 @@ export function MainSidebar({ user, profile }: MainSidebarProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
-    const supabase = createClientComponentClient();
+    const supabase = createClient();
 
     const getInitials = () => {
         if (profile?.full_name) {

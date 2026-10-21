@@ -1,16 +1,26 @@
 'use server';
 
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
-import { type SessaoEstudo, type Resource, type Disciplina, type Flashcard } from '@/lib/types';
+import { type SessaoEstudo, type Resource, type Disciplina } from '@/lib/types';
 import { JSONContent } from '@tiptap/react';
 
 
+type Flashcard = {
+  question: string;
+  answer: string;
+};
+
+async function getAuth() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return { supabase, user };
+}
+
 // --- AÇÕES DE CONCURSOS ---
 export async function addConcurso(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   
@@ -32,7 +42,8 @@ export async function addConcurso(formData: FormData) {
 }
 
 export async function updateConcurso(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
   const id = Number(formData.get('id'));
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
@@ -46,28 +57,30 @@ export async function updateConcurso(formData: FormData) {
 
   await supabase.from('concursos').update({ 
     nome, banca, data_prova: dataProva, status, edital_url, prioridades
-  }).eq('id', id);
+  }).eq('id', id).eq('user_id', user.id);
 
   revalidatePath('/guia-estudos');
 }
 
 export async function updateConcursoStatus(id: number, status: 'ativo' | 'previsto' | 'arquivado') {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('concursos').update({ status }).eq('id', id);
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('concursos').update({ status }).eq('id', id).eq('user_id', user.id);
   revalidatePath('/guia-estudos');
 }
 
 export async function deleteConcurso(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('concursos').delete().eq('id', id);
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('concursos').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/guia-estudos');
 }
 
 // --- AÇÕES DE DISCIPLINAS ---
 export async function createPagina(parentId: number | null, title: string, emoji: string) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado' };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { data, error } = await supabase
     .from('paginas')
@@ -85,16 +98,22 @@ export async function createPagina(parentId: number | null, title: string, emoji
 export async function updatePaginaContent(id: number, content: string) {
   if (isNaN(id)) return { error: "ID da página inválido." };
 
-  // 2. Converta a string de volta para um objeto JSON
-  const parsedContent: JSONContent = JSON.parse(content);
+  let parsedContent: JSONContent;
+  try {
+    parsedContent = JSON.parse(content);
+  } catch {
+    return { error: 'Conteúdo inválido.' };
+  }
 
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { error } = await supabase
     .from('paginas')
     // 3. Use o objeto já convertido para salvar no banco de dados
     .update({ content: parsedContent })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', user.id);
 
   if (error) {
     console.error("Erro ao salvar conteúdo da página:", error);
@@ -105,14 +124,22 @@ export async function updatePaginaContent(id: number, content: string) {
 }
 
 export async function deletePagina(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('paginas').delete().eq('id', id);
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('paginas').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/disciplinas');
 }
 
 // --- AÇÕES DE VÍNCULO ---
 export async function linkPastaToConcurso(concursoId: number, paginaId: number) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  const [{ data: concurso }, { data: pagina }] = await Promise.all([
+    supabase.from('concursos').select('id').eq('id', concursoId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('paginas').select('id').eq('id', paginaId).eq('user_id', user.id).maybeSingle(),
+  ]);
+  if (!concurso || !pagina) return;
+
   const { data: existingLink } = await supabase
     .from('concurso_paginas')
     .select()
@@ -126,14 +153,21 @@ export async function linkPastaToConcurso(concursoId: number, paginaId: number) 
 }
 
 export async function unlinkPastaFromConcurso(concursoId: number, paginaId: number) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  const [{ data: concurso }, { data: pagina }] = await Promise.all([
+    supabase.from('concursos').select('id').eq('id', concursoId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('paginas').select('id').eq('id', paginaId).eq('user_id', user.id).maybeSingle(),
+  ]);
+  if (!concurso || !pagina) return;
   await supabase.from('concurso_paginas').delete().match({ concurso_id: concursoId, pagina_id: paginaId });
   revalidatePath('/guia-estudos');
 }
 
 // --- AÇÕES DO CICLO DE ESTUDOS ---
 export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { id: number }) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
   const { id, ...data } = sessaoData;
   if (!id) return { error: 'ID da sessão é necessário para atualização.' };
   
@@ -147,7 +181,7 @@ export async function updateSessaoEstudo(sessaoData: Partial<SessaoEstudo> & { i
     materia_finalizada: data.materia_finalizada,
   };
 
-  const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id);
+  const { error } = await supabase.from('ciclo_sessoes').update(updateData).eq('id', id).eq('user_id', user.id);
   if (error) {
     console.error("Erro no auto-save da sessão:", error);
     return { error: "Falha ao salvar alterações da sessão." };
@@ -162,7 +196,8 @@ export async function updateDatasSessaoEstudo(
 ) {
   if (!novaData) return { error: 'Data inválida.' };
 
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
   const dataFormatada = new Date(novaData + 'T03:00:00');
 
   try {
@@ -176,12 +211,12 @@ export async function updateDatasSessaoEstudo(
         data_revisao_1: rev1.toISOString(),
         data_revisao_2: rev7.toISOString(),
         data_revisao_3: rev30.toISOString(),
-      }).eq('id', sessaoId);
+      }).eq('id', sessaoId).eq('user_id', user.id);
       
       await Promise.all([
-        supabase.from('revisoes').update({ data_revisao: rev1.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '24h' }),
-        supabase.from('revisoes').update({ data_revisao: rev7.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '7 dias' }),
-        supabase.from('revisoes').update({ data_revisao: rev30.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '30 dias' })
+        supabase.from('revisoes').update({ data_revisao: rev1.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '24h', user_id: user.id }),
+        supabase.from('revisoes').update({ data_revisao: rev7.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '7 dias', user_id: user.id }),
+        supabase.from('revisoes').update({ data_revisao: rev30.toISOString().split('T')[0] }).match({ ciclo_sessao_id: sessaoId, tipo_revisao: '30 dias', user_id: user.id })
       ]);
 
     } else {
@@ -194,13 +229,14 @@ export async function updateDatasSessaoEstudo(
 
       await supabase.from('ciclo_sessoes').update({
         [infoRevisao.campoDB]: dataFormatada.toISOString()
-      }).eq('id', sessaoId);
+      }).eq('id', sessaoId).eq('user_id', user.id);
 
       await supabase.from('revisoes').update({ 
         data_revisao: dataFormatada.toISOString().split('T')[0] 
       }).match({ 
         ciclo_sessao_id: sessaoId, 
-        tipo_revisao: infoRevisao.tipo 
+        tipo_revisao: infoRevisao.tipo,
+        user_id: user.id,
       });
     }
     
@@ -218,19 +254,17 @@ export async function updateDatasSessaoEstudo(
 }
 
 export async function toggleConclusaoSessao(sessaoId: number, isCompleting: boolean) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuth();
 
-  if (!user || isNaN(sessaoId)) {
-    return { error: 'Ação inválida ou usuário não autenticado.' };
-  }
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (isNaN(sessaoId)) return { error: 'Ação inválida.' };
 
   try {
     if (isCompleting) {
       const studyDate = new Date();
       const { data: sessao, error: sessaoError } = await supabase
         .from('ciclo_sessoes').select('disciplina_id, foco_sugerido, materia_nome')
-        .eq('id', sessaoId).single();
+        .eq('id', sessaoId).eq('user_id', user.id).single();
       if (sessaoError) throw new Error(`Falha ao buscar sessão: ${sessaoError.message}`);
       if (!sessao) throw new Error('Sessão de estudo não encontrada.');
 
@@ -241,9 +275,9 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
       await supabase.from('ciclo_sessoes').update({
         concluida: true, data_estudo: studyDate.toISOString(),
         data_revisao_1: rev1.toISOString(), data_revisao_2: rev7.toISOString(), data_revisao_3: rev30.toISOString(),
-      }).eq('id', sessaoId);
+      }).eq('id', sessaoId).eq('user_id', user.id);
       
-      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
+      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId).eq('user_id', user.id);
 
       const revisoesParaInserir = [
         { ciclo_sessao_id: sessaoId, user_id: user.id, data_revisao: rev1.toISOString().split('T')[0], tipo_revisao: '24h', concluida: false, materia_nome: sessao.materia_nome, foco_sugerido: sessao.foco_sugerido },
@@ -257,8 +291,8 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
     } else {
       await supabase.from('ciclo_sessoes').update({
         concluida: false, data_estudo: null, data_revisao_1: null, data_revisao_2: null, data_revisao_3: null,
-      }).eq('id', sessaoId);
-      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId);
+      }).eq('id', sessaoId).eq('user_id', user.id);
+      await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessaoId).eq('user_id', user.id);
     }
     
     revalidatePath('/ciclo');
@@ -275,7 +309,7 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
 }
 
 export async function seedFase1Ciclo() {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
@@ -291,7 +325,7 @@ export async function seedFase1Ciclo() {
 }
 
 export async function addSessaoCiclo() {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: ultimaSessao } = await supabase.from('ciclo_sessoes').select('ordem').eq('user_id', user.id).order('ordem', { ascending: false }).limit(1).single();
@@ -301,9 +335,10 @@ export async function addSessaoCiclo() {
 }
 
 export async function deleteSessaoCiclo(id: number) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
   if (isNaN(id)) return;
-  await supabase.from('ciclo_sessoes').delete().eq('id', id);
+  await supabase.from('ciclo_sessoes').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/ciclo');
 }
 
@@ -313,7 +348,7 @@ export async function deleteSessoesEmMassa(ids: number[]) {
     return { error: 'Nenhum ID fornecido para exclusão.' };
   }
 
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
@@ -337,35 +372,39 @@ export async function deleteSessoesEmMassa(ids: number[]) {
 
 // --- AÇÕES DO CALENDÁRIO ---
 export async function addLembrete(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
   const titulo = formData.get('titulo') as string;
   const data = formData.get('data') as string;
   const cor = formData.get('cor') as string;
   if (!titulo || !data) return;
-  await supabase.from('lembretes').insert({ titulo, data, cor });
+  await supabase.from('lembretes').insert({ titulo, data, cor, user_id: user.id });
   revalidatePath('/calendario');
 }
 
 export async function updateLembrete(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
   const id = Number(formData.get('id'));
   const titulo = formData.get('titulo') as string;
   const cor = formData.get('cor') as string;
   if(!id || !titulo) return;
-  await supabase.from('lembretes').update({ titulo, cor }).eq('id', id);
+  await supabase.from('lembretes').update({ titulo, cor }).eq('id', id).eq('user_id', user.id);
   revalidatePath('/calendario');
 }
 
 export async function deleteLembrete(id: number) {
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return;
   if(isNaN(id)) return;
-  await supabase.from('lembretes').delete().eq('id', id);
+  await supabase.from('lembretes').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/calendario');
 }
 
 export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
-    const supabase = createServerActionClient({ cookies });
-    const { error } = await supabase.from('revisoes').update({ concluida: status }).eq('id', revisaoId);
+    const { supabase, user } = await getAuth();
+    if (!user) return { error: 'Usuário não autenticado.' };
+    const { error } = await supabase.from('revisoes').update({ concluida: status }).eq('id', revisaoId).eq('user_id', user.id);
     if (error) return { error: error.message };
     revalidatePath('/revisoes');
     revalidatePath('/calendario');
@@ -382,7 +421,7 @@ export async function addDocumento(formData: FormData) {
     return { error: 'O título é obrigatório.' };
   }
 
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { error: 'Usuário não autenticado.' };
@@ -413,16 +452,22 @@ export async function updateDocumentoContent(id: number, content: string) {
   
   if (isNaN(id)) return { error: "ID inválido." };
 
-  // CONVERTE A STRING DE VOLTA PARA UM OBJETO JSON
-  const parsedContent: JSONContent = JSON.parse(content);
+  let parsedContent: JSONContent;
+  try {
+    parsedContent = JSON.parse(content);
+  } catch {
+    return { error: 'Conteúdo inválido.' };
+  }
 
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
   
   const { error } = await supabase
     .from('documentos')
     // Salva o objeto já parseado
     .update({ content: parsedContent })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', user.id);
 
   if (error) {
     console.error("Erro ao salvar conteúdo do documento:", error);
@@ -437,7 +482,16 @@ export async function deleteDocumento(id: number) {
     return { error: "ID inválido." };
   }
 
-  const supabase = createServerActionClient({ cookies });
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const { data: documento } = await supabase
+    .from('documentos')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!documento) return { error: 'Documento não encontrado.' };
+
   const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
 
   if (error) {
@@ -455,9 +509,9 @@ export async function deleteDocumento(id: number) {
 type TableName = 'paginas' | 'documentos';
 
 export async function createItem(table: TableName, parentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const newItemData: any = {
     title: 'Novo Item',
@@ -489,9 +543,9 @@ export async function createItem(table: TableName, parentId: number | null) {
 
 
 export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
     const { error } = await supabase
@@ -511,13 +565,20 @@ export async function updateItemTitle(table: 'documentos' | 'paginas', id: numbe
 }
 
 export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
     let error;
     if (table === 'documentos') {
+      const { data: documento } = await supabase
+        .from('documentos')
+        .select('id')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!documento) return { error: 'Documento não encontrado.' };
       const { error: rpcError } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
       error = rpcError;
     } else {
@@ -541,9 +602,9 @@ export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
 
 // CORRIGIDO: Ação para alternar o status de favorito de um item
 export async function toggleFavoriteStatus(table: TableName, id: number) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
     const { data: currentItem, error: fetchError } = await supabase
@@ -583,7 +644,7 @@ export async function addTarefa(formData: FormData) {
   const title = formData.get('title') as string;
   const dueDate = formData.get('due_date') as string;
   if (!title) return;
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from('tarefas').insert({ title, due_date: dueDate || null, user_id: user.id });
@@ -591,24 +652,26 @@ export async function addTarefa(formData: FormData) {
 }
 
 export async function toggleTarefa(id: number, currentState: boolean) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('tarefas').update({ completed: !currentState }).eq('id', id);
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('tarefas').update({ completed: !currentState }).eq('id', id).eq('user_id', user.id);
   revalidatePath('/tarefas');
 }
 
 export async function deleteTarefa(id: number) {
-  const supabase = createServerActionClient({ cookies });
-  await supabase.from('tarefas').delete().eq('id', id);
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('tarefas').delete().eq('id', id).eq('user_id', user.id);
   revalidatePath('/tarefas');
 }
 
 // ==================================================================
 // --- AÇÕES DE PERFIL ---
 export async function updateProfile({ id, fullName, avatarUrl }: { id: string, fullName: string, avatarUrl: string | null }) {
-  const supabase = createServerActionClient({ cookies });
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuth();
 
-  if (!user || user.id !== id) {
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (user.id !== id) {
     return { error: 'Operação não autorizada.' };
   }
   
@@ -630,9 +693,9 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
 // ==================================================================
 // --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS, DISCIPLINAS, RECURSOS) ---
 export async function updateItemParent(table: 'documentos' | 'paginas' | 'resources', itemId: number, newParentId: number | null) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
     const { error } = await supabase
@@ -655,11 +718,17 @@ export async function updateItemParent(table: 'documentos' | 'paginas' | 'resour
 // ==================================================================
 // --- AÇÕES PARA GERADOR DE ANKI ---
 export async function generateAnkiCards(formData: FormData) {
-  const sourceText = formData.get('sourceText') as string;
+  const sourceTextValue = formData.get('sourceText');
+  const sourceText = typeof sourceTextValue === 'string' ? sourceTextValue.trim() : '';
   const numCards = Number(formData.get('numCards'));
 
-  const { data: { user } } = await createServerActionClient({ cookies }).auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  const { user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!sourceText) return { error: 'Informe um texto de estudo.' };
+  if (sourceText.length > 20000) return { error: 'O texto deve ter no máximo 20000 caracteres.' };
+  if (!Number.isInteger(numCards) || numCards < 1 || numCards > 50) {
+    return { error: 'O número de flashcards deve ser um inteiro entre 1 e 50.' };
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { error: "Chave de API do Gemini não encontrada." };
@@ -691,33 +760,44 @@ export async function generateAnkiCards(formData: FormData) {
         }
     };
     
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
     const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`Erro na API: ${response.statusText} - ${errorBody}`);
+      const errorBody = await response.text();
+      console.error('Erro na API do Gemini:', errorBody);
+      return { error: 'Falha ao gerar flashcards. Tente novamente mais tarde.' };
     }
 
     const result = await response.json();
-    const text = result.candidates[0].content.parts[0].text;
-    const parsedJson = JSON.parse(text);
+    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof text !== 'string') {
+      return { error: 'A resposta da IA está em um formato inválido.' };
+    }
 
-    return { data: parsedJson.cards };
+    try {
+      const parsedJson = JSON.parse(text);
+      if (!Array.isArray(parsedJson?.cards)) {
+        return { error: 'A resposta da IA está em um formato inválido.' };
+      }
+      return { data: parsedJson.cards as Flashcard[] };
+    } catch {
+      return { error: 'A resposta da IA está em um formato inválido.' };
+    }
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
-    return { error: `Falha ao gerar flashcards: ${message}` };
+    console.error('Falha ao gerar flashcards:', error);
+    return { error: 'Falha ao gerar flashcards. Tente novamente mais tarde.' };
   }
 }
 
 export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
   if (!title.trim()) return { error: "O título é obrigatório." };
   if (cards.length === 0) return { error: "Não há flashcards para guardar." };
 
@@ -729,9 +809,9 @@ export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
 }
 
 export async function deleteAnkiDeck(deckId: number) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { error } = await supabase.from('anki_decks').delete().match({ id: deckId, user_id: user.id });
 
@@ -747,9 +827,9 @@ export async function updateTarefaStatus(
   id: number,
   status: 'pendente' | 'concluida' | 'arquivada'
 ) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const isCompleted = status === 'concluida';
 
@@ -770,9 +850,9 @@ export async function updateTarefaStatus(
 // ==================================================================
 // --- AÇÕES PARA METAS DE ESTUDO ---
 export async function addStudyGoal(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const title = formData.get('title') as string;
   const type = formData.get('type') as string;
@@ -803,9 +883,9 @@ export async function addStudyGoal(formData: FormData) {
 }
 
 export async function updateStudyGoalValue(id: number, new_value: number) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { error } = await supabase
     .from('study_goals')
@@ -822,9 +902,9 @@ export async function updateStudyGoalValue(id: number, new_value: number) {
 }
 
 export async function deleteStudyGoal(id: number) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const { error } = await supabase
     .from('study_goals')
@@ -841,9 +921,9 @@ export async function deleteStudyGoal(id: number) {
 }
 
 export async function updateStudyGoal(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const id = Number(formData.get('id'));
   const title = formData.get('title') as string;
@@ -872,7 +952,7 @@ export async function updateStudyGoal(formData: FormData) {
 // ==================================================================
 // --- AÇÕES PARA A BIBLIOTECA (VERSÃO ESTÁVEL E SIMPLIFICADA) ---
 export async function getBibliotecaData() {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Utilizador não autenticado.");
 
@@ -905,7 +985,7 @@ async function getOrCreateDisciplinaFolder(supabase: any, userId: string, discip
     if (existingFolder) {
         return existingFolder.id;
     } else {
-        const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplinaId).single();
+        const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplinaId).eq('user_id', userId).single();
         if (disciplina) {
             const { data: newFolder, error: newFolderError } = await supabase
                 .from('resources')
@@ -923,9 +1003,9 @@ async function getOrCreateDisciplinaFolder(supabase: any, userId: string, discip
 }
 
 export async function createResource(formData: FormData) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Utilizador não autenticado." };
+  if (!user) return { error: 'Usuário não autenticado.' };
 
   const title = formData.get('title') as string;
   const description = formData.get('description') as string;
@@ -943,7 +1023,7 @@ export async function createResource(formData: FormData) {
       if (folderId) parent_id = folderId;
   }
 
-  let resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
+  const resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
 
   if (type === 'link') {
     resourceData.url = url;
@@ -957,9 +1037,9 @@ export async function createResource(formData: FormData) {
 }
 
 export async function updateResource(formData: FormData) {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
+    if (!user) return { error: 'Usuário não autenticado.' };
 
     const id = Number(formData.get('id'));
     const title = formData.get('title') as string;
@@ -970,7 +1050,7 @@ export async function updateResource(formData: FormData) {
     const parentIdStr = formData.get('parent_id') as string;
     let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
     
-    const { data: currentResource } = await supabase.from('resources').select('disciplina_id, type').eq('id', id).single();
+    const { data: currentResource } = await supabase.from('resources').select('disciplina_id, type').eq('id', id).eq('user_id', user.id).single();
     if (!currentResource) return { error: "Recurso não encontrado." };
 
     if (disciplina_id && disciplina_id !== currentResource.disciplina_id && currentResource.type !== 'folder') {
@@ -978,7 +1058,7 @@ export async function updateResource(formData: FormData) {
         if (folderId) parent_id = folderId;
     }
     
-    const { error } = await supabase.from('resources').update({ title, description, url, parent_id, disciplina_id }).eq('id', id);
+    const { error } = await supabase.from('resources').update({ title, description, url, parent_id, disciplina_id }).eq('id', id).eq('user_id', user.id);
     if (error) return { error: "Falha ao atualizar o recurso.", details: error.message };
 
     revalidatePath('/biblioteca');
@@ -986,9 +1066,9 @@ export async function updateResource(formData: FormData) {
 }
 
 export async function deleteResource(resourceId: number, isPermanent: boolean) {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
+    if (!user) return { error: 'Usuário não autenticado.' };
 
     if (!isPermanent) {
         const { error } = await supabase.from('resources').update({ status: 'arquivado' }).match({ id: resourceId, user_id: user.id });
@@ -996,6 +1076,14 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
         revalidatePath('/biblioteca');
         return { success: true };
     }
+
+    const { data: resource } = await supabase
+        .from('resources')
+        .select('id')
+        .eq('id', resourceId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+    if (!resource) return { error: 'Recurso não encontrado.' };
 
     const { error } = await supabase.rpc('delete_resource_and_children', { p_resource_id: resourceId });
     if (error) return { error: "Falha ao apagar o recurso e seus conteúdos.", details: error.message };
@@ -1005,16 +1093,17 @@ export async function deleteResource(resourceId: number, isPermanent: boolean) {
 }
 
 export async function updateResourceStatus(resourceId: number, status: 'ativo' | 'arquivado') {
-    const supabase = createServerActionClient({ cookies });
-    await supabase.from('resources').update({ status }).eq('id', resourceId);
+    const { supabase, user } = await getAuth();
+    if (!user) return { error: 'Usuário não autenticado.' };
+    await supabase.from('resources').update({ status }).eq('id', resourceId).eq('user_id', user.id);
     revalidatePath('/biblioteca');
     return { success: true };
 }
 
 export async function updateResourcesOrder(updates: {id: number, ordem: number, parent_id: number | null}[]) {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
+    if (!user) return { error: 'Usuário não autenticado.' };
 
     try {
         const updatePromises = updates.map(item => 
@@ -1038,7 +1127,7 @@ export async function updateResourcesOrder(updates: {id: number, ordem: number, 
 
 // NOVO: Ação para pesquisar documentos e páginas para os links [[...]]
 export async function searchDocumentsAndPages(query: string) {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -1079,9 +1168,9 @@ export async function searchDocumentsAndPages(query: string) {
 // --- FUNÇÕES EM FALTA ADICIONADAS PARA CORRIGIR O BUILD ---
 
 export async function updateConcursosOrdem(updates: { id: number, ordem: number }[]) {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
+    if (!user) return { error: 'Usuário não autenticado.' };
 
     try {
         const updatePromises = updates.map(item => 
@@ -1104,9 +1193,9 @@ export async function updateConcursosOrdem(updates: { id: number, ordem: number 
 }
 
 export async function updateAnkiDeck(deckId: number, title: string, cards: Flashcard[]) {
-    const supabase = createServerActionClient({ cookies });
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: "Utilizador não autenticado." };
+    if (!user) return { error: 'Usuário não autenticado.' };
     
     if (!title.trim()) return { error: "O título é obrigatório." };
     if (cards.length === 0) return { error: "Não há flashcards para guardar." };
@@ -1126,7 +1215,7 @@ export async function updateAnkiDeck(deckId: number, title: string, cards: Flash
 
 // NOVO: Ação para buscar todos os itens para a Paleta de Comandos
 export async function getAllSearchableItems() {
-  const supabase = createServerActionClient({ cookies });
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 

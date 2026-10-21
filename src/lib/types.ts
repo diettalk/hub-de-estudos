@@ -88,7 +88,12 @@ export type Profile = {
 };
 
 // NOVO TIPO: Define a estrutura de um Recurso da Biblioteca
-export type Resource = Node; // Um Recurso é um tipo de Nó
+export type Resource = Node & {
+  user_id?: string;
+  status?: 'ativo' | 'arquivado';
+  ordem?: number;
+  disciplina_id?: number | null;
+};
 
 // Adicione este tipo no final do ficheiro src/lib/types.ts
 

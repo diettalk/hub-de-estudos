@@ -1,5 +1,4 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { ProfileForm } from '@/components/ProfileForm'; // Vamos criar este componente a seguir
 import { type Profile } from '@/lib/types'; // Vamos precisar de um tipo para o perfil
@@ -7,9 +6,7 @@ import { type Profile } from '@/lib/types'; // Vamos precisar de um tipo para o 
 export const dynamic = 'force-dynamic';
 
 export default async function ProfilePage() {
-  // CORREÇÃO: Await na promise dos cookies
-  const cookieStore = await cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+  const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
 
