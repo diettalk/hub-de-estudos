@@ -223,7 +223,6 @@ export async function updateCadernoErro(
 
   if (revisoesError) {
     console.error('Erro ao atualizar revisões do Caderno de Erros:', revisoesError);
-    return { error: 'Não foi possível atualizar as revisões do erro.' };
   }
 
   revalidateCadernoErros();
@@ -236,16 +235,6 @@ export async function deleteCadernoErro(id: number): Promise<{ error?: string; s
   if (authError) console.error('Erro ao autenticar exclusão no Caderno de Erros:', authError);
   if (!user) return { error: 'Usuário não autenticado.' };
   if (!Number.isInteger(id) || id <= 0) return { error: 'Erro inválido.' };
-
-  const { error: revisoesError } = await supabase
-    .from('revisoes')
-    .delete()
-    .eq('caderno_erro_id', id)
-    .eq('user_id', user.id);
-  if (revisoesError) {
-    console.error('Erro ao excluir revisões do Caderno de Erros:', revisoesError);
-    return { error: 'Não foi possível excluir as revisões do erro.' };
-  }
 
   const { error: deleteError } = await supabase
     .from('caderno_erros')
