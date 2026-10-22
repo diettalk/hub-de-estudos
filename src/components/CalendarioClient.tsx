@@ -9,7 +9,7 @@ import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
-import { addLembrete, deleteLembrete, updateRevisaoStatus } from '@/app/actions';
+import { deleteLembrete, updateRevisaoStatus } from '@/app/actions';
 import { LembreteEditor } from '@/components/LembreteEditor';
 import { type Lembrete, type Revisao } from '@/lib/types';
 import { Trash2 } from 'lucide-react';
@@ -93,7 +93,7 @@ export function CalendarioClient({ lembretes, revisoes }: { lembretes: Lembrete[
           {selectedDayLembretes.map(lembrete => (
             <div key={`lem-${lembrete.id}`} className="flex items-center justify-between hover:bg-secondary/50 p-1 rounded-md group">
               <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: lembrete.cor }}></div>
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: lembrete.cor ?? undefined }}></div>
                 <span className="text-sm">{lembrete.titulo}</span>
               </div>
               <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">

@@ -31,10 +31,9 @@ async function isOwnedParent(
 }
 
 // --- AÇÕES DE CONCURSOS ---
-export async function addConcurso(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+export async function addConcurso(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
   
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
@@ -44,18 +43,25 @@ export async function addConcurso(formData: FormData) {
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()).filter(p => p.length > 0) : [];
 
-  if (!nome || !banca || !dataProva || !status) return;
+  if (!nome || !banca || !dataProva || !status) {
+    return { error: 'Preencha os campos obrigatórios do concurso.' };
+  }
 
-  await supabase.from('concursos').insert({ 
+  const { error } = await supabase.from('concursos').insert({
     nome, banca, data_prova: dataProva, status, edital_url, prioridades, user_id: user.id 
   });
+  if (error) {
+    console.error('Erro ao adicionar concurso:', error);
+    return { error: 'Não foi possível adicionar o concurso.' };
+  }
 
   revalidatePath('/guia-estudos');
+  return { success: true };
 }
 
-export async function updateConcurso(formData: FormData) {
+export async function updateConcurso(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const { supabase, user } = await getAuth();
-  if (!user) return;
+  if (!user) return { error: 'Usuário não autenticado.' };
   const id = Number(formData.get('id'));
   const nome = formData.get('nome') as string;
   const banca = formData.get('banca') as string;
@@ -65,13 +71,20 @@ export async function updateConcurso(formData: FormData) {
   const prioridadesRaw = formData.get('prioridades') as string;
   const prioridades = prioridadesRaw ? prioridadesRaw.split('\n').map(p => p.trim()).filter(p => p.length > 0) : [];
 
-  if (!id || !nome || !banca || !dataProva || !status) return;
+  if (!id || !nome || !banca || !dataProva || !status) {
+    return { error: 'Preencha os campos obrigatórios do concurso.' };
+  }
 
-  await supabase.from('concursos').update({ 
+  const { error } = await supabase.from('concursos').update({
     nome, banca, data_prova: dataProva, status, edital_url, prioridades
   }).eq('id', id).eq('user_id', user.id);
+  if (error) {
+    console.error('Erro ao atualizar concurso:', error);
+    return { error: 'Não foi possível atualizar o concurso.' };
+  }
 
   revalidatePath('/guia-estudos');
+  return { success: true };
 }
 
 export async function updateConcursoStatus(id: number, status: 'ativo' | 'previsto' | 'arquivado') {
@@ -323,6 +336,25 @@ export async function toggleConclusaoSessao(sessaoId: number, isCompleting: bool
   }
 }
 
+export async function toggleFinalizarSessao(id: number, finalizada: boolean) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { error } = await supabase
+    .from('ciclo_sessoes')
+    .update({ materia_finalizada: finalizada })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Erro ao atualizar finalização da sessão:', error);
+    return { error: 'Falha ao atualizar a sessão.' };
+  }
+
+  revalidatePath('/ciclo');
+  return { success: true };
+}
+
 export async function seedFase1Ciclo() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -386,26 +418,36 @@ export async function deleteSessoesEmMassa(ids: number[]) {
 }
 
 // --- AÇÕES DO CALENDÁRIO ---
-export async function addLembrete(formData: FormData) {
+export async function addLembrete(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const { supabase, user } = await getAuth();
-  if (!user) return;
+  if (!user) return { error: 'Usuário não autenticado.' };
   const titulo = formData.get('titulo') as string;
   const data = formData.get('data') as string;
   const cor = formData.get('cor') as string;
-  if (!titulo || !data) return;
-  await supabase.from('lembretes').insert({ titulo, data, cor, user_id: user.id });
+  if (!titulo || !data) return { error: 'Preencha o título e a data do lembrete.' };
+  const { error } = await supabase.from('lembretes').insert({ titulo, data, cor, user_id: user.id });
+  if (error) {
+    console.error('Erro ao adicionar lembrete:', error);
+    return { error: 'Não foi possível adicionar o lembrete.' };
+  }
   revalidatePath('/calendario');
+  return { success: true };
 }
 
-export async function updateLembrete(formData: FormData) {
+export async function updateLembrete(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const { supabase, user } = await getAuth();
-  if (!user) return;
+  if (!user) return { error: 'Usuário não autenticado.' };
   const id = Number(formData.get('id'));
   const titulo = formData.get('titulo') as string;
   const cor = formData.get('cor') as string;
-  if(!id || !titulo) return;
-  await supabase.from('lembretes').update({ titulo, cor }).eq('id', id).eq('user_id', user.id);
+  if (!id || !titulo) return { error: 'Informe um título e um lembrete válido.' };
+  const { error } = await supabase.from('lembretes').update({ titulo, cor }).eq('id', id).eq('user_id', user.id);
+  if (error) {
+    console.error('Erro ao atualizar lembrete:', error);
+    return { error: 'Não foi possível atualizar o lembrete.' };
+  }
   revalidatePath('/calendario');
+  return { success: true };
 }
 
 export async function deleteLembrete(id: number) {
@@ -646,6 +688,7 @@ export async function generateAnkiCards(formData: FormData) {
     const payload = { 
         contents: chatHistory,
         generationConfig: {
+            maxOutputTokens: 8192,
             responseMimeType: "application/json",
             responseSchema: {
                 type: "OBJECT",
@@ -667,20 +710,52 @@ export async function generateAnkiCards(formData: FormData) {
     };
     
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-    const response = await fetch(apiUrl, {
+    const sendRequest = () => fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(payload)
     });
+    let response = await sendRequest();
+    if (response.status === 503 || response.status === 500) {
+      await new Promise<void>(resolve => setTimeout(resolve, 1500));
+      response = await sendRequest();
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('Erro na API do Gemini:', errorBody);
-      return { error: 'Falha ao gerar flashcards. Tente novamente mais tarde.' };
+      console.error('Erro na API do Gemini:', response.status, errorBody);
+      if (response.status === 429) {
+        return { error: 'Limite de uso da IA atingido. Aguarde alguns minutos e tente novamente.' };
+      }
+      if (
+        (response.status === 400 || response.status === 403) &&
+        ['API key', 'API_KEY', 'PERMISSION_DENIED'].some(reason => errorBody.includes(reason))
+      ) {
+        return {
+          error: 'A chave da API do Gemini é inválida ou não tem permissão. Verifique a variável GEMINI_API_KEY.',
+        };
+      }
+      if (response.status === 503 || response.status === 500) {
+        return { error: 'A IA está sobrecarregada no momento. Tente novamente em instantes.' };
+      }
+      return {
+        error: `Falha ao gerar flashcards (código ${response.status}). Tente novamente mais tarde.`,
+      };
     }
 
     const result = await response.json();
-    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = result?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    const text = candidate?.content?.parts?.[0]?.text;
+    if (finishReason === 'MAX_TOKENS') {
+      return { error: 'O texto gerou uma resposta grande demais. Tente com menos cards ou um texto menor.' };
+    }
+    if (
+      (typeof text !== 'string' || text.trim().length === 0) &&
+      (finishReason === 'SAFETY' || finishReason === 'RECITATION')
+    ) {
+      return { error: 'A IA recusou gerar flashcards para este texto.' };
+    }
     if (typeof text !== 'string') {
       return { error: 'A resposta da IA está em um formato inválido.' };
     }
@@ -755,28 +830,71 @@ export async function updateTarefaStatus(
 
 // ==================================================================
 // --- AÇÕES PARA METAS DE ESTUDO ---
+type StudyGoalValues = {
+  title: string;
+  type: string;
+  target_value: number;
+  current_value: number;
+  start_date: string;
+  end_date: string;
+};
+
+function parseStudyGoalValues(formData: FormData): { data: StudyGoalValues } | { error: string } {
+  const getString = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === 'string' ? value.trim() : '';
+  };
+
+  const title = getString('title');
+  const targetValue = Number(getString('target_value'));
+  const currentValueField = formData.get('current_value');
+  const currentValue = currentValueField === null || currentValueField === ''
+    ? 0
+    : typeof currentValueField === 'string' ? Number(currentValueField) : NaN;
+  const startDate = getString('start_date');
+  const endDate = getString('end_date');
+  const type = getString('type') || 'monthly_questions';
+
+  if (!title || title.length > 200) {
+    return { error: 'Informe um título com até 200 caracteres.' };
+  }
+  if (!Number.isInteger(targetValue) || targetValue <= 0) {
+    return { error: 'A meta deve ser um número inteiro maior que zero.' };
+  }
+  if (
+    !Number.isInteger(currentValue) ||
+    currentValue < 0 ||
+    currentValue > targetValue
+  ) {
+    return { error: 'O progresso atual deve estar entre zero e o valor da meta.' };
+  }
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(startDate) || !datePattern.test(endDate) || endDate < startDate) {
+    return { error: 'Informe um período válido para a meta.' };
+  }
+
+  return {
+    data: {
+      title,
+      type,
+      target_value: targetValue,
+      current_value: currentValue,
+      start_date: startDate,
+      end_date: endDate,
+    },
+  };
+}
+
 export async function addStudyGoal(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuth();
   if (!user) return { error: 'Usuário não autenticado.' };
 
-  const title = formData.get('title') as string;
-  const type = formData.get('type') as string;
-  const target_value = Number(formData.get('target_value'));
-  const start_date = formData.get('start_date') as string;
-  const end_date = formData.get('end_date') as string;
-
-  if (!title || !type || !target_value || !start_date || !end_date) {
-    return { error: "Faltam dados essenciais para criar a meta." };
-  }
+  const parsed = parseStudyGoalValues(formData);
+  if ('error' in parsed) return parsed;
 
   const { error } = await supabase.from('study_goals').insert({
     user_id: user.id,
-    title,
-    type,
-    target_value,
-    start_date,
-    end_date,
+    ...parsed.data,
   });
 
   if (error) {
@@ -827,22 +945,25 @@ export async function deleteStudyGoal(id: number) {
 }
 
 export async function updateStudyGoal(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuth();
   if (!user) return { error: 'Usuário não autenticado.' };
 
-  const id = Number(formData.get('id'));
-  const title = formData.get('title') as string;
-  const type = formData.get('type') as string;
-  const target_value = Number(formData.get('target_value'));
+  const idValue = formData.get('id');
+  const id = typeof idValue === 'string' ? Number(idValue.trim()) : NaN;
+  if (!Number.isInteger(id) || id <= 0) return { error: 'Meta inválida.' };
 
-  if (!id || !title || !type || !target_value) {
-    return { error: "Faltam dados essenciais para atualizar a meta." };
-  }
+  const parsed = parseStudyGoalValues(formData);
+  if ('error' in parsed) return parsed;
 
   const { error } = await supabase
     .from('study_goals')
-    .update({ title, type, target_value })
+    .update({
+      title: parsed.data.title,
+      target_value: parsed.data.target_value,
+      current_value: parsed.data.current_value,
+      start_date: parsed.data.start_date,
+      end_date: parsed.data.end_date,
+    })
     .eq('id', id)
     .eq('user_id', user.id);
 

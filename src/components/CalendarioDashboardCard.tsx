@@ -44,7 +44,11 @@ export function CalendarioDashboardCard({ lembretes, revisoes }: { lembretes: Le
   const handleFormSubmit = (formData: FormData) => {
     startTransition(async () => {
       const action = editingLembrete ? updateLembrete : addLembrete;
-      await action(formData);
+      const result = await action(formData);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(`Lembrete ${editingLembrete ? 'atualizado' : 'adicionado'} com sucesso!`);
       setIsModalOpen(false);
       setEditingLembrete(null);

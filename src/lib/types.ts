@@ -64,6 +64,17 @@ export type CadernoErro = {
   updated_at: string;
 };
 
+export type StudyGoal = {
+  id: number;
+  title: string;
+  type: string;
+  target_value: number;
+  current_value: number;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+};
+
 export type Tarefa = {
   id: number;
   title: string;

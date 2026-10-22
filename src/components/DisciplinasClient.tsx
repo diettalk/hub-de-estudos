@@ -99,7 +99,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                      )}
                      <TextEditor
                          key={selectedPage.id}
-                         initialContent={selectedPage.content}
+                         initialContent={selectedPage.content ?? null}
                          onSave={handleSave}
                          onClose={() => router.push('/disciplinas')}
                      />
@@ -125,4 +125,3 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         </div>
     );
 }
-

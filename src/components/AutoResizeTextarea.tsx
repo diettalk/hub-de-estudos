@@ -1,39 +1,37 @@
 'use client';
 
 import * as React from 'react';
-import { Textarea, type TextareaProps } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/textarea';
 
 const AutoResizeTextarea = React.forwardRef<
   HTMLTextAreaElement,
-  TextareaProps
+  React.ComponentProps<'textarea'>
 >(({ value, onChange, ...props }, ref) => {
   const internalRef = React.useRef<HTMLTextAreaElement>(null);
-  const combinedRef = (ref as React.RefObject<HTMLTextAreaElement>) || internalRef;
+  React.useImperativeHandle(ref, () => internalRef.current!, []);
 
   // Ajusta a altura com base no conteúdo
   React.useLayoutEffect(() => {
-    const textarea = combinedRef.current;
+    const textarea = internalRef.current;
     if (textarea) {
       // Reseta a altura para recalcular o scrollHeight
       textarea.style.height = 'auto'; 
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
-  }, [value, combinedRef]);
+  }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const textarea = combinedRef.current;
+    const textarea = internalRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
       textarea.style.height = `${textarea.scrollHeight}px`;
     }
-    if (onChange) {
-      onChange(e);
-    }
+    onChange?.(e);
   };
 
   return (
     <Textarea
-      ref={combinedRef}
+      ref={internalRef}
       value={value}
       onChange={handleChange}
       rows={1} // Começa com uma linha

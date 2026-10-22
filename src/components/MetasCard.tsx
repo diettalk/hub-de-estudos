@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { addDays, format } from 'date-fns';
 import { type StudyGoal } from '@/lib/types';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -15,13 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { addStudyGoal, updateStudyGoal, deleteStudyGoal, updateStudyGoalValue } from '@/app/actions';
 import { toast } from 'sonner';
 import { Target, PlusCircle, Trash2, Edit, Plus, Minus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export function MetasCard({ goals }: { goals: StudyGoal[] }) {
+  const today = new Date();
+  const defaultStartDate = format(today, 'yyyy-MM-dd');
+  const defaultEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [openGoal, setOpenGoal] = useState<StudyGoal | null>(null);
@@ -30,22 +33,9 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
   // Função para lidar com o envio do formulário de criação/edição
   const handleFormSubmit = (formData: FormData) => {
     startTransition(async () => {
-      const title = formData.get('title') as string;
-      const description = formData.get('description') as string;
-      const target_value = Number(formData.get('target_value'));
-      const current_value = Number(formData.get('current_value'));
+      const result = await (openGoal?.id ? updateStudyGoal(formData) : addStudyGoal(formData));
 
-      const dataToSave = {
-        id: openGoal?.id,
-        title,
-        description,
-        target_value,
-        current_value,
-      };
-
-      const result = await (openGoal?.id ? updateStudyGoal(dataToSave) : addStudyGoal(dataToSave));
-
-      if (result.error) {
+      if ('error' in result) {
         toast.error(result.error);
       } else {
         toast.success(`Meta ${openGoal?.id ? 'atualizada' : 'criada'} com sucesso!`);
@@ -128,7 +118,7 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
             })
           ) : (
             <p className="text-sm text-muted-foreground text-center pt-8">
-              Nenhuma meta definida. Clique em '+' para adicionar uma.
+              Nenhuma meta definida. Clique em &apos;+&apos; para adicionar uma.
             </p>
           )}
         </div>
@@ -143,20 +133,38 @@ export function MetasCard({ goals }: { goals: StudyGoal[] }) {
           <input type="hidden" name="id" value={openGoal?.id || ''} />
           <div>
             <Label htmlFor="title">Título</Label>
-            <Input id="title" name="title" required defaultValue={openGoal?.title || ''} />
-          </div>
-          <div>
-            <Label htmlFor="description">Descrição (Opcional)</Label>
-            <Textarea id="description" name="description" defaultValue={openGoal?.description || ''} />
+            <Input id="title" name="title" maxLength={200} required defaultValue={openGoal?.title || ''} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="current_value">Progresso Atual</Label>
-              <Input id="current_value" name="current_value" type="number" defaultValue={openGoal?.current_value || 0} required />
+              <Input id="current_value" name="current_value" type="number" defaultValue={openGoal?.current_value ?? 0} required />
             </div>
             <div>
               <Label htmlFor="target_value">Meta Final</Label>
-              <Input id="target_value" name="target_value" type="number" defaultValue={openGoal?.target_value || 100} required />
+              <Input id="target_value" name="target_value" type="number" defaultValue={openGoal?.target_value ?? 100} required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="start_date">Data inicial</Label>
+              <Input
+                id="start_date"
+                name="start_date"
+                type="date"
+                defaultValue={openGoal?.start_date ?? defaultStartDate}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="end_date">Data final</Label>
+              <Input
+                id="end_date"
+                name="end_date"
+                type="date"
+                defaultValue={openGoal?.end_date ?? defaultEndDate}
+                required
+              />
             </div>
           </div>
           <DialogFooter>

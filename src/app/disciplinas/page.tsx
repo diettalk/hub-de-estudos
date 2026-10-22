@@ -14,7 +14,7 @@ function sanitizeTiptapContent(node: JSONContent | null | undefined): JSONConten
   }
   const processedChildren = node.content.map(childNode => {
     if (childNode && childNode.content) {
-      return { ...childNode, content: sanitizeTiptapContent(childNode as any)?.content || [] };
+      return { ...childNode, content: sanitizeTiptapContent(childNode)?.content || [] };
     }
     return childNode;
   });
@@ -24,7 +24,7 @@ function sanitizeTiptapContent(node: JSONContent | null | undefined): JSONConten
     }
     return true;
   });
-  return { ...node, content: sanitizedContent as JSONContent[] };
+  return { ...node, content: sanitizedContent };
 }
 
 // CORREÇÃO 1: searchParams agora deve ser tipado como uma Promise
