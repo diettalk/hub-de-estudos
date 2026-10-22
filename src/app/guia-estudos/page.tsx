@@ -20,6 +20,7 @@ export default async function GuiaDeEstudosPage() {
     .select('*, concurso_paginas(paginas(*))') // 'paginas' é o nome da tabela de disciplinas
     .eq('user_id', user.id)
     .eq('concurso_paginas.paginas.user_id', user.id)
+    .order('ordem', { ascending: true, nullsFirst: false })
     .order('data_prova', { ascending: true });
     
   // Busca todas as disciplinas disponíveis para oferecer no modal de vínculo
