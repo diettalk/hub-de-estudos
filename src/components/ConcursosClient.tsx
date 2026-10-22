@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import { motion } from 'framer-motion'; // Para o efeito de hover
 import { DndContext, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'; // Para o drag-and-drop
 import { arrayMove, SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,7 +14,7 @@ import Link from 'next/link';
 import { type Concurso, type Disciplina } from '@/lib/types';
 import { toast } from 'sonner';
 
-// O Card de Concurso agora é um componente "sortable" e "animável"
+// O Card de Concurso agora é um componente sortable
 const SortableConcursoCard = ({ concurso, onEdit, onLink }: { concurso: Concurso, onEdit: () => void, onLink: () => void }) => {
   const [, startTransition] = useTransition();
 
@@ -44,15 +43,13 @@ const SortableConcursoCard = ({ concurso, onEdit, onLink }: { concurso: Concurso
   const dataFormatada = new Date(concurso.data_prova ?? '').toLocaleDateString('pt-BR', { timeZone: 'UTC' });
 
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       style={style}
-      layout // Anima as mudanças de layout
-      whileHover={{ scale: 1.02 }} // Efeito de "levantar"
-      className="bg-card p-4 rounded-lg border flex flex-col justify-between h-full relative"
+      className="bg-card p-4 rounded-lg border flex flex-col justify-between h-full relative transition-shadow hover:shadow-lg"
     >
       {/* Handle para arrastar */}
-      <div {...attributes} {...listeners} className="absolute top-3 right-3 cursor-grab active:cursor-grabbing text-muted-foreground">
+      <div {...attributes} {...listeners} className="absolute top-3 right-3 cursor-grab active:cursor-grabbing text-muted-foreground touch-none">
         <GripVertical className="w-5 h-5" />
       </div>
 
@@ -98,7 +95,7 @@ const SortableConcursoCard = ({ concurso, onEdit, onLink }: { concurso: Concurso
         )}
         <Button variant="ghost" size="icon" onClick={() => {if (confirm(`Tem a certeza?`)) {startTransition(() => deleteConcurso(concurso.id))}}} title="Excluir"><Trash2 className="h-4 w-4 text-destructive" /></Button>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
