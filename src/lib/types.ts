@@ -6,10 +6,9 @@ export type Node = {
   parent_id: number | null;
   title: string;
   children: Node[];
-  // Campos opcionais de Disciplinas/Documentos
+  is_favorite?: boolean;
   emoji?: string | null;
   content?: JSONContent | null;
-  // Campos opcionais de Recursos
   type?: 'link' | 'pdf' | 'folder';
   url?: string | null;
   file_path?: string | null;
@@ -40,11 +39,29 @@ export type SessaoEstudo = {
 export type Revisao = {
   id: number;
   ciclo_sessao_id: number | null;
+  caderno_erro_id?: number | null;
   data_revisao: string;
   tipo_revisao: string;
   concluida: boolean;
   materia_nome: string | null;
   foco_sugerido: string | null;
+};
+
+export type MotivoErro = 'atencao' | 'conteudo' | 'interpretacao' | 'chute' | 'outro';
+
+export type CadernoErro = {
+  id: number;
+  disciplina_id: number | null;
+  disciplina_nome: string;
+  assunto: string;
+  banca: string | null;
+  ano: number | null;
+  enunciado: string | null;
+  o_que_errei: string;
+  motivo: MotivoErro;
+  aprendizado: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Tarefa = {
@@ -85,14 +102,6 @@ export type Profile = {
   full_name: string | null;
   avatar_url: string | null;
   updated_at: string | null;
-};
-
-// NOVO TIPO: Define a estrutura de um Recurso da Biblioteca
-export type Resource = Node & {
-  user_id?: string;
-  status?: 'ativo' | 'arquivado';
-  ordem?: number;
-  disciplina_id?: number | null;
 };
 
 // Adicione este tipo no final do ficheiro src/lib/types.ts

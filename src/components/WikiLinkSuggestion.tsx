@@ -1,21 +1,26 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Editor, Range, ReactRenderer } from '@tiptap/react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { ReactRenderer } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
-import { Suggestion, SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+import { Suggestion } from '@tiptap/suggestion';
+import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import tippy, { Instance } from 'tippy.js';
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { Book, FileText } from 'lucide-react';
+import { Book } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { searchDocumentsAndPages } from '@/app/actions';
+import { searchPaginas } from '@/app/actions';
 import { PluginKey } from 'prosemirror-state';
 
 interface SearchItem {
   id: number;
   title: string;
-  type: 'documentos' | 'paginas';
+  type: 'paginas';
 }
 
-const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((props, ref) => {
+type WikiLinkListRef = {
+  onKeyDown: (props: SuggestionKeyDownProps) => boolean;
+};
+
+const WikiLinkListComponent = forwardRef<WikiLinkListRef, SuggestionProps<SearchItem>>((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const selectItem = (index: number) => {
@@ -55,7 +60,7 @@ const WikiLinkListComponent = forwardRef<any, SuggestionProps<SearchItem>>((prop
                 onSelect={() => selectItem(index)}
                 className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}
               >
-                {item.type === 'documentos' ? <FileText className="w-4 h-4" /> : <Book className="w-4 h-4" />}
+                <Book className="w-4 h-4" />
                 <span>{item.title}</span>
               </CommandItem>
             ))
@@ -79,8 +84,8 @@ export const WikiLinkSuggestion = Extension.create({
         editor: this.editor,
         char: '[[',
         command: ({ editor, range, props }) => {
-          const { id, title, type } = props;
-          const href = type === 'documentos' ? `/documentos?id=${id}` : `/disciplinas?page=${id}`;
+          const { id, title } = props;
+          const href = `/disciplinas?page=${id}`;
           
           // CORREÇÃO: Usa um método de inserção mais explícito e robusto
           editor
@@ -104,15 +109,16 @@ export const WikiLinkSuggestion = Extension.create({
             ])
             .run();
         },
-        items: async ({ query }) => await searchDocumentsAndPages(query),
+        items: async ({ query }) => await searchPaginas(query),
         render: () => {
-          let reactRenderer: ReactRenderer<any>;
+          let reactRenderer: ReactRenderer<WikiLinkListRef, SuggestionProps<SearchItem>>;
           let popup: Instance[];
           return {
             onStart: props => {
-              reactRenderer = new ReactRenderer(WikiLinkListComponent, { props, editor: props.editor });
+              const getReferenceClientRect = () => props.clientRect?.() ?? new DOMRect();
+              reactRenderer = new ReactRenderer<WikiLinkListRef, SuggestionProps<SearchItem>>(WikiLinkListComponent, { props, editor: props.editor });
               popup = tippy('body', {
-                getReferenceClientRect: props.clientRect,
+                getReferenceClientRect,
                 appendTo: () => document.body,
                 content: reactRenderer.element,
                 showOnCreate: true,
@@ -124,7 +130,7 @@ export const WikiLinkSuggestion = Extension.create({
             onUpdate(props) {
               reactRenderer.updateProps(props);
               if (!props.clientRect) return;
-              popup[0].setProps({ getReferenceClientRect: props.clientRect });
+              popup[0].setProps({ getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect() });
             },
             onKeyDown(props) {
               if (props.event.key === 'Escape') {
@@ -143,4 +149,3 @@ export const WikiLinkSuggestion = Extension.create({
     ];
   },
 });
-

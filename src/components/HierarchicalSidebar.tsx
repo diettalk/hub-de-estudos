@@ -13,22 +13,26 @@ import { Tree, NodeRendererProps, TreeApi } from 'react-arborist';
 import { 
     ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator
 } from '@/components/ui/context-menu';
-// Certifique-se que TableName está sendo importado ou definido corretamente
-// import { TableName } from '@/app/actions'; // Se você exportou o tipo
 import { createItem, updateItemTitle, deleteItem, updateItemParent, toggleFavoriteStatus } from '@/app/actions';
 import { type Node as NodeType } from '@/lib/types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-// Defina o tipo TableName se não estiver importando
-type TableName = 'documentos' | 'paginas'; 
+type TableName = 'paginas';
+type FavoriteItem = { id: number | string; title: string };
+type TreeNodeData = Omit<NodeType, 'id' | 'children'> & {
+    id: string;
+    table: TableName;
+    is_favorite: boolean;
+    children?: TreeNodeData[];
+};
 
 // ============================================================================
 // --- Componente Node ---
 // ============================================================================
-function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditingId }: NodeRendererProps<NodeType> & { 
-    onToggleFavorite: (item: NodeType) => void;
+function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditingId }: NodeRendererProps<TreeNodeData> & {
+    onToggleFavorite: (item: FavoriteItem) => void;
     editingId: string | null;
     setEditingId: (id: string | null) => void;
 }) {
@@ -37,7 +41,9 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     const [, startTransition] = useTransition();
     const router = useRouter();
     // CORREÇÃO: Usa o tipo TableName diretamente
-    const table = node.data.table as TableName; 
+    const table = node.data.table;
+    const siblings = node.parent?.children;
+    const isLast = siblings?.[siblings.length - 1]?.id === node.id;
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -52,8 +58,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     const handleSaveTitle = () => {
         if (title.trim() && title !== node.data.title) {
             startTransition(() => {
-                // REMOVIDO: Mapeamento não é mais necessário
-                // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
                 updateItemTitle(table, Number(node.data.id), title).then(result => {
                     if (result.error) toast.error(result.error);
                     setEditingId(null);
@@ -67,8 +71,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     };
 
     const handleCreateChild = () => startTransition(() => {
-        // REMOVIDO: Mapeamento não é mais necessário
-        // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
         createItem(table, Number(node.data.id)).then(() => {
             if (!node.isOpen) node.toggle();
             refreshView();
@@ -76,8 +78,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
     });
 
     const handleDelete = () => startTransition(() => {
-        // REMOVIDO: Mapeamento não é mais necessário
-        // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
         deleteItem(table, Number(node.data.id)).then(res => {
             if (res.error) toast.error(res.error);
             else toast.success(`"${node.data.title}" foi excluído.`);
@@ -85,10 +85,7 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
         });
     });
     
-    // CORREÇÃO: Lógica ajustada para usar 'paginas'
-    const href = table === 'documentos' 
-        ? `/documentos?id=${node.data.id}` 
-        : `/disciplinas?page=${node.data.id}`;
+    const href = `/disciplinas?page=${node.data.id}`;
 
     return (
         <ContextMenu>
@@ -100,7 +97,6 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                         node.state.isDragging && "opacity-50",
                         node.state.isSelected && "bg-primary/20",
                         // Adicionado feedback visual para drop
-                        node.state.isDraggingOver && "bg-blue-500/20", 
                         node.state.willReceiveDrop && "outline-2 outline-dashed outline-primary/50"
                     )}
                 >
@@ -117,7 +113,7 @@ function Node({ node, style, dragHandle, onToggleFavorite, editingId, setEditing
                          ))}
                          {node.parent && ( /* Só mostra a linha se tiver pai */
                            <div className="absolute left-0 top-0 h-full w-[24px]" style={{ transform: `translateX(-24px)` }}>
-                               <div className={`mx-auto ${node.isLast ? 'h-1/2' : 'h-full'} w-px bg-border/50`}></div> {/* Cor e altura ajustadas */}
+                               <div className={`mx-auto ${isLast ? 'h-1/2' : 'h-full'} w-px bg-border/50`}></div> {/* Cor e altura ajustadas */}
                                <div className="h-px w-1/2 bg-border/50 absolute top-1/2 right-0"></div> {/* Posição ajustada */}
                            </div>
                          )}
@@ -208,7 +204,7 @@ export function HierarchicalSidebar({
     const topScrollRef = useRef<HTMLDivElement>(null);
     const mainScrollRef = useRef<HTMLDivElement>(null);
     const contentWidthRef = useRef<HTMLDivElement>(null);
-    const treeRef = useRef<TreeApi<NodeType>>(null);
+    const treeRef = useRef<TreeApi<TreeNodeData>>(null);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [openIds, setOpenIds] = useState<string[]>([]);
@@ -221,7 +217,7 @@ export function HierarchicalSidebar({
 
     // Processa os dados brutos para o formato esperado pelo react-arborist
     const processedData = useMemo(() => {
-        function processNodes(nodes: NodeType[] = []): any[] {
+        function processNodes(nodes: NodeType[] = []): TreeNodeData[] {
             return nodes.map((n) => ({
                 ...n,
                 id: String(n.id), // Garante que ID é string
@@ -286,8 +282,6 @@ export function HierarchicalSidebar({
         const movedItemId = Number(dragIds[0]);
         const newParentId = parentId ? Number(parentId) : null;
         startTransition(() => {
-            // REMOVIDO: Mapeamento não é mais necessário
-            // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
             updateItemParent(table, movedItemId, newParentId).then((result) => {
                 if (result.error) toast.error(result.error);
                 router.refresh(); // Atualiza a view
@@ -298,8 +292,6 @@ export function HierarchicalSidebar({
     // Handler para criar um item na raiz
     const handleCreateRoot = () => {
         startTransition(() => {
-            // REMOVIDO: Mapeamento não é mais necessário
-            // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
             createItem(table, null).then(() => {
                 router.refresh();
             });
@@ -307,10 +299,8 @@ export function HierarchicalSidebar({
     };
 
     // Handler para alternar favorito
-    const handleToggleFavorite = (item: NodeType) => {
+    const handleToggleFavorite = (item: FavoriteItem) => {
         startTransition(() => {
-            // REMOVIDO: Mapeamento não é mais necessário
-            // const correctTableName = table === 'disciplinas' ? 'paginas' : 'documentos';
             toggleFavoriteStatus(table, Number(item.id)).then(result => {
                 if (result.error) {
                     toast.error(result.error);
@@ -358,9 +348,7 @@ export function HierarchicalSidebar({
                   </h3>
                   <div className="flex flex-col gap-1">
                       {favoriteItems.map(item => {
-                          const href = table === 'documentos' 
-                              ? `/documentos?id=${item.id}` 
-                              : `/disciplinas?page=${item.id}`;
+                          const href = `/disciplinas?page=${item.id}`;
                           return (
                               <ContextMenu key={item.id}>
                                   <ContextMenuTrigger asChild>
@@ -405,7 +393,7 @@ export function HierarchicalSidebar({
               <div ref={mainScrollRef} className="flex-grow overflow-auto -mr-2 pr-2">
                   {processedData.length > 0 ? (
                       isLoadedFromStorage && (
-                          <Tree<NodeType>
+                          <Tree<TreeNodeData>
                               ref={treeRef}
                               data={processedData} // Usa os dados processados
                               onMove={handleMove}
@@ -413,8 +401,8 @@ export function HierarchicalSidebar({
                               rowHeight={40}
                               indent={24}
                               openByDefault={false}
-                              openIds={openIds}
-                              onOpenChange={(ids) => setOpenIds(ids.map(String))}
+                              initialOpenState={Object.fromEntries(openIds.map((id): [string, boolean] => [id, true]))}
+                              onToggle={(id) => setOpenIds((ids) => ids.includes(id) ? ids.filter((openId) => openId !== id) : [...ids, id])}
                               // getId não é mais necessário se 'id' já é string em processedData
                               searchTerm={searchTerm}
                               // A prop 'children' renderiza cada nó
@@ -423,7 +411,7 @@ export function HierarchicalSidebar({
                           </Tree>
                       )
                   ) : (
-                      <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum item. Clique em '+' para criar.</p></div>
+                      <div className="flex items-center justify-center h-full"><p className="text-muted-foreground text-sm">Nenhum item. Clique em + para criar.</p></div>
                   )}
               </div>
           </div>

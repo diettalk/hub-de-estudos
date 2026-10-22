@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: '/documentos', destination: '/caderno-erros', permanent: false },
+      { source: '/biblioteca', destination: '/caderno-erros', permanent: false },
+    ];
+  },
+
   // Ignora erros do ESLint durante o deploy
   eslint: {
     ignoreDuringBuilds: true,

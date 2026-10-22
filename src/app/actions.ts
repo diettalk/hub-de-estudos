@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
-import { type SessaoEstudo, type Resource, type Disciplina } from '@/lib/types';
+import { type SessaoEstudo } from '@/lib/types';
 import { JSONContent } from '@tiptap/react';
 
 
@@ -20,7 +20,7 @@ async function getAuth() {
 
 async function isOwnedParent(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  table: 'paginas' | 'documentos' | 'resources',
+  table: 'paginas',
   parentId: number | null,
   userId: string,
 ): Promise<boolean> {
@@ -426,105 +426,7 @@ export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
     return { success: true };
 }
 
-// --- AÇÕES PARA DOCUMENTOS ---
-export async function addDocumento(formData: FormData) {
-  const title = formData.get('title') as string;
-  const parentIdValue = formData.get('parent_id') as string | null;
-  const parentId = parentIdValue ? Number(parentIdValue) : null;
-
-  if (!title || title.trim() === '') {
-    return { error: 'O título é obrigatório.' };
-  }
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: 'Usuário não autenticado.' };
-  }
-  if (!(await isOwnedParent(supabase, 'documentos', parentId, user.id))) {
-    return { error: 'Pasta de destino inválida.' };
-  }
-
-  const { data, error } = await supabase
-    .from('documentos')
-    .insert({
-      title,
-      user_id: user.id,
-      content: null, 
-      parent_id: parentId,
-    })
-    .select('id') 
-    .single();
-
-  if (error) {
-    console.error("Erro ao adicionar documento:", error);
-    return { error: error.message };
-  }
-
-  revalidatePath('/documentos');
-  return { data }; 
-}
-
-// A função agora espera uma STRING como segundo parâmetro
-export async function updateDocumentoContent(id: number, content: string) {
-  
-  if (isNaN(id)) return { error: "ID inválido." };
-
-  let parsedContent: JSONContent;
-  try {
-    parsedContent = JSON.parse(content);
-  } catch {
-    return { error: 'Conteúdo inválido.' };
-  }
-
-  const { supabase, user } = await getAuth();
-  if (!user) return { error: 'Usuário não autenticado.' };
-  
-  const { error } = await supabase
-    .from('documentos')
-    // Salva o objeto já parseado
-    .update({ content: parsedContent })
-    .eq('id', id)
-    .eq('user_id', user.id);
-
-  if (error) {
-    console.error("Erro ao salvar conteúdo do documento:", error);
-    return { error: error.message };
-  }
-
-  return { success: true };
-}
-
-export async function deleteDocumento(id: number) {
-  if (isNaN(id)) {
-    return { error: "ID inválido." };
-  }
-
-  const { supabase, user } = await getAuth();
-  if (!user) return { error: 'Usuário não autenticado.' };
-  const { data: documento } = await supabase
-    .from('documentos')
-    .select('id')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (!documento) return { error: 'Documento não encontrado.' };
-
-  const { error } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
-
-  if (error) {
-    console.error("Erro ao deletar documento:", error);
-    return { error: error.message };
-  }
-
-  revalidatePath('/documentos');
-  return { success: true };
-}
-
-// ============================================================================
-// --- AÇÕES GENÉRICAS PARA HIERARQUIA (PÁGINAS, DOCUMENTOS) ---
-// ============================================================================
-type TableName = 'paginas' | 'documentos';
+type TableName = 'paginas';
 
 export async function createItem(table: TableName, parentId: number | null) {
   const supabase = await createClient();
@@ -534,16 +436,13 @@ export async function createItem(table: TableName, parentId: number | null) {
     return { error: 'Pasta de destino inválida.' };
   }
 
-  const newItemData: any = {
+  const newItemData = {
     title: 'Novo Item',
     user_id: user.id,
     parent_id: parentId,
-    content: { type: 'doc', content: [{ type: 'paragraph' }] } // garante json válido
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    emoji: '📄',
   };
-
-  if (table === 'paginas') {
-    newItemData.emoji = '📄';
-  }
 
   try {
     const { data, error } = await supabase
@@ -553,7 +452,7 @@ export async function createItem(table: TableName, parentId: number | null) {
       .single();
 
     if (error) throw error;
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath('/disciplinas');
     return { success: true, newItem: data };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -563,7 +462,7 @@ export async function createItem(table: TableName, parentId: number | null) {
 }
 
 
-export async function updateItemTitle(table: 'documentos' | 'paginas', id: number, newTitle: string) {
+export async function updateItemTitle(table: TableName, id: number, newTitle: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
@@ -577,7 +476,7 @@ export async function updateItemTitle(table: 'documentos' | 'paginas', id: numbe
 
     if (error) throw error;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath('/disciplinas');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -585,35 +484,20 @@ export async function updateItemTitle(table: 'documentos' | 'paginas', id: numbe
   }
 }
 
-export async function deleteItem(table: 'documentos' | 'paginas', id: number) {
+export async function deleteItem(table: TableName, id: number) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
 
   try {
-    let error;
-    if (table === 'documentos') {
-      const { data: documento } = await supabase
-        .from('documentos')
-        .select('id')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (!documento) return { error: 'Documento não encontrado.' };
-      const { error: rpcError } = await supabase.rpc('delete_documento_e_filhos', { doc_id: id });
-      error = rpcError;
-    } else {
-      const { error: deleteError } = await supabase
-        .from(table)
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
-      error = deleteError;
-    }
-
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
     if (error) throw error;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath('/disciplinas');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -650,7 +534,7 @@ export async function toggleFavoriteStatus(table: TableName, id: number) {
 
     if (updateError) throw updateError;
 
-    revalidatePath(table === 'paginas' ? '/disciplinas' : '/documentos');
+    revalidatePath('/disciplinas');
     return { success: true, isFavorite: newFavoriteStatus };
 
   } catch (error) {
@@ -711,9 +595,8 @@ export async function updateProfile({ id, fullName, avatarUrl }: { id: string, f
   return { success: true };
 }
 
-// ==================================================================
-// --- AÇÕES GENÉRICAS PARA HIERARQUIA (DOCUMENTOS, DISCIPLINAS, RECURSOS) ---
-export async function updateItemParent(table: 'documentos' | 'paginas' | 'resources', itemId: number, newParentId: number | null) {
+// --- AÇÕES DE HIERARQUIA PARA DISCIPLINAS ---
+export async function updateItemParent(table: TableName, itemId: number, newParentId: number | null) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não autenticado.' };
@@ -730,8 +613,7 @@ export async function updateItemParent(table: 'documentos' | 'paginas' | 'resour
 
     if (error) throw error;
     
-    const path = table === 'resources' ? '/biblioteca' : (table === 'paginas' ? '/disciplinas' : '/documentos');
-    revalidatePath(path);
+    revalidatePath('/disciplinas');
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro desconhecido";
@@ -973,235 +855,40 @@ export async function updateStudyGoal(formData: FormData) {
   return { success: true };
 }
 
-// ==================================================================
-// --- AÇÕES PARA A BIBLIOTECA (VERSÃO ESTÁVEL E SIMPLIFICADA) ---
-export async function getBibliotecaData() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Utilizador não autenticado.");
-
-    const [allResourcesResult, disciplinasResult] = await Promise.all([
-        supabase.from('resources').select('*').eq('user_id', user.id).order('ordem'),
-        supabase.from('paginas').select('id, title').eq('user_id', user.id).order('title'),
-    ]);
-
-    if (allResourcesResult.error) throw allResourcesResult.error;
-    if (disciplinasResult.error) throw disciplinasResult.error;
-
-    const allResources = allResourcesResult.data as Resource[];
-    
-    return {
-        activeResources: allResources.filter(r => r.status === 'ativo'),
-        archivedItems: allResources.filter(r => r.status === 'arquivado'),
-        disciplinas: (disciplinasResult.data || []) as Disciplina[],
-    };
-}
-
-async function getOrCreateDisciplinaFolder(supabase: any, userId: string, disciplinaId: number): Promise<number | null> {
-    const { data: existingFolder } = await supabase
-        .from('resources')
-        .select('id')
-        .eq('disciplina_id', disciplinaId)
-        .eq('type', 'folder')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    if (existingFolder) {
-        return existingFolder.id;
-    } else {
-        const { data: disciplina } = await supabase.from('paginas').select('title').eq('id', disciplinaId).eq('user_id', userId).single();
-        if (disciplina) {
-            const { data: newFolder, error: newFolderError } = await supabase
-                .from('resources')
-                .insert({ user_id: userId, title: disciplina.title, type: 'folder', disciplina_id: disciplinaId, parent_id: null, status: 'ativo' })
-                .select('id')
-                .single();
-            if (newFolderError) {
-                console.error("Falha ao criar pasta da disciplina:", newFolderError);
-                return null;
-            }
-            return newFolder.id;
-        }
-    }
-    return null;
-}
-
-export async function createResource(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-
-  const title = formData.get('title') as string;
-  const description = formData.get('description') as string;
-  const type = formData.get('type') as 'link' | 'folder';
-  const disciplinaIdStr = formData.get('disciplina_id') as string;
-  const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
-  const url = formData.get('url') as string;
-  const parentIdStr = formData.get('parent_id') as string;
-  let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
-
-  if (!title || !type) return { error: "Título e tipo são obrigatórios." };
-
-  if (disciplina_id && type !== 'folder') {
-      const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
-      if (folderId) parent_id = folderId;
-  }
-  if (!(await isOwnedParent(supabase, 'resources', parent_id, user.id))) {
-    return { error: 'Pasta de destino inválida.' };
-  }
-
-  const resourceData: Partial<Resource> = { user_id: user.id, title, description, type, disciplina_id, parent_id, status: 'ativo' };
-
-  if (type === 'link') {
-    resourceData.url = url;
-  }
-
-  const { error } = await supabase.from('resources').insert(resourceData as any);
-  if (error) return { error: "Falha ao criar o recurso.", details: error.message };
-
-  revalidatePath('/biblioteca');
-  return { success: true };
-}
-
-export async function updateResource(formData: FormData) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Usuário não autenticado.' };
-
-    const id = Number(formData.get('id'));
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string;
-    const url = formData.get('url') as string;
-    const disciplinaIdStr = formData.get('disciplina_id') as string;
-    const disciplina_id = (disciplinaIdStr && disciplinaIdStr !== 'null') ? Number(disciplinaIdStr) : null;
-    const parentIdStr = formData.get('parent_id') as string;
-    let parent_id = parentIdStr && parentIdStr !== 'null' ? Number(parentIdStr) : null;
-    
-    const { data: currentResource } = await supabase.from('resources').select('disciplina_id, type').eq('id', id).eq('user_id', user.id).single();
-    if (!currentResource) return { error: "Recurso não encontrado." };
-
-    if (disciplina_id && disciplina_id !== currentResource.disciplina_id && currentResource.type !== 'folder') {
-        const folderId = await getOrCreateDisciplinaFolder(supabase, user.id, disciplina_id);
-        if (folderId) parent_id = folderId;
-    }
-    if (parent_id === id || !(await isOwnedParent(supabase, 'resources', parent_id, user.id))) {
-        return { error: 'Pasta de destino inválida.' };
-    }
-    
-    const { error } = await supabase.from('resources').update({ title, description, url, parent_id, disciplina_id }).eq('id', id).eq('user_id', user.id);
-    if (error) return { error: "Falha ao atualizar o recurso.", details: error.message };
-
-    revalidatePath('/biblioteca');
-    return { success: true };
-}
-
-export async function deleteResource(resourceId: number, isPermanent: boolean) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Usuário não autenticado.' };
-
-    if (!isPermanent) {
-        const { error } = await supabase.from('resources').update({ status: 'arquivado' }).match({ id: resourceId, user_id: user.id });
-        if (error) return { error: "Falha ao arquivar o recurso." };
-        revalidatePath('/biblioteca');
-        return { success: true };
-    }
-
-    const { data: resource } = await supabase
-        .from('resources')
-        .select('id')
-        .eq('id', resourceId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-    if (!resource) return { error: 'Recurso não encontrado.' };
-
-    const { error } = await supabase.rpc('delete_resource_and_children', { p_resource_id: resourceId });
-    if (error) return { error: "Falha ao apagar o recurso e seus conteúdos.", details: error.message };
-
-    revalidatePath('/biblioteca');
-    return { success: true };
-}
-
-export async function updateResourceStatus(resourceId: number, status: 'ativo' | 'arquivado') {
-    const { supabase, user } = await getAuth();
-    if (!user) return { error: 'Usuário não autenticado.' };
-    await supabase.from('resources').update({ status }).eq('id', resourceId).eq('user_id', user.id);
-    revalidatePath('/biblioteca');
-    return { success: true };
-}
-
-export async function updateResourcesOrder(updates: {id: number, ordem: number, parent_id: number | null}[]) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Usuário não autenticado.' };
-    if (updates.some(item => item.parent_id === item.id)) {
-        return { error: 'Pasta de destino inválida.' };
-    }
-    const parentIds = new Set(updates.map(item => item.parent_id).filter((parentId): parentId is number => parentId !== null));
-    for (const parentId of parentIds) {
-        if (!(await isOwnedParent(supabase, 'resources', parentId, user.id))) {
-            return { error: 'Pasta de destino inválida.' };
-        }
-    }
-
-    try {
-        const updatePromises = updates.map(item => 
-            supabase.from('resources')
-                .update({ ordem: item.ordem, parent_id: item.parent_id })
-                .eq('id', item.id)
-                .eq('user_id', user.id)
-        );
-        
-        const results = await Promise.all(updatePromises);
-        const firstError = results.find(res => res.error);
-        if (firstError) throw firstError.error;
-
-        revalidatePath('/biblioteca');
-        return { success: true };
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "Erro desconhecido";
-        return { error: `Falha ao salvar a nova ordem: ${message}` };
-    }
-}
-
-// NOVO: Ação para pesquisar documentos e páginas para os links [[...]]
-export async function searchDocumentsAndPages(query: string) {
+export async function searchPaginas(query: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // Se a pesquisa estiver vazia, retorna os 5 mais recentes de cada tipo
   if (!query) {
-    const [docs, pages] = await Promise.all([
-      supabase.from('documentos').select('id, title').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
-      supabase.from('paginas').select('id, title').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5)
-    ]);
+    const { data, error } = await supabase
+      .from('paginas')
+      .select('id, title')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(5);
 
-    const combinedResults = [
-      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
-      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
-    ];
-    return combinedResults;
+    if (error) {
+      console.error('Erro na pesquisa de páginas:', error);
+      return [];
+    }
+    return (data || []).map((page) => ({ ...page, type: 'paginas' as const }));
   }
 
-  // Se houver uma pesquisa, procura em ambas as tabelas
   const searchTerm = `%${query}%`;
-  const [docs, pages] = await Promise.all([
-    supabase.from('documentos').select('id, title').eq('user_id', user.id).ilike('title', searchTerm).limit(5),
-    supabase.from('paginas').select('id, title').eq('user_id', user.id).ilike('title', searchTerm).limit(5)
-  ]);
+  const { data, error } = await supabase
+    .from('paginas')
+    .select('id, title')
+    .eq('user_id', user.id)
+    .ilike('title', searchTerm)
+    .limit(5);
 
-  if (docs.error || pages.error) {
-    console.error("Erro na pesquisa:", docs.error || pages.error);
+  if (error) {
+    console.error('Erro na pesquisa de páginas:', error);
     return [];
   }
 
-  const combinedResults = [
-      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
-      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
-  ];
-
-  return combinedResults;
+  return (data || []).map((page) => ({ ...page, type: 'paginas' as const }));
 }
 
 // --- FUNÇÕES EM FALTA ADICIONADAS PARA CORRIGIR O BUILD ---
@@ -1250,28 +937,4 @@ export async function updateAnkiDeck(deckId: number, title: string, cards: Flash
 
     revalidatePath('/anki');
     return { success: true };
-}
-
-// NOVO: Ação para buscar todos os itens para a Paleta de Comandos
-export async function getAllSearchableItems() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
-
-  const [docs, pages] = await Promise.all([
-    supabase.from('documentos').select('id, title').eq('user_id', user.id),
-    supabase.from('paginas').select('id, title').eq('user_id', user.id)
-  ]);
-
-  if (docs.error || pages.error) {
-    console.error("Erro ao buscar itens para a paleta de comandos:", docs.error || pages.error);
-    return [];
-  }
-
-  const combinedResults = [
-      ...(docs.data || []).map(d => ({ ...d, type: 'documentos' })),
-      ...(pages.data || []).map(p => ({ ...p, type: 'paginas' }))
-  ];
-
-  return combinedResults;
 }

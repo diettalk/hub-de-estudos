@@ -6,10 +6,9 @@ import { useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
-// 1. IMPORTAR O ÍCONE DA BIBLIOTECA
 import {
     LayoutDashboard, BookOpen, PenSquare, Recycle, ListTodo, Calendar,
-    ChevronsLeft, ChevronsRight, FileText, BrainCircuit, User as UserIcon, LogOut, Library // Adicionado
+    ChevronsLeft, ChevronsRight, BrainCircuit, User as UserIcon, LogOut, NotebookPen
 } from 'lucide-react';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,15 +21,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// 2. ADICIONAR O NOVO ITEM DE NAVEGAÇÃO
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Guia de Estudos', href: '/guia-estudos', icon: BookOpen },
     { name: 'Disciplinas', href: '/disciplinas', icon: PenSquare },
     { name: 'Ciclo de Estudos', href: '/ciclo', icon: Recycle },
     { name: 'Revisões', href: '/revisoes', icon: ListTodo },
-    { name: 'Documentos', href: '/documentos', icon: FileText },
-    { name: 'Biblioteca', href: '/biblioteca', icon: Library }, // Adicionado aqui
+    { name: 'Caderno de Erros', href: '/caderno-erros', icon: NotebookPen },
     { name: 'Gerador Anki', href: '/anki', icon: BrainCircuit },
     { name: 'Tarefas', href: '/tarefas', icon: ListTodo },
     { name: 'Calendário', href: '/calendario', icon: Calendar },

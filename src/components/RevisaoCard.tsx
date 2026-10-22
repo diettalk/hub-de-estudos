@@ -1,6 +1,7 @@
 // src/components/RevisaoCard.tsx
 'use client';
 
+import Link from 'next/link';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { updateRevisaoStatus } from '@/app/actions';
@@ -42,6 +43,11 @@ export function RevisaoCard({ revisao }: { revisao: Revisao }) {
       <div className="flex-grow">
         <p className="font-semibold">{revisao.materia_nome}</p>
         <p className="text-sm text-muted-foreground">{revisao.foco_sugerido}</p>
+        {revisao.caderno_erro_id && (
+          <Link href="/caderno-erros" className="mt-1 inline-block text-xs text-primary hover:underline">
+            Caderno de Erros
+          </Link>
+        )}
       </div>
       <div className={`text-xs font-bold px-2 py-1 rounded-full border ${getBadgeColor(revisao.tipo_revisao)}`}>
         {revisao.tipo_revisao}
