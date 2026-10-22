@@ -9,13 +9,7 @@ import { Label } from './ui/label';
 import { addLembrete, updateLembrete } from '@/app/actions';
 import { Edit } from 'lucide-react';
 import { toast } from 'sonner';
-
-type Lembrete = {
-  id: number;
-  titulo: string;
-  cor: string;
-  data: string;
-};
+import { type Lembrete } from '@/lib/types';
 
 export function LembreteEditor({ lembrete, data, onActionSuccess }: { lembrete?: Lembrete, data?: string, onActionSuccess: () => void; }) {
   const [open, setOpen] = useState(false);

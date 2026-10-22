@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Editor, Range, ReactRenderer } from '@tiptap/react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { ReactRenderer, type Editor, type Range } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
-import { Suggestion, SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
+import { Suggestion } from '@tiptap/suggestion';
+import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import tippy, { Instance } from 'tippy.js';
 import { Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare } from 'lucide-react';
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
@@ -17,7 +18,15 @@ const commandItems = [
     { title: 'Lista de Tarefas', icon: <CheckSquare className="w-4 h-4" />, command: ({ editor, range }: { editor: Editor, range: Range }) => { editor.chain().focus().deleteRange(range).toggleTaskList().run(); } },
 ];
 
-const CommandListComponent = forwardRef<any, SuggestionProps>((props: any, ref) => {
+type SlashCommandItem = (typeof commandItems)[number];
+type SlashCommandListRef = {
+    onKeyDown: (props: SuggestionKeyDownProps) => boolean;
+};
+
+const CommandListComponent = forwardRef<
+    SlashCommandListRef,
+    SuggestionProps<SlashCommandItem, SlashCommandItem>
+>((props, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     const selectItem = (index: number) => {
@@ -48,7 +57,7 @@ const CommandListComponent = forwardRef<any, SuggestionProps>((props: any, ref) 
         <Command onMouseDown={(e) => e.preventDefault()} className="rounded-lg border shadow-md w-64 bg-card text-card-foreground">
             <CommandList>
                 <CommandGroup>
-                    {props.items.length ? props.items.map((item: any, index: number) => (
+                    {props.items.length ? props.items.map((item, index) => (
                         <CommandItem key={item.title} onSelect={() => selectItem(index)} className={cn("flex items-center gap-2 cursor-pointer", selectedIndex === index && 'is-selected bg-accent')}>
                             {item.icon}
                             <span>{item.title}</span>
@@ -65,20 +74,26 @@ export const SlashCommand = Extension.create({
   name: 'slashCommand',
   addProseMirrorPlugins() {
     return [
-      Suggestion({
+      Suggestion<SlashCommandItem, SlashCommandItem>({
         pluginKey: new PluginKey('slashSuggestion'),
         editor: this.editor,
         char: '/',
         items: ({ query }) => commandItems.filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10),
         command: ({ editor, range, props }) => { props.command({ editor, range }); },
         render: () => {
-          let reactRenderer: ReactRenderer<any>;
+          let reactRenderer: ReactRenderer<
+            SlashCommandListRef,
+            SuggestionProps<SlashCommandItem, SlashCommandItem>
+          >;
           let popup: Instance[];
           return {
             onStart: props => {
-              reactRenderer = new ReactRenderer(CommandListComponent, { props, editor: props.editor });
+              reactRenderer = new ReactRenderer<
+                SlashCommandListRef,
+                SuggestionProps<SlashCommandItem, SlashCommandItem>
+              >(CommandListComponent, { props, editor: props.editor });
               popup = tippy('body', {
-                getReferenceClientRect: props.clientRect,
+                getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
                 appendTo: () => document.body,
                 content: reactRenderer.element,
                 showOnCreate: true,
@@ -89,8 +104,9 @@ export const SlashCommand = Extension.create({
             },
             onUpdate(props) {
               reactRenderer.updateProps(props);
-              if (!props.clientRect) return;
-              popup[0].setProps({ getReferenceClientRect: props.clientRect });
+              popup[0].setProps({
+                getReferenceClientRect: () => props.clientRect?.() ?? new DOMRect(),
+              });
             },
             onKeyDown(props) {
               if (props.event.key === 'Escape') {
@@ -109,4 +125,3 @@ export const SlashCommand = Extension.create({
     ];
   },
 });
-

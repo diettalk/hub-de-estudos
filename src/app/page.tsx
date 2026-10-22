@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', user.id);
   const lembretesPromise = supabase.from('lembretes').select('*').eq('user_id', user.id);
 
-  let [
+  const [
     { data: sessoes },
     { data: tarefas },
     { data: revisoes },

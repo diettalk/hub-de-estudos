@@ -47,7 +47,7 @@ export function DeckViewClient({ deck }: { deck: Deck }) {
 
   const handleSaveChanges = () => {
     startTransition(async () => {
-      const result = await updateAnkiDeck(deck.id, cards);
+      const result = await updateAnkiDeck(deck.id, deck.title, cards);
       if (result.error) {
         toast.error(result.error);
       } else {

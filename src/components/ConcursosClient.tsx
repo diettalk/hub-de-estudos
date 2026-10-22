@@ -153,8 +153,8 @@ export function ConcursosClient({ ativos: initialAtivos, previstos: initialPrevi
     } // Adicionar lógica para 'arquivados' se também for reordenável
 
     if (updatedList) {
-        const orderedIds = updatedList.map(c => c.id);
-        updateConcursosOrdem(orderedIds).then(result => {
+        const updates = updatedList.map((concurso, index) => ({ id: concurso.id, ordem: index }));
+        updateConcursosOrdem(updates).then(result => {
             if (result?.error) toast.error("Falha ao salvar a nova ordem.");
         });
     }

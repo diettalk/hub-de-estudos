@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, type ChangeEvent } from 'react';
 import { toast } from 'sonner';
 // VERIFIQUE: Garanta que todas estas funções estão exportadas em @/app/actions.ts
 import { toggleConclusaoSessao, updateDatasSessaoEstudo, updateSessaoEstudo, deleteSessaoCiclo, toggleFinalizarSessao } from '@/app/actions';
@@ -56,15 +56,15 @@ export function CicloTableRow({
       } = debouncedRowData;
       // Garante que só salva se o componente não estiver sendo desmontado ou em pending
       if(!isPending) { 
-        startTransition(() =>
-          updateSessaoEstudo({
+        startTransition(async () => {
+          await updateSessaoEstudo({
             id,
             foco_sugerido,
             diario_de_bordo,
             questoes_acertos,
             questoes_total,
-          })
-        );
+          });
+        });
       }
     }
   // Adiciona isPending como dependência para evitar chamadas enquanto uma transição está ativa
@@ -121,9 +121,9 @@ export function CicloTableRow({
   const handleToggleFinalizada = (checked: boolean | 'indeterminate') => {
      if (typeof checked === 'boolean') {
         startTransition(async () => {
-          // Passa o estado booleano diretamente
-          await toggleFinalizarSessao(sessao.id, checked); 
-          toast.success('Status de finalização alterado.');
+          const result = await toggleFinalizarSessao(sessao.id, checked);
+          if (result.error) toast.error(result.error);
+          else toast.success('Status de finalização alterado.');
         });
      }
   };
@@ -208,7 +208,7 @@ export function CicloTableRow({
         {/* Garanta que AutoResizeTextarea está sendo importado corretamente */}
         <AutoResizeTextarea
           value={rowData.foco_sugerido || ''}
-          onChange={(e) => handleInputChange('foco_sugerido', e.target.value)}
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleInputChange('foco_sugerido', e.target.value)}
           className="bg-input text-sm"
           disabled={isPending}
         />
@@ -216,7 +216,7 @@ export function CicloTableRow({
       <td className="p-2">
         <AutoResizeTextarea
           value={rowData.diario_de_bordo || ''}
-          onChange={(e) => handleInputChange('diario_de_bordo', e.target.value)}
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleInputChange('diario_de_bordo', e.target.value)}
           placeholder="Suas anotações..."
           className="bg-input text-sm"
           disabled={isPending}
@@ -225,9 +225,9 @@ export function CicloTableRow({
       
       <td className="p-2">
         <div className="flex items-center gap-1">
-          <Input type="number" value={rowData.questoes_acertos ?? ''} onChange={(e) => handleInputChange('questoes_acertos', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="C" />
+          <Input type="number" value={rowData.questoes_acertos ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange('questoes_acertos', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="C" />
           <span className="text-muted-foreground">/</span>
-          <Input type="number" value={rowData.questoes_total ?? ''} onChange={(e) => handleInputChange('questoes_total', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="T" />
+          <Input type="number" value={rowData.questoes_total ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => handleInputChange('questoes_total', e.target.value === '' ? null : e.target.valueAsNumber)} className="bg-input h-8 w-16" placeholder="T" />
           {total > 0 && <span className="text-xs text-muted-foreground ml-2">{percAcerto}%</span>}
         </div>
       </td>
@@ -245,4 +245,3 @@ export function CicloTableRow({
     </tr>
   );
 }
-

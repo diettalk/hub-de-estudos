@@ -12,7 +12,7 @@ interface DashboardListItemProps {
   id: number;
   href: string;
   type: 'revisao' | 'tarefa';
-  action: (id: number, status: boolean) => Promise<any>;
+  action: (id: number, status: boolean) => Promise<{ error?: string } | void>;
   children: React.ReactNode;
 }
 
@@ -25,7 +25,7 @@ export function DashboardListItem({ id, href, type, action, children }: Dashboar
     startTransition(async () => {
       // 1. Chama a Server Action para atualizar o item no banco de dados
       const result = await action(id, checked);
-      if (result?.error) {
+      if (result && 'error' in result && result.error) {
         toast.error(result.error);
       } else {
         // 2. Mostra uma notificação de sucesso

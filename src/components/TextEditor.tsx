@@ -59,7 +59,6 @@ const Summary = Node.create({
     name: 'summary',
     group: 'summary',
     content: 'inline*', // Permite conteúdo editável DENTRO do summary
-    editable: false,   // <<< ADICIONADO: Marca o próprio nó summary como não editável
     parseHTML() {
         return [{ tag: 'summary' }];
     },
@@ -267,7 +266,7 @@ MenuBar.displayName = 'MenuBar';
 // ============================================================================
 interface TextEditorProps {
   initialContent: JSONContent | string | null;
-  onSave: (newContent: JSONContent) => Promise<any>;
+  onSave: (newContent: JSONContent) => Promise<void>;
   onClose: () => void;
 }
 
@@ -340,14 +339,14 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
                     : initialContent;
                 const currentContentJSON = editor.getJSON();
                 if (JSON.stringify(currentContentJSON) !== JSON.stringify(initialContentJSON)) {
-                    editor.commands.setContent(initialContentJSON || '', false);
+                    editor.commands.setContent(initialContentJSON || '', { emitUpdate: false });
                 }
             } catch (error) {
                 console.error("Erro ao processar ou definir conteúdo inicial:", error);
-                editor.commands.setContent('', false);
+                editor.commands.setContent('', { emitUpdate: false });
             }
         } else if (editor && !editor.isDestroyed && !initialContent) {
-             editor.commands.setContent('', false);
+             editor.commands.setContent('', { emitUpdate: false });
         }
     }, [initialContent, editor]);
 
@@ -425,4 +424,3 @@ function TextEditor({ initialContent, onSave, onClose }: TextEditorProps) {
 }
 
 export default TextEditor;
-
