@@ -688,6 +688,7 @@ export async function generateAnkiCards(formData: FormData) {
     const payload = { 
         contents: chatHistory,
         generationConfig: {
+            maxOutputTokens: 8192,
             responseMimeType: "application/json",
             responseSchema: {
                 type: "OBJECT",
@@ -709,20 +710,52 @@ export async function generateAnkiCards(formData: FormData) {
     };
     
     const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-    const response = await fetch(apiUrl, {
+    const sendRequest = () => fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(payload)
     });
+    let response = await sendRequest();
+    if (response.status === 503 || response.status === 500) {
+      await new Promise<void>(resolve => setTimeout(resolve, 1500));
+      response = await sendRequest();
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('Erro na API do Gemini:', errorBody);
-      return { error: 'Falha ao gerar flashcards. Tente novamente mais tarde.' };
+      console.error('Erro na API do Gemini:', response.status, errorBody);
+      if (response.status === 429) {
+        return { error: 'Limite de uso da IA atingido. Aguarde alguns minutos e tente novamente.' };
+      }
+      if (
+        (response.status === 400 || response.status === 403) &&
+        ['API key', 'API_KEY', 'PERMISSION_DENIED'].some(reason => errorBody.includes(reason))
+      ) {
+        return {
+          error: 'A chave da API do Gemini é inválida ou não tem permissão. Verifique a variável GEMINI_API_KEY.',
+        };
+      }
+      if (response.status === 503 || response.status === 500) {
+        return { error: 'A IA está sobrecarregada no momento. Tente novamente em instantes.' };
+      }
+      return {
+        error: `Falha ao gerar flashcards (código ${response.status}). Tente novamente mais tarde.`,
+      };
     }
 
     const result = await response.json();
-    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = result?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    const text = candidate?.content?.parts?.[0]?.text;
+    if (finishReason === 'MAX_TOKENS') {
+      return { error: 'O texto gerou uma resposta grande demais. Tente com menos cards ou um texto menor.' };
+    }
+    if (
+      (typeof text !== 'string' || text.trim().length === 0) &&
+      (finishReason === 'SAFETY' || finishReason === 'RECITATION')
+    ) {
+      return { error: 'A IA recusou gerar flashcards para este texto.' };
+    }
     if (typeof text !== 'string') {
       return { error: 'A resposta da IA está em um formato inválido.' };
     }
