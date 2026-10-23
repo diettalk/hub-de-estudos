@@ -1,29 +1,19 @@
-// src/components/DashboardCard.tsx
 'use client';
 
-import { motion } from 'framer-motion';
+import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DashboardCardProps {
   id: string;
   children: React.ReactNode;
   className?: string;
+  headerAction?: React.ReactNode;
 }
 
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      duration: 0.5
-    }
-  }
-};
-
-export function DashboardCard({ id, children, className }: DashboardCardProps) {
+export function DashboardCard({ id, children, className, headerAction }: DashboardCardProps) {
   const {
     attributes,
     listeners,
@@ -33,28 +23,41 @@ export function DashboardCard({ id, children, className }: DashboardCardProps) {
     isDragging,
   } = useSortable({ id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1,
   };
 
   return (
-    <motion.div 
-      ref={setNodeRef} 
-      style={style} 
-      className={`bg-card border rounded-lg flex flex-col h-full relative ${className}`}
-      layout
-      variants={itemVariants}
-      // ALTERAÇÃO: Adicionar a animação de hover
-      whileHover={{ scale: 1.03, zIndex: 10 }}
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'group relative flex flex-col h-full rounded-2xl bg-card border border-border shadow-xs transition-all duration-200',
+        'hover:border-border/80 hover:shadow-md',
+        isDragging && 'opacity-60 ring-2 ring-primary shadow-2xl scale-[1.01] cursor-grabbing',
+        className
+      )}
     >
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 absolute top-2 right-2 text-muted-foreground hover:text-foreground">
-        <GripVertical className="w-5 h-5" />
+      {/* Alça de Arraste e Ações de Topo */}
+      <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
+        {headerAction}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Reorganizar card"
+          className="p-1.5 rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
       </div>
-      <div className="p-6 flex-grow flex flex-col">
+
+      {/* Conteúdo Interno */}
+      <div className="p-5 sm:p-6 flex-grow flex flex-col min-w-0">
         {children}
       </div>
-    </motion.div>
+    </div>
   );
 }

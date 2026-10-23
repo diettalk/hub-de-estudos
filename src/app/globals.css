@@ -45,8 +45,9 @@
 
 :root {
   --radius: 0.625rem;
-  /* TEMA CLARO REFINADO */
-  --background: oklch(0.98 0.005 240);
+  
+  /* TEMA CLARO */
+  --background: oklch(0.985 0.003 247);
   --foreground: oklch(0.147 0.004 49.25);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.147 0.004 49.25);
@@ -54,56 +55,58 @@
   --popover-foreground: oklch(0.147 0.004 49.25);
   --primary: oklch(0.45 0.22 260);
   --primary-foreground: oklch(0.985 0.001 106.423);
-  --secondary: oklch(0.94 0.01 240);
+  --secondary: oklch(0.95 0.008 240);
   --secondary-foreground: oklch(0.216 0.006 56.043);
-  --muted: oklch(0.94 0.01 240);
-  --muted-foreground: oklch(0.553 0.013 58.071);
-  --accent: oklch(0.94 0.01 240);
+  --muted: oklch(0.95 0.008 240);
+  --muted-foreground: oklch(0.5 0.015 250);
+  --accent: oklch(0.93 0.015 240);
   --accent-foreground: oklch(0.216 0.006 56.043);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.02 240);
-  --input: oklch(0.9 0.02 240);
+  --border: oklch(0.91 0.01 240);
+  --input: oklch(0.91 0.01 240);
   --ring: oklch(0.45 0.22 260);
   
-  /* Cores da Sidebar para o Tema Claro */
-  --sidebar: oklch(0.96 0.01 240);
+  /* Sidebar Claro */
+  --sidebar: oklch(0.99 0.002 240);
   --sidebar-foreground: oklch(0.25 0.005 240);
   --sidebar-primary: oklch(0.45 0.22 260);
   --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-accent: oklch(0.92 0.015 240);
+  --sidebar-accent: oklch(0.94 0.01 240);
   --sidebar-accent-foreground: oklch(0.147 0.004 49.25);
-  --sidebar-border: oklch(0.9 0.02 240);
+  --sidebar-border: oklch(0.91 0.01 240);
   --sidebar-ring: oklch(0.45 0.22 260);
 }
 
 .dark {
-  /* Tema Escuro */
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
-  --card: oklch(0.216 0.006 56.043);
-  --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.216 0.006 56.043);
-  --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.923 0.003 48.717);
-  --primary-foreground: oklch(0.216 0.006 56.043);
-  --secondary: oklch(0.268 0.007 34.298);
-  --secondary-foreground: oklch(0.985 0.001 106.423);
-  --muted: oklch(0.268 0.007 34.298);
-  --muted-foreground: oklch(0.709 0.01 56.259);
-  --accent: oklch(0.268 0.007 34.298);
-  --accent-foreground: oklch(0.985 0.001 106.423);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.553 0.013 58.071);
-  --sidebar: oklch(0.216 0.006 56.043);
-  --sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-accent: oklch(0.268 0.007 34.298);
-  --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.553 0.013 58.071);
+  /* TEMA ESCURO */
+  --background: oklch(0.14 0.005 250);
+  --foreground: oklch(0.98 0.002 250);
+  --card: oklch(0.18 0.006 250);
+  --card-foreground: oklch(0.98 0.002 250);
+  --popover: oklch(0.18 0.006 250);
+  --popover-foreground: oklch(0.98 0.002 250);
+  --primary: oklch(0.58 0.22 260);
+  --primary-foreground: oklch(0.99 0.001 100);
+  --secondary: oklch(0.22 0.008 250);
+  --secondary-foreground: oklch(0.98 0.002 250);
+  --muted: oklch(0.22 0.008 250);
+  --muted-foreground: oklch(0.68 0.012 250);
+  --accent: oklch(0.24 0.01 250);
+  --accent-foreground: oklch(0.98 0.002 250);
+  --destructive: oklch(0.65 0.22 25);
+  --border: oklch(0.26 0.008 250);
+  --input: oklch(0.26 0.008 250);
+  --ring: oklch(0.58 0.22 260);
+  
+  /* Sidebar Escuro */
+  --sidebar: oklch(0.16 0.006 250);
+  --sidebar-foreground: oklch(0.98 0.002 250);
+  --sidebar-primary: oklch(0.58 0.22 260);
+  --sidebar-primary-foreground: oklch(0.99 0.001 100);
+  --sidebar-accent: oklch(0.22 0.008 250);
+  --sidebar-accent-foreground: oklch(0.98 0.002 250);
+  --sidebar-border: oklch(0.24 0.008 250);
+  --sidebar-ring: oklch(0.58 0.22 260);
 }
 
 @layer base {
@@ -111,67 +114,83 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
   }
 
-  /* --- CORREÇÃO PARA A TABELA DO TIPTAP --- */
+  /* Scrollbar customizada moderna */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  /* Tipografia do Tiptap */
+  .ProseMirror {
+    outline: none !important;
+  }
   .ProseMirror table th,
   .ProseMirror table td {
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--foreground));
-    background-color: transparent !important; 
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    background-color: transparent !important;
+    padding: 0.5rem 0.75rem;
   }
-
   .ProseMirror table th {
-      font-weight: bold;
+    font-weight: 600;
+    background-color: var(--muted) !important;
   }
-  
-  /* --- ESTILOS DEFINITIVOS PARA O EDITOR DE TEXTO --- */
-  .ProseMirror h1 { @apply text-3xl font-bold my-4; }
-  .ProseMirror h2 { @apply text-2xl font-semibold my-3; }
+  .ProseMirror h1 { @apply text-3xl font-bold tracking-tight my-4; }
+  .ProseMirror h2 { @apply text-2xl font-semibold tracking-tight my-3; }
   .ProseMirror h3 { @apply text-xl font-semibold my-2; }
-  .ProseMirror ul { @apply list-disc list-outside pl-6; }
-  .ProseMirror ol { @apply list-decimal list-outside pl-6; }
-  .ProseMirror li > p { @apply my-0; } /* Remove margem extra em parágrafos dentro de listas */
-  .ProseMirror li::marker { color: hsl(var(--muted-foreground)); }
+  .ProseMirror ul { @apply list-disc list-outside pl-6 my-2; }
+  .ProseMirror ol { @apply list-decimal list-outside pl-6 my-2; }
+  .ProseMirror li > p { @apply my-0.5; }
+  .ProseMirror li::marker { color: var(--muted-foreground); }
 }
 
-/* Estilos para o Calendário */
+/* Estilos de Calendário */
 .day-with-event {
   position: relative;
   font-weight: 700 !important;
-  color: hsl(var(--destructive)) !important;
+  color: var(--destructive) !important;
 }
 
 .day-with-event::after {
   content: '';
   position: absolute;
-  bottom: 6px;
+  bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background-color: hsl(var(--destructive));
+  background-color: var(--destructive);
 }
 
 .rdp {
-    --rdp-cell-size: 40px;
-    --rdp-caption-font-size: 1rem;
-    --rdp-background-color: hsl(var(--card));
-    --rdp-color: hsl(var(--foreground));
-    --rdp-accent-color: hsl(var(--primary));
-    --rdp-accent-color-dark: hsl(var(--primary));
-    --rdp-outline: 2px solid hsl(var(--primary));
-    --rdp-outline-selected: 3px solid hsl(var(--primary));
+  --rdp-cell-size: 38px;
+  --rdp-caption-font-size: 0.95rem;
+  --rdp-background-color: var(--card);
+  --rdp-color: var(--foreground);
+  --rdp-accent-color: var(--primary);
+  --rdp-outline: 2px solid var(--primary);
+  margin: 0;
 }
 
 .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
-    background-color: hsl(var(--primary)) !important;
-    color: hsl(var(--primary-foreground)) !important;
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
 }
 
 .rdp-day_selected.day-with-event::after {
-    background-color: hsl(var(--primary-foreground));
+  background-color: var(--primary-foreground);
 }
-

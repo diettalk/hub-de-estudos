@@ -1,20 +1,29 @@
-import './globals.css'
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import { ThemeProvider } from 'next-themes'
-import { MainSidebar } from '@/components/MainSidebar'
-import { Toaster } from 'sonner'
-import { createClient } from '@/lib/supabase/server'
-import { LayoutClientManager } from '@/components/LayoutClientManager'
+import './globals.css';
+import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
+import { ThemeProvider } from 'next-themes';
+import { Toaster } from 'sonner';
+import { createClient } from '@/lib/supabase/server';
+import { LayoutClientManager } from '@/components/LayoutClientManager';
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'HUB Hélio',
-  description: 'Sua Plataforma Centralizada para a Aprovação',
-}
+  title: 'HUB de Estudos | Sua Plataforma Centralizada para a Aprovação',
+  description: 'Gerencie disciplinas, ciclos de estudo, revisões espaçadas, caderno de erros e flashcards em um só lugar.',
+};
 
-type Profile = {
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fafafa' },
+    { media: '(prefers-color-scheme: dark)', color: '#13151b' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
+
+export type ProfileData = {
   full_name: string | null;
   avatar_url: string | null;
 } | null;
@@ -22,13 +31,12 @@ type Profile = {
 export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  
   const { data: { user } } = await supabase.auth.getUser();
 
-  let profile: Profile = null;
+  let profile: ProfileData = null;
   if (user) {
     const { data: profileData } = await supabase
       .from('profiles')
@@ -40,18 +48,14 @@ export default async function RootLayout({
 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.className} min-h-screen bg-background text-foreground antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-          <div className="flex h-screen bg-background text-foreground">
-            {user && <MainSidebar user={user} profile={profile} />}
-            
-            <LayoutClientManager user={user}>
-              {children}
-            </LayoutClientManager>
-          </div>
-          <Toaster richColors position="top-right" />
+          <LayoutClientManager user={user} profile={profile}>
+            {children}
+          </LayoutClientManager>
+          <Toaster richColors closeButton position="top-right" />
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
