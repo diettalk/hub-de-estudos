@@ -4,8 +4,20 @@ import { useState, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { PageTransition } from '@/components/PageTransition';
 import { MainSidebar } from '@/components/MainSidebar';
+import { RegistroEstudoModal } from '@/components/RegistroEstudoModal';
 import { ProfileData } from '@/app/layout';
-import { Menu, X, Sparkles, Maximize2, Minimize2, Timer, Play, Pause, RotateCcw } from 'lucide-react';
+import {
+  Menu,
+  X,
+  Sparkles,
+  Maximize2,
+  Minimize2,
+  Timer,
+  Play,
+  Pause,
+  RotateCcw,
+  PlusCircle,
+} from 'lucide-react';
 import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
 
@@ -18,20 +30,18 @@ interface LayoutClientManagerProps {
 export function LayoutClientManager({ children, user, profile }: LayoutClientManagerProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // Mini Pomodoro Global
-  const [pomodoroActive, setPomodoroActive] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(25 * 60);
+
+  // Cronômetro Progressivo / Pomodoro
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (pomodoroActive && secondsLeft > 0) {
-      interval = setInterval(() => setSecondsLeft((prev) => prev - 1), 1000);
-    } else if (secondsLeft === 0) {
-      setPomodoroActive(false);
+    if (timerRunning) {
+      interval = setInterval(() => setElapsedSeconds((prev) => prev + 1), 1000);
     }
     return () => clearInterval(interval);
-  }, [pomodoroActive, secondsLeft]);
+  }, [timerRunning]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -43,10 +53,21 @@ export function LayoutClientManager({ children, user, profile }: LayoutClientMan
     }
   };
 
-  const formatTimer = (totalSec: number) => {
-    const mins = Math.floor(totalSec / 60);
+  const formatTimerHHMMSS = (totalSec: number) => {
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
     const secs = totalSec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`;
+  };
+
+  const handleOpenRegistroComTempo = () => {
+    setTimerRunning(false);
+    const tempoFormatado = elapsedSeconds > 0 ? formatTimerHHMMSS(elapsedSeconds) : '00:45:00';
+    window.dispatchEvent(
+      new CustomEvent('open-registro-estudo', { detail: { tempoFormatado } })
+    );
   };
 
   if (!user) {
@@ -59,17 +80,19 @@ export function LayoutClientManager({ children, user, profile }: LayoutClientMan
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
-      {/* SIDEBAR DESKTOP (Fixa a partir de telas lg) */}
+      {/* MODAL GLOBAL DE REGISTRO DE ESTUDO */}
+      <RegistroEstudoModal />
+
+      {/* SIDEBAR DESKTOP */}
       <div className="hidden lg:flex h-full flex-shrink-0 z-30">
         <MainSidebar user={user} profile={profile} />
       </div>
 
       {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-        {/* CABEÇALHO GLOBAL / BARRA DE FOCO (Tablet & Celular) */}
+        {/* CABEÇALHO GLOBAL DE FOCO E CRONÔMETRO */}
         <header className="flex items-center justify-between h-14 px-3 sm:px-6 border-b border-border bg-card/80 backdrop-blur-md z-20 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {/* Botão Gaveta Mobile */}
             <div className="lg:hidden">
               <Drawer open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <DrawerTrigger asChild>
@@ -104,41 +127,59 @@ export function LayoutClientManager({ children, user, profile }: LayoutClientMan
             </div>
           </div>
 
-          {/* CENTRO: Mini Pomodoro Rápido */}
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-secondary/80 border border-border text-xs">
+          {/* CENTRO: Cronômetro Integrado ao Modal de Registro */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/80 border border-border text-xs">
             <Timer className="w-3.5 h-3.5 text-primary" />
-            <span className="font-mono font-bold text-[11px] sm:text-xs">{formatTimer(secondsLeft)}</span>
+            <span className="font-mono font-bold text-[11px] sm:text-xs">
+              {formatTimerHHMMSS(elapsedSeconds)}
+            </span>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setPomodoroActive(!pomodoroActive)}
+              onClick={() => setTimerRunning(!timerRunning)}
               className="h-6 w-6 rounded-full hover:bg-background"
-              title={pomodoroActive ? 'Pausar' : 'Iniciar Foco'}
+              title={timerRunning ? 'Pausar Cronômetro' : 'Iniciar Cronômetro'}
             >
-              {pomodoroActive ? <Pause className="w-3 h-3 text-amber-500" /> : <Play className="w-3 h-3 text-emerald-500" />}
+              {timerRunning ? (
+                <Pause className="w-3 h-3 text-amber-500" />
+              ) : (
+                <Play className="w-3 h-3 text-emerald-500" />
+              )}
             </Button>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => {
-                setPomodoroActive(false);
-                setSecondsLeft(25 * 60);
+                setTimerRunning(false);
+                setElapsedSeconds(0);
               }}
               className="h-6 w-6 rounded-full hover:bg-background text-muted-foreground"
-              title="Reiniciar 25min"
+              title="Zerar Cronômetro"
             >
               <RotateCcw className="w-2.5 h-2.5" />
             </Button>
+
+            <div className="h-3.5 w-px bg-border mx-0.5" />
+
+            <button
+              type="button"
+              onClick={handleOpenRegistroComTempo}
+              className="flex items-center gap-1 text-[11px] font-bold text-emerald-500 hover:text-emerald-400 px-1.5 py-0.5 rounded-full transition-colors"
+              title="Salvar tempo no Registro de Estudo"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Registrar</span>
+            </button>
           </div>
 
-          {/* DIREITA: Modo Tela Cheia (Perfeito para Tablet S10 FE) */}
+          {/* DIREITA: Tela Cheia */}
           <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
               size="sm"
               onClick={toggleFullscreen}
               className="h-8 px-2.5 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
-              title="Modo Tela Cheia (Ocultar barras)"
+              title="Modo Tela Cheia"
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               <span className="hidden sm:inline">{isFullscreen ? 'Janela' : 'Tela Cheia'}</span>
@@ -146,7 +187,7 @@ export function LayoutClientManager({ children, user, profile }: LayoutClientMan
           </div>
         </header>
 
-        {/* CONTEÚDO PRINCIPAL COM SCROLL SUAVE */}
+        {/* CONTEÚDO PRINCIPAL */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6">
           <div className="max-w-7xl mx-auto w-full">
             <PageTransition>{children}</PageTransition>
