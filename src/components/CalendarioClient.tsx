@@ -125,16 +125,17 @@ export function CalendarioClient({
     revisoes: [],
   };
 
-  const handleCreateLembrete = (e: React.FormEvent) => {
+const handleCreateLembrete = (e: React.FormEvent) => {
     e.preventDefault();
     if (!novoTitulo.trim()) return;
 
+    const formData = new FormData();
+    formData.append('titulo', novoTitulo.trim());
+    formData.append('data', selectedDateISO);
+    formData.append('cor', novaCor);
+
     startTransition(async () => {
-      const res = await addLembrete({
-        titulo: novoTitulo.trim(),
-        data: selectedDateISO,
-        cor: novaCor,
-      });
+      const res = await addLembrete(formData);
       if (res?.error) {
         toast.error(res.error);
       } else {
@@ -144,7 +145,7 @@ export function CalendarioClient({
       }
     });
   };
-
+  
   const handleDeleteLembrete = (id: number) => {
     startTransition(async () => {
       await deleteLembrete(id);
