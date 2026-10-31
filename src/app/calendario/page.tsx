@@ -1,7 +1,7 @@
 // src/app/calendario/page.tsx
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { CalendarioClient } from '@/components/CalendarioClient';
+import CalendarioClient from '@/components/CalendarioClient';
 import { type Lembrete, type Revisao } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
