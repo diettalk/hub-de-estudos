@@ -3,10 +3,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { toggleConclusaoSessao } from '@/app/actions';
+import { toggleConclusaoSessao, linkPastaToConcurso } from '@/app/actions';
+import { usePlanoAtivo } from '@/lib/plano-ativo';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   Calendar,
   Folder,
@@ -42,6 +44,7 @@ export function RegistroEstudoModal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+  const { planoAtivo, recarregarPlanos } = usePlanoAtivo();
 
   const [paginas, setPaginas] = useState<PaginaItem[]>([]);
 
@@ -94,7 +97,6 @@ export function RegistroEstudoModal() {
     return () => window.removeEventListener('open-registro-estudo', handleOpen);
   }, []);
 
-  // Fecha com ESC
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -119,10 +121,14 @@ export function RegistroEstudoModal() {
     fetchPaginas();
   }, [open, supabase]);
 
-  const disciplinasRaiz = useMemo(
-    () => paginas.filter((p) => p.parent_id === null),
-    [paginas]
-  );
+  // Se houver um Plano Ativo com disciplinas vinculadas, exibe apenas as disciplinas daquele plano (ou todas se o plano ainda estiver vazio)
+  const disciplinasRaiz = useMemo(() => {
+    const todasRaiz = paginas.filter((p) => p.parent_id === null);
+    if (planoAtivo && planoAtivo.disciplinaIds.length > 0) {
+      return todasRaiz.filter((p) => planoAtivo.disciplinaIds.includes(p.id));
+    }
+    return todasRaiz;
+  }, [paginas, planoAtivo]);
 
   const topicosDaDisciplina = useMemo(() => {
     if (!disciplinaId || disciplinaId === 'nova') return [];
@@ -132,9 +138,7 @@ export function RegistroEstudoModal() {
 
   const getSelectedDateISO = () => {
     const now = new Date();
-    if (datePreset === 'hoje') {
-      return now.toISOString().split('T')[0];
-    }
+    if (datePreset === 'hoje') return now.toISOString().split('T')[0];
     if (datePreset === 'ontem') {
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
@@ -144,8 +148,7 @@ export function RegistroEstudoModal() {
   };
 
   const handleOnlyNumbers = (val: string, setter: (v: string) => void) => {
-    const clean = val.replace(/\D/g, '').slice(0, 5);
-    setter(clean);
+    setter(val.replace(/\D/g, '').slice(0, 5));
   };
 
   const handleTimeFormat = (val: string, setter: (v: string) => void) => {
@@ -213,6 +216,10 @@ export function RegistroEstudoModal() {
 
         if (!pageErr && createdPage) {
           finalDisciplinaId = createdPage.id;
+          // Se houver um Plano Ativo, já vincula a nova disciplina a ele automaticamente!
+          if (planoAtivo) {
+            await linkPastaToConcurso(planoAtivo.id, createdPage.id);
+          }
         }
       }
 
@@ -224,7 +231,11 @@ export function RegistroEstudoModal() {
       if (material.trim()) partesFoco.push(`(${material.trim()})`);
       const focoFinal = partesFoco.join(' ') || 'Estudo Geral';
 
+      // Carimba o ID do Plano Ativo para isolamento absoluto entre planos
       const partesDiario: string[] = [];
+      if (planoAtivo) {
+        partesDiario.push(`[PLANO:${planoAtivo.id}]`);
+      }
       const tempoLimpo = tempoEstudo.trim() || '00:45:00';
       partesDiario.push(`⏱️ ${tempoLimpo}`);
 
@@ -261,15 +272,24 @@ export function RegistroEstudoModal() {
       if (contabilizarPlanejamento) {
         const { data: pendentes } = await supabase
           .from('ciclo_sessoes')
-          .select('id')
+          .select('id, diario_de_bordo, foco_sugerido')
           .eq('user_id', user.id)
           .eq('concluida', false)
           .eq('materia_nome', nomeMateria)
-          .order('ordem', { ascending: true })
-          .limit(1);
+          .order('ordem', { ascending: true });
 
         if (pendentes && pendentes.length > 0) {
-          targetSessionId = pendentes[0].id;
+          // Procura sessão pendente do mesmo plano ativo
+          const doMesmoPlano = planoAtivo
+            ? pendentes.find(
+                (p) =>
+                  `${p.diario_de_bordo || ''} ${p.foco_sugerido || ''}`.includes(
+                    `[PLANO:${planoAtivo.id}]`
+                  ) || !`${p.diario_de_bordo || ''} ${p.foco_sugerido || ''}`.includes('[PLANO:')
+              )
+            : pendentes[0];
+
+          if (doMesmoPlano) targetSessionId = doMesmoPlano.id;
         }
       }
 
@@ -329,7 +349,12 @@ export function RegistroEstudoModal() {
         await toggleConclusaoSessao(targetSessionId, true);
       }
 
-      toast.success('Estudo registrado com sucesso!');
+      toast.success(
+        planoAtivo
+          ? `Estudo registrado no plano "${planoAtivo.nome}"!`
+          : 'Estudo registrado com sucesso!'
+      );
+      recarregarPlanos();
       resetForm();
       setOpen(false);
       router.refresh();
@@ -345,19 +370,24 @@ export function RegistroEstudoModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
-      {/* JANELA AMPLA REAL DE 880PX SEM TRAVAS DO SHADCN */}
       <div
         className="relative w-full max-w-[880px] max-h-[92vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl overflow-hidden text-foreground"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* CABEÇALHO */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-border/60 flex-shrink-0">
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground">
-              Registro de estudo
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                Registro de estudo
+              </h2>
+              {planoAtivo && (
+                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[11px] font-bold">
+                  🎯 {planoAtivo.nome}
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Preencha os detalhes para registrar seu tempo e avanço
+              Preencha os detalhes para registrar seu tempo e avanço neste plano
             </p>
           </div>
           <button
@@ -369,9 +399,7 @@ export function RegistroEstudoModal() {
           </button>
         </div>
 
-        {/* FORMULÁRIO */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
-          {/* SELETOR DE DATA: HOJE | ONTEM | OUTRO */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/60 border border-border">
               <div className="px-2.5 text-muted-foreground">
@@ -425,7 +453,6 @@ export function RegistroEstudoModal() {
             )}
           </div>
 
-          {/* LINHA 1: CATEGORIA | DISCIPLINA | TEMPO DE ESTUDO */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
             <div className="sm:col-span-3 space-y-1.5">
               <label className="text-xs font-semibold text-foreground block">Categoria</label>
@@ -446,7 +473,9 @@ export function RegistroEstudoModal() {
             </div>
 
             <div className="sm:col-span-6 space-y-1.5">
-              <label className="text-xs font-semibold text-foreground block">Disciplina</label>
+              <label className="text-xs font-semibold text-foreground block">
+                Disciplina {planoAtivo ? `(do plano ${planoAtivo.nome})` : ''}
+              </label>
               <div className="flex gap-2">
                 <div className="relative flex-1 flex items-center">
                   <Layers className="w-4 h-4 text-muted-foreground absolute left-3 pointer-events-none" />
@@ -467,7 +496,7 @@ export function RegistroEstudoModal() {
                       </option>
                     ))}
                     <option value="nova" className="bg-card text-primary font-bold">
-                      + Criar nova disciplina...
+                      + Criar nova disciplina neste plano...
                     </option>
                   </select>
                 </div>
@@ -501,7 +530,6 @@ export function RegistroEstudoModal() {
             </div>
           </div>
 
-          {/* LINHA 2: TÓPICO | MATERIAL */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
             <div className="sm:col-span-8 space-y-1.5">
               <label className="text-xs font-semibold text-foreground block">Tópico</label>
@@ -542,7 +570,6 @@ export function RegistroEstudoModal() {
             </div>
           </div>
 
-          {/* CHECKBOXES */}
           <div className="flex flex-wrap items-center gap-6 pt-1">
             <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-foreground">
               <Checkbox
@@ -560,16 +587,14 @@ export function RegistroEstudoModal() {
                 className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
               />
               <span>Contabilizar no planejamento</span>
-              <span title="Vincula e conclui o bloco no Ciclo de Estudos">
+              <span title="Vincula e conclui o bloco no Ciclo de Estudos deste plano">
                 <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
               </span>
             </label>
           </div>
 
-          {/* BLOCOS OPCIONAIS AMPLOS (CADA CAIXA TEM MAIS DE 160PX DE LARGURA) */}
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* BLOCO 1: QUESTÕES */}
               <div className="p-4 rounded-2xl border border-emerald-500/40 bg-secondary/20 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -617,7 +642,6 @@ export function RegistroEstudoModal() {
                 </div>
               </div>
 
-              {/* BLOCO 2: PÁGINAS */}
               <div className="p-4 rounded-2xl border border-emerald-500/40 bg-secondary/20 space-y-3">
                 <div>
                   <h4 className="text-sm font-bold text-foreground">
@@ -659,7 +683,6 @@ export function RegistroEstudoModal() {
               </div>
             </div>
 
-            {/* BLOCO 3: VIDEOAULAS (LINHA INTEIRA DE 800PX) */}
             <div className="p-4 rounded-2xl border border-emerald-500/40 bg-secondary/20 space-y-3">
               <div>
                 <h4 className="text-sm font-bold text-foreground">
@@ -713,7 +736,6 @@ export function RegistroEstudoModal() {
             </div>
           </div>
 
-          {/* COMENTÁRIOS */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground block">
               Comentários <span className="text-muted-foreground font-normal italic">(opcional)</span>
@@ -727,7 +749,6 @@ export function RegistroEstudoModal() {
             />
           </div>
 
-          {/* RODAPÉ */}
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-border/60">
             <Button
               type="button"

@@ -1,62 +1,111 @@
-// src/app/page.tsx
-
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { DashboardClient } from '@/components/DashboardClient';
-import { startOfToday, isToday, parseISO } from 'date-fns';
+import { isToday, parseISO } from 'date-fns';
+import {
+  type SessaoEstudo,
+  type Tarefa,
+  type Revisao,
+  type StudyGoal,
+  type Lembrete,
+} from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage() {
+export default async function HomePage() {
   const supabase = await createClient();
-  
-  // CORREÇÃO 2: Uso do getUser() recomendado pelo Supabase
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
 
-  // CORREÇÃO 3: Trocamos session.user.id por user.id
-  const sessoesPromise = supabase.from('ciclo_sessoes').select('*').eq('user_id', user.id);
-  const tarefasPromise = supabase.from('tarefas').select('*').eq('user_id', user.id);
-  const revisoesPromise = supabase.from('revisoes').select('*').eq('user_id', user.id);
-  const studyGoalsPromise = supabase.from('study_goals').select('*').eq('user_id', user.id);
-  const lembretesPromise = supabase.from('lembretes').select('*').eq('user_id', user.id);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
 
   const [
-    { data: sessoes },
-    { data: tarefas },
-    { data: revisoes },
-    { data: studyGoals },
-    { data: lembretes },
+    sessoesRes,
+    tarefasRes,
+    revisoesRes,
+    lembretesRes,
+    goalsRes,
+    profileRes,
   ] = await Promise.all([
-    sessoesPromise, 
-    tarefasPromise, 
-    revisoesPromise, 
-    studyGoalsPromise, 
-    lembretesPromise
+    supabase
+      .from('ciclo_sessoes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('ordem', { ascending: true }),
+    supabase
+      .from('tarefas')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('completed', false)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('revisoes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('data_revisao', { ascending: true }),
+    supabase
+      .from('lembretes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('data', { ascending: true }),
+    supabase
+      .from('study_goals')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle(),
   ]);
 
-  const hoje = startOfToday();
-  const sessoesDeHoje = sessoes?.filter(s => s.data_estudo && isToday(parseISO(s.data_estudo))) || [];
-  const revisoesDeHoje = revisoes?.filter(r => r.data_revisao && isToday(parseISO(r.data_revisao))) || [];
-  
+  const todasSessoes = (sessoesRes.data as SessaoEstudo[]) || [];
+  const tarefasPendentes = (tarefasRes.data as Tarefa[]) || [];
+  const revisoes = (revisoesRes.data as Revisao[]) || [];
+  const lembretes = (lembretesRes.data as Lembrete[]) || [];
+  const studyGoals = (goalsRes.data as StudyGoal[]) || [];
+
+  const sessoesDeHoje = todasSessoes.filter((s) => {
+    if (!s.data_estudo || s.concluida) return false;
+    try {
+      return isToday(parseISO(s.data_estudo));
+    } catch {
+      return false;
+    }
+  });
+
+  const sessoesConcluidasTotal = todasSessoes.filter((s) => s.concluida).length;
+
+  const revisoesDeHoje = revisoes.filter((r) => {
+    if (!r.data_revisao || r.concluida) return false;
+    try {
+      return isToday(parseISO(r.data_revisao));
+    } catch {
+      return false;
+    }
+  });
+
+  const primeiroNome =
+    profileRes.data?.full_name?.trim().split(' ')[0] ||
+    user.email?.split('@')[0] ||
+    'Hélio';
+
   const dashboardData = {
-    todasSessoes: sessoes || [],
-    tarefasPendentes: tarefas?.filter(t => !t.completed) || [],
-    revisoes: revisoes || [], // Passa TODAS as revisões
-    lembretes: lembretes || [], // Passa TODOS os lembretes
+    todasSessoes,
+    tarefasPendentes,
+    revisoes,
+    lembretes,
     sessoesDeHoje,
-    sessoesConcluidasTotal: sessoes?.filter(s => s.concluida).length || 0,
+    sessoesConcluidasTotal,
     revisoesDeHoje,
-    studyGoals: studyGoals || [],
+    studyGoals,
+    userName: primeiroNome,
   };
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Bem-vindo(a) de volta! Aqui está um resumo do seu progresso.</p>
-      </header>
-      <DashboardClient data={dashboardData} />
-    </div>
-  );
+  return <DashboardClient data={dashboardData} />;
 }

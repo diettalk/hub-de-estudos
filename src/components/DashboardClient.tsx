@@ -6,6 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import { DashboardListItem } from '@/components/ui/DashboardListItem';
 import { updateRevisaoStatus, toggleTarefa, toggleConclusaoSessao } from '@/app/actions';
 import {
+  usePlanoAtivo,
+  sessaoPertenceAoPlano,
+  revisaoPertenceAoPlano,
+  limparTagPlano,
+} from '@/lib/plano-ativo';
+import {
   type SessaoEstudo,
   type Tarefa,
   type Revisao,
@@ -68,7 +74,6 @@ const MOTIVATIONAL_QUOTES = [
   { text: 'Não espere por circunstâncias ideais. Elas nunca chegam. Comece onde você está.', author: 'Sêneca' },
 ];
 
-// Ordem de Segunda a Domingo
 const DIAS_SEG_A_DOM = [
   { curto: 'SEG', completo: 'Segunda-feira' },
   { curto: 'TER', completo: 'Terça-feira' },
@@ -79,7 +84,6 @@ const DIAS_SEG_A_DOM = [
   { curto: 'DOM', completo: 'Domingo' },
 ];
 
-// Extrai minutos da tag "⏱️ HH:MM:SS" ou assume 50min por sessão concluída
 function extrairMinutosSessao(diario: string | null): number {
   if (diario) {
     const match = diario.match(/⏱️\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -107,10 +111,9 @@ function formatarMinutosCurto(min: number): string {
   return h > 0 ? `${h}h${m > 0 ? `${m.toString().padStart(2, '0')}min` : ''}` : `${m}min`;
 }
 
-// Retorna a Segunda-feira da semana de uma data
 function getMondayOfCurrentWeek(baseDate: Date, offsetWeeks = 0): Date {
   const d = new Date(baseDate);
-  const day = d.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+  const day = d.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diffToMonday - offsetWeeks * 7);
   d.setHours(0, 0, 0, 0);
@@ -119,6 +122,23 @@ function getMondayOfCurrentWeek(baseDate: Date, offsetWeeks = 0): Date {
 
 export function DashboardClient({ data }: { data: DashboardData }) {
   const supabase = createClient();
+  const { planoAtivo } = usePlanoAtivo();
+
+  // -------------------------------------------------------------
+  // FILTRO AUTOMÁTICO PELO PLANO ATIVO SELECIONADO NA SIDEBAR
+  // -------------------------------------------------------------
+  const sessoesDoPlano = useMemo(
+    () => data.todasSessoes.filter((s) => sessaoPertenceAoPlano(s, planoAtivo)),
+    [data.todasSessoes, planoAtivo]
+  );
+
+  const revisoesHojeDoPlano = useMemo(
+    () =>
+      data.revisoesDeHoje.filter((r) =>
+        revisaoPertenceAoPlano(r, planoAtivo, sessoesDoPlano)
+      ),
+    [data.revisoesDeHoje, planoAtivo, sessoesDoPlano]
+  );
 
   const [streakOffsetDays, setStreakOffsetDays] = useState(0);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -131,36 +151,25 @@ export function DashboardClient({ data }: { data: DashboardData }) {
   const [desafioNome, setDesafioNome] = useState<string>('');
   const [desafioData, setDesafioData] = useState<string>('');
 
+  // Sincroniza o card "Próximo Desafio" com o Plano Ativo
+  useEffect(() => {
+    if (planoAtivo) {
+      setDesafioNome(planoAtivo.nome);
+      setDesafioData(planoAtivo.data_prova ? planoAtivo.data_prova.split('T')[0] : '');
+    } else {
+      const savedDesafioNome = localStorage.getItem('hub_desafio_nome');
+      const savedDesafioData = localStorage.getItem('hub_desafio_data');
+      if (savedDesafioNome) setDesafioNome(savedDesafioNome);
+      if (savedDesafioData) setDesafioData(savedDesafioData);
+    }
+  }, [planoAtivo]);
+
   useEffect(() => {
     const savedHoras = localStorage.getItem('hub_meta_horas_semana');
     const savedQuestoes = localStorage.getItem('hub_meta_questoes_semana');
     if (savedHoras) setMetaHorasSemana(parseFloat(savedHoras) || 7.5);
     if (savedQuestoes) setMetaQuestoesSemana(parseInt(savedQuestoes, 10) || 150);
-
-    const savedDesafioNome = localStorage.getItem('hub_desafio_nome');
-    const savedDesafioData = localStorage.getItem('hub_desafio_data');
-    if (savedDesafioNome) setDesafioNome(savedDesafioNome);
-    if (savedDesafioData) setDesafioData(savedDesafioData);
-
-    async function loadConcursoAtivo() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: concursos } = await supabase
-        .from('concursos')
-        .select('nome, data_prova')
-        .eq('user_id', user.id)
-        .eq('status', 'ativo')
-        .not('data_prova', 'is', null)
-        .order('data_prova', { ascending: true })
-        .limit(1);
-
-      if (concursos && concursos.length > 0 && concursos[0].data_prova) {
-        setDesafioNome(concursos[0].nome);
-        setDesafioData(concursos[0].data_prova.split('T')[0]);
-      }
-    }
-    loadConcursoAtivo();
-  }, [supabase]);
+  }, []);
 
   const salvarMetasSemanais = (horas: number, questoes: number) => {
     setMetaHorasSemana(horas);
@@ -179,7 +188,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
   };
 
   // -------------------------------------------------------------
-  // 1. ESTRATIFICAÇÃO DE TEMPO E KPIS (HOJE | SEMANA | MÊS | TOTAL)
+  // 1. ESTRATIFICAÇÃO DE TEMPO E KPIS DO PLANO ATIVO
   // -------------------------------------------------------------
   const {
     estratificacaoTempo,
@@ -194,7 +203,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     const currentMonth = now.getUTCMonth();
     const currentYear = now.getUTCFullYear();
 
-    // Segunda e Domingo da semana atual
     const segundaAtual = getMondayOfCurrentWeek(now, 0);
     const domingoAtual = new Date(segundaAtual);
     domingoAtual.setDate(segundaAtual.getDate() + 6);
@@ -216,11 +224,11 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     let acertosMes = 0;
     let questoesMes = 0;
 
-    const totalTopicos = data.todasSessoes.length;
-    const topicosConcluidos = data.todasSessoes.filter((s) => s.concluida).length;
+    const totalTopicos = sessoesDoPlano.length;
+    const topicosConcluidos = sessoesDoPlano.filter((s) => s.concluida).length;
     let topicosMes = 0;
 
-    data.todasSessoes.forEach((s) => {
+    sessoesDoPlano.forEach((s) => {
       if (!s.concluida) return;
 
       const dataStr = s.data_estudo ? s.data_estudo.split('T')[0] : null;
@@ -269,7 +277,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         hoje: { texto: formatarMinutosCurto(minutosHoje), min: minutosHoje, sub: `${blocosHoje} ${blocosHoje === 1 ? 'bloco' : 'blocos'}` },
         semana: { texto: formatarMinutosCurto(minutosSemana), min: minutosSemana, sub: `${diasAtivosSemana.size}/7 dias ativos` },
         mes: { texto: formatarMinutosCurto(minutosMes), min: minutosMes, sub: `${diasAtivosMes.size} dias ativos` },
-        total: { texto: formatarMinutosCurto(minutosTotal), min: minutosTotal, sub: `${diasAtivosTotal.size} dias na história` },
+        total: { texto: formatarMinutosCurto(minutosTotal), min: minutosTotal, sub: `${diasAtivosTotal.size} dias estudados` },
       },
       kpiDesempenhoTotal: { perc: percTotal, total: questoesTotal },
       kpiDesempenhoMes: { perc: percMes, total: questoesMes },
@@ -277,14 +285,14 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       kpiEditalTexto: `${topicosConcluidos} de ${totalTopicos} tópicos`,
       kpiEditalMes: topicosMes,
     };
-  }, [data.todasSessoes]);
+  }, [sessoesDoPlano]);
 
   // -------------------------------------------------------------
-  // 2. CONSTÂNCIA NOS ESTUDOS (30 DIAS)
+  // 2. CONSTÂNCIA NOS ESTUDOS DO PLANO ATIVO (30 DIAS)
   // -------------------------------------------------------------
   const { diasConstancia, periodoLabel, statusConstancia } = useMemo(() => {
     const datasEstudadas = new Set(
-      data.todasSessoes
+      sessoesDoPlano
         .filter((s) => s.concluida && s.data_estudo)
         .map((s) => s.data_estudo!.split('T')[0])
     );
@@ -338,10 +346,10 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       periodoLabel: `${fmtCurto(inicioPeriodo)} ~ ${fmtCurto(fimPeriodo)}`,
       statusConstancia: { streakAtual, diasSemEstudo },
     };
-  }, [data.todasSessoes, streakOffsetDays]);
+  }, [sessoesDoPlano, streakOffsetDays]);
 
   // -------------------------------------------------------------
-  // 3. METAS SEMANAIS + ÚLTIMAS 5 SEMANAS (SEGUNDA A DOMINGO)
+  // 3. METAS SEMANAIS + ÚLTIMAS 5 SEMANAS DO PLANO ATIVO
   // -------------------------------------------------------------
   const { metasSemanaAtual, historicoCincoSemanas } = useMemo(() => {
     const metaMinutos = Math.round(metaHorasSemana * 60);
@@ -354,7 +362,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       let mins = 0;
       let questoes = 0;
 
-      data.todasSessoes.forEach((s) => {
+      sessoesDoPlano.forEach((s) => {
         if (!s.concluida || !s.data_estudo) return;
         const dISO = s.data_estudo.split('T')[0];
         if (dISO >= iniISO && dISO <= fimISO) {
@@ -404,10 +412,10 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       },
       historicoCincoSemanas: cincoSemanas,
     };
-  }, [data.todasSessoes, metaHorasSemana, metaQuestoesSemana]);
+  }, [sessoesDoPlano, metaHorasSemana, metaQuestoesSemana]);
 
   // -------------------------------------------------------------
-  // 4. TABELA "ESTUDO SEMANAL" DE SEGUNDA A DOMINGO (TEMPO & QUESTÕES/%)
+  // 4. TABELA "ESTUDO SEMANAL" DE SEGUNDA A DOMINGO DO PLANO ATIVO
   // -------------------------------------------------------------
   const { linhasTabelaSemanal, labelSemanaTabela, resumoSemanal } = useMemo(() => {
     const hoje = new Date();
@@ -446,7 +454,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       let acDia = 0;
       let qDia = 0;
 
-      data.todasSessoes.forEach((s) => {
+      sessoesDoPlano.forEach((s) => {
         if (s.concluida && s.data_estudo && s.data_estudo.split('T')[0] === iso) {
           minsDia += extrairMinutosSessao(s.diario_de_bordo);
           blocosDia += 1;
@@ -493,10 +501,10 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         percSemanaGeral,
       },
     };
-  }, [data.todasSessoes, weekOffset]);
+  }, [sessoesDoPlano, weekOffset]);
 
   // -------------------------------------------------------------
-  // 5. DISTRIBUIÇÃO DE TEMPO POR MATÉRIA (HOJE | SEMANA | MÊS | TOTAL)
+  // 5. DISTRIBUIÇÃO DE TEMPO POR MATÉRIA DO PLANO ATIVO
   // -------------------------------------------------------------
   const distribuicaoMaterias = useMemo(() => {
     const hoje = new Date();
@@ -509,7 +517,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     const mapa: Record<string, number> = {};
     let somaTotal = 0;
 
-    data.todasSessoes.forEach((s) => {
+    sessoesDoPlano.forEach((s) => {
       if (!s.concluida) return;
       const dStr = s.data_estudo ? s.data_estudo.split('T')[0] : null;
       if (!dStr && tempoTab !== 'total') return;
@@ -539,13 +547,13 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         perc: somaTotal > 0 ? Math.round((minutos / somaTotal) * 100) : 0,
       }))
       .sort((a, b) => b.minutos - a.minutos);
-  }, [data.todasSessoes, tempoTab]);
+  }, [sessoesDoPlano, tempoTab]);
 
   // -------------------------------------------------------------
-  // 6. FILA DO PLANEJAMENTO DO DIA
+  // 6. FILA DO PLANEJAMENTO DO DIA DO PLANO ATIVO
   // -------------------------------------------------------------
   const { proximoEstudo, filaProximosEstudos } = useMemo(() => {
-    const pendentes = [...data.todasSessoes]
+    const pendentes = [...sessoesDoPlano]
       .filter((s) => !s.concluida)
       .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 
@@ -553,7 +561,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
       proximoEstudo: pendentes[0] || null,
       filaProximosEstudos: pendentes.slice(1, 4),
     };
-  }, [data.todasSessoes]);
+  }, [sessoesDoPlano]);
 
   const handleIniciarEstudo = (sessao: SessaoEstudo) => {
     window.dispatchEvent(
@@ -561,7 +569,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         detail: {
           disciplinaId: sessao.disciplina_id ? String(sessao.disciplina_id) : undefined,
           materiaNome: sessao.materia_nome,
-          topico: sessao.foco_sugerido || '',
+          topico: limparTagPlano(sessao.foco_sugerido),
           tempoFormatado: '00:45:00',
         },
       })
@@ -601,14 +609,21 @@ export function DashboardClient({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-5">
-      {/* CABEÇALHO SUPERIOR */}
+      {/* CABEÇALHO SUPERIOR COM SELO DO PLANO ATIVO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            Bom te ver, {nomeUsuario}
-          </h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+              Bom te ver, {nomeUsuario}
+            </h1>
+            <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-bold">
+              {planoAtivo ? `🎯 ${planoAtivo.nome}` : '🌐 Todos os Planos'}
+            </Badge>
+          </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Pronto para mais um dia?
+            {planoAtivo
+              ? `Exibindo métricas, ciclo e revisões exclusivos do plano ${planoAtivo.nome}`
+              : 'Visão unificada de todos os seus planos de estudo'}
           </p>
         </div>
 
@@ -622,9 +637,8 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         </Button>
       </div>
 
-      {/* TOPO EM 4 COLUNAS: TEMPO ESTRATIFICADO | DESEMPENHO | EDITAL | FRASE */}
+      {/* TOPO EM 4 COLUNAS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
-        {/* 1. TEMPO DE ESTUDO (COM RESUMO HOJE / SEMANA / MÊS / TOTAL) */}
         <div className="flex flex-col justify-between p-4 rounded-2xl bg-card border border-border shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -638,7 +652,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             <span className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
               {estratificacaoTempo.total.texto}
             </span>
-            <span className="text-[11px] text-muted-foreground">total</span>
+            <span className="text-[11px] text-muted-foreground">no plano</span>
           </div>
           <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-border/50 text-[10px]">
             <div>
@@ -656,7 +670,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        {/* 2. DESEMPENHO */}
         <div className="flex flex-col justify-between p-4 rounded-2xl bg-card border border-border shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -679,7 +692,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           </span>
         </div>
 
-        {/* 3. PROGRESSO NO EDITAL */}
         <div className="flex flex-col justify-between p-4 rounded-2xl bg-card border border-border shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -702,7 +714,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           </span>
         </div>
 
-        {/* 4. CITAÇÃO MOTIVACIONAL */}
         <div className="flex flex-col justify-between p-4 rounded-2xl bg-card border border-border shadow-xs">
           <Quote className="w-5 h-5 text-emerald-500/60" />
           <p className="text-xs text-muted-foreground italic text-center my-2 px-2 leading-relaxed">
@@ -714,13 +725,11 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* CONSTÂNCIA NOS ESTUDOS + ESTRATIFICAÇÃO (HOJE | SEMANA | MÊS | TOTAL) */}
-      {/* ------------------------------------------------------------- */}
+      {/* CONSTÂNCIA NOS ESTUDOS + ESTRATIFICAÇÃO */}
       <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            Constância nos Estudos
+            Constância nos Estudos {planoAtivo ? `— ${planoAtivo.nome}` : ''}
           </span>
 
           <div className="flex items-center gap-2 text-xs font-semibold text-emerald-500">
@@ -753,11 +762,11 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             />
             {statusConstancia.streakAtual > 0 ? (
               <span className="text-muted-foreground">
-                Você está há <strong className="text-emerald-500">{statusConstancia.streakAtual} {statusConstancia.streakAtual === 1 ? 'dia' : 'dias'}</strong> seguidos estudando!
+                Você está há <strong className="text-emerald-500">{statusConstancia.streakAtual} {statusConstancia.streakAtual === 1 ? 'dia' : 'dias'}</strong> seguidos estudando neste plano!
               </span>
             ) : (
               <span className="text-muted-foreground">
-                <strong className="text-emerald-500">{statusConstancia.diasSemEstudo} dias</strong> sem estudo. Bastam <strong className="text-emerald-500">20 minutos</strong> para o dia contar.
+                <strong className="text-emerald-500">{statusConstancia.diasSemEstudo} dias</strong> sem estudo neste plano. Bastam <strong className="text-emerald-500">20 minutos</strong> para o dia contar.
               </span>
             )}
           </div>
@@ -767,7 +776,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           </Link>
         </div>
 
-        {/* Bolinhas dos 30 dias */}
         <div className="flex items-center justify-between gap-1 overflow-x-auto py-1 no-scrollbar">
           {diasConstancia.map((d) => (
             <div
@@ -786,7 +794,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           ))}
         </div>
 
-        {/* FAIXA ESTRATIFICADA DA CONSTÂNCIA: HOJE | SEMANA | MÊS | TOTAL */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-border/60">
           <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/50 flex items-center justify-between">
             <div>
@@ -820,7 +827,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
 
           <div className="p-2.5 rounded-xl bg-secondary/30 border border-border/50 flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold uppercase text-muted-foreground block">Total Acumulado</span>
+              <span className="text-[10px] font-bold uppercase text-muted-foreground block">Total no Plano</span>
               <span className="text-sm font-extrabold text-primary">{estratificacaoTempo.total.texto}</span>
             </div>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-background text-muted-foreground">
@@ -830,13 +837,11 @@ export function DashboardClient({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* ------------------------------------------------------------- */}
-      {/* GRID PRINCIPAL EM 2 COLUNAS                                   */}
-      {/* ------------------------------------------------------------- */}
+      {/* GRID PRINCIPAL EM 2 COLUNAS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* COLUNA DA ESQUERDA (7 COLS) */}
         <div className="lg:col-span-7 space-y-5">
-          {/* 1. PLANEJAMENTO DO DIA */}
+          {/* 1. PLANEJAMENTO DO DIA DO PLANO ATIVO */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs">
@@ -884,13 +889,13 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                   </div>
                   <div className="space-y-1 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Próximo
+                      Próximo no Plano
                     </span>
                     <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
                       {proximoEstudo.materia_nome || 'Disciplina do Ciclo'}
                     </h3>
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
-                      <span>{proximoEstudo.foco_sugerido || 'Tópico programado'}</span>
+                      <span>{limparTagPlano(proximoEstudo.foco_sugerido) || 'Tópico programado'}</span>
                       <PenLine className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                     </p>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-0.5">
@@ -933,9 +938,16 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                 </div>
               </div>
             ) : (
-              <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-secondary/10">
-                <CheckCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                <p className="text-xs font-bold text-foreground">Todos os blocos do ciclo foram concluídos!</p>
+              <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-secondary/10 space-y-2">
+                <CheckCheck className="w-8 h-8 text-emerald-500 mx-auto" />
+                <p className="text-xs font-bold text-foreground">
+                  Nenhum bloco pendente para {planoAtivo ? planoAtivo.nome : 'este plano'}!
+                </p>
+                <Link href="/ciclo">
+                  <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl mt-1">
+                    Montar / Ver Ciclo deste Plano
+                  </Button>
+                </Link>
               </div>
             )}
 
@@ -967,7 +979,9 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                             {item.materia_nome || 'Matéria'}
                           </h4>
                           <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
-                            <span>{item.foco_sugerido || `Bloco #${item.ordem.toString().padStart(2, '0')}`}</span>
+                            <span>
+                              {limparTagPlano(item.foco_sugerido) || `Bloco #${item.ordem.toString().padStart(2, '0')}`}
+                            </span>
                             <PenLine className="w-3 h-3 text-emerald-500 flex-shrink-0" />
                           </p>
                         </div>
@@ -1003,16 +1017,20 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             )}
           </div>
 
-          {/* 2. REVISÕES DO DIA */}
+          {/* 2. REVISÕES DO DIA DO PLANO ATIVO */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-              Revisões do Dia
+              Revisões do Dia {planoAtivo ? `(${planoAtivo.nome})` : ''}
             </span>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <CalendarCheck className="w-4 h-4 text-emerald-500" />
-                <span>{data.revisoesDeHoje.length > 0 ? `${data.revisoesDeHoje.length} revisões para hoje` : 'Sem revisões'}</span>
+                <span>
+                  {revisoesHojeDoPlano.length > 0
+                    ? `${revisoesHojeDoPlano.length} revisões para hoje`
+                    : 'Sem revisões neste plano'}
+                </span>
               </div>
               <Link href="/revisoes">
                 <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-full px-3">
@@ -1021,9 +1039,9 @@ export function DashboardClient({ data }: { data: DashboardData }) {
               </Link>
             </div>
 
-            {data.revisoesDeHoje.length > 0 ? (
+            {revisoesHojeDoPlano.length > 0 ? (
               <div className="space-y-1.5">
-                {data.revisoesDeHoje.map((r) => (
+                {revisoesHojeDoPlano.map((r) => (
                   <DashboardListItem
                     key={r.id}
                     id={r.id}
@@ -1040,7 +1058,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                 <RotateCcw className="w-6 h-6 text-emerald-500 mx-auto" />
                 <p className="text-xs font-bold text-foreground">Tudo em dia!</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Você não tem revisões agendadas para hoje.
+                  Você não tem revisões agendadas para hoje neste plano.
                 </p>
               </div>
             )}
@@ -1104,11 +1122,9 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        {/* =========================================================== */}
-        {/* COLUNA DA DIREITA (5 COLS)                                  */}
-        {/* =========================================================== */}
+        {/* COLUNA DA DIREITA (5 COLS) */}
         <div className="lg:col-span-5 space-y-5">
-          {/* 1. PRÓXIMO DESAFIO (CONTAGEM REGRESSIVA) */}
+          {/* 1. PRÓXIMO DESAFIO (SINCRONIZADO COM O PLANO ATIVO) */}
           <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border shadow-xs">
             <div className="flex items-start gap-3.5">
               <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500 flex-shrink-0 mt-0.5">
@@ -1119,21 +1135,21 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">
-                        Próximo Desafio
+                        Prova do Plano Ativo
                       </span>
                       <Popover>
                         <PopoverTrigger asChild>
                           <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground underline">
-                            Alterar
+                            Alterar data
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-72 p-3.5 space-y-3 bg-card border-border text-xs" align="end">
-                          <h4 className="font-bold">Definir Próxima Prova</h4>
+                          <h4 className="font-bold">Definir Data da Prova</h4>
                           <input
                             type="text"
                             value={desafioNome}
                             onChange={(e) => setDesafioNome(e.target.value)}
-                            placeholder="Ex.: SEDES-DF, Polícia Federal..."
+                            placeholder="Nome da Prova"
                             className="h-9 w-full px-3 rounded-lg bg-background border border-border"
                           />
                           <input
@@ -1168,14 +1184,14 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                 ) : (
                   <div className="space-y-1">
                     <h3 className="text-xs sm:text-sm font-bold text-foreground">
-                      Qual é o seu próximo desafio?
+                      {planoAtivo ? planoAtivo.nome : 'Qual é o seu próximo desafio?'}
                     </h3>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Acompanhe a contagem regressiva para sua próxima prova e mantenha o foco.{' '}
+                      Acompanhe a contagem regressiva para sua próxima prova.{' '}
                       <Popover>
                         <PopoverTrigger asChild>
                           <button type="button" className="text-emerald-500 font-semibold hover:underline inline-flex items-center gap-0.5">
-                            Adicionar prova +
+                            Definir data da prova +
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-72 p-3.5 space-y-3 bg-card border-border text-xs" align="end">
@@ -1184,7 +1200,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                             type="text"
                             value={desafioNome}
                             onChange={(e) => setDesafioNome(e.target.value)}
-                            placeholder="Nome do Concurso (Ex.: SEDES-DF)"
+                            placeholder="Nome do Concurso"
                             className="h-9 w-full px-3 rounded-lg bg-background border border-border"
                           />
                           <input
@@ -1354,7 +1370,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             </div>
           </div>
 
-          {/* 3. CARD ESTUDO SEMANAL: TABELA DE SEGUNDA A DOMINGO (TEMPO vs QUESTÕES & %) */}
+          {/* 3. TABELA DE ESTUDO SEMANAL (SEG A DOM) */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -1380,7 +1396,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
               </div>
             </div>
 
-            {/* Alternador: Tempo vs Questões & % Acerto */}
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-muted-foreground">
                 {weeklyTableMode === 'tempo' ? 'Visão de carga horária diária' : 'Visão de questões e % de acerto'}
@@ -1413,7 +1428,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
               </div>
             </div>
 
-            {/* TABELA DE SEGUNDA A DOMINGO */}
             <div className="rounded-xl border border-border overflow-hidden">
               <table className="w-full text-xs text-left">
                 <thead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-secondary/50 border-b border-border">
@@ -1433,7 +1447,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {linhasTabelaSemanal.map((row) => {
-                    const percBarraTempo = Math.min(100, Math.round((row.minutos / 180) * 100)); // 3h referência
+                    const percBarraTempo = Math.min(100, Math.round((row.minutos / 180) * 100));
                     return (
                       <tr
                         key={row.dateISO}
@@ -1442,7 +1456,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
                           row.isToday ? 'bg-emerald-500/[0.06]' : 'hover:bg-secondary/30'
                         )}
                       >
-                        {/* Coluna Dia (SEG a DOM) */}
                         <td className="py-2.5 px-3 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span
@@ -1523,7 +1536,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
               </table>
             </div>
 
-            {/* RODAPÉ RESUMIDO DA TABELA SEMANAL */}
             {weeklyTableMode === 'tempo' ? (
               <div className="p-3 rounded-xl bg-secondary/40 border border-border/60 flex items-center justify-between text-xs">
                 <div>
@@ -1577,7 +1589,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             )}
           </div>
 
-          {/* 4. DISTRIBUIÇÃO DE TEMPO POR MATÉRIA (HOJE | SEMANA | MÊS | TOTAL) */}
+          {/* 4. TEMPO POR DISCIPLINA NO PLANO ATIVO */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
