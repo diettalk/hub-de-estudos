@@ -86,19 +86,27 @@ export function revisaoPertenceAoPlano(
 export function usePlanoAtivo() {
   const [planos, setPlanos] = useState<PlanoAtivoInfo[]>([]);
   const [planoAtivoId, setPlanoAtivoId] = useState<number | 'all' | null>(null);
+  const [userId, setUserId] = useState<string>('anon');
   const [isLoadingPlano, setIsLoadingPlano] = useState(true);
   const supabase = createClient();
 
   const carregarPlanos = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       setIsLoadingPlano(false);
       return;
     }
 
+    setUserId(user.id);
+    const storageKey = `hub_plano_ativo_id_${user.id}`;
+
     const { data } = await supabase
       .from('concursos')
-      .select('id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))')
+      .select(
+        'id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))'
+      )
       .eq('user_id', user.id)
       .order('ordem', { ascending: true, nullsFirst: false });
 
@@ -129,15 +137,17 @@ export function usePlanoAtivo() {
 
       setPlanos(formatados);
 
-      const saved = localStorage.getItem('hub_plano_ativo_id');
+      const saved =
+        localStorage.getItem(storageKey) || localStorage.getItem('hub_plano_ativo_id');
       if (saved === 'all') {
         setPlanoAtivoId('all');
       } else if (saved && formatados.some((p) => String(p.id) === saved)) {
         setPlanoAtivoId(Number(saved));
       } else {
-        const primeiroAtivo = formatados.find((p) => p.status === 'ativo') || formatados[0];
+        const primeiroAtivo =
+          formatados.find((p) => p.status === 'ativo') || formatados[0];
         setPlanoAtivoId(primeiroAtivo.id);
-        localStorage.setItem('hub_plano_ativo_id', String(primeiroAtivo.id));
+        localStorage.setItem(storageKey, String(primeiroAtivo.id));
       }
     } else {
       setPlanos([]);
@@ -163,8 +173,11 @@ export function usePlanoAtivo() {
 
   const alterarPlanoAtivo = (novoId: number | 'all') => {
     setPlanoAtivoId(novoId);
+    localStorage.setItem(`hub_plano_ativo_id_${userId}`, String(novoId));
     localStorage.setItem('hub_plano_ativo_id', String(novoId));
-    window.dispatchEvent(new CustomEvent('plano-ativo-changed', { detail: { id: novoId } }));
+    window.dispatchEvent(
+      new CustomEvent('plano-ativo-changed', { detail: { id: novoId } })
+    );
   };
 
   const planoAtivo =
