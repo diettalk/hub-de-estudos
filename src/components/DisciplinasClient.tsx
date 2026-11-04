@@ -1,1301 +1,1403 @@
-'use client';
+'use server';
 
-import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
-import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
-import {
-  ChevronRight,
-  PanelLeftClose,
-  PanelLeft,
-  FolderTree,
-  BookOpen,
-  Search,
-  Plus,
-  Clock,
-  FileText,
-  BarChart3,
-  ListChecks,
-  Pencil,
-  Trash2,
-  Wand2,
-  Check,
-  Loader2,
-  X,
-} from 'lucide-react';
-import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
-import TextEditor from '@/components/TextEditor';
-import {
-  createPagina,
-  updatePaginaContent,
-  updateItemTitle,
-  deleteItem,
-  linkPastaToConcurso,
-} from '@/app/actions';
-import { usePlanoAtivo } from '@/lib/plano-ativo';
-import { type JSONContent } from '@tiptap/react';
-import { type Node, type SessaoEstudo } from '@/lib/types';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
+import { add } from 'date-fns';
+import { type SessaoEstudo } from '@/lib/types';
+import { JSONContent } from '@tiptap/react';
 
-interface DisciplinasClientProps {
-  paginaTree: Node[];
-  initialPage: Node | null;
+type Flashcard = {
+  question: string;
+  answer: string;
+};
+
+async function getAuth() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, user };
 }
 
-interface TopicoCheckState {
-  teoria: boolean;
-  revisao: boolean;
-  questoes: boolean;
+async function isOwnedParent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: 'paginas',
+  parentId: number | null,
+  userId: string
+): Promise<boolean> {
+  if (parentId === null) return true;
+  if (!Number.isInteger(parentId)) return false;
+  const { data } = await supabase
+    .from(table)
+    .select('id')
+    .eq('id', parentId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return !!data;
 }
 
-const ICON_COLORS = [
-  'bg-rose-500/15 text-rose-400 border-rose-500/30',
-  'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-];
+// --- AÇÕES DE CONCURSOS ---
+export async function addConcurso(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-function extrairMinutos(diario: string | null): number {
-  if (diario) {
-    const match = diario.match(/⏱️\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    if (match) {
-      const hrs = parseInt(match[1], 10) || 0;
-      const mins = parseInt(match[2], 10) || 0;
-      const secs = parseInt(match[3] || '0', 10) || 0;
-      return hrs * 60 + mins + Math.round(secs / 60);
-    }
+  const nome = formData.get('nome') as string;
+  const banca = (formData.get('banca') as string) || '';
+  const dataProva = (formData.get('data_prova') as string) || null;
+  const status = (formData.get('status') as string) || 'ativo';
+  const edital_url = (formData.get('edital_url') as string) || '';
+  const prioridadesRaw = formData.get('prioridades') as string;
+  const prioridades = prioridadesRaw
+    ? prioridadesRaw
+        .split('\n')
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+    : [];
+
+  if (!nome || !status) {
+    return { error: 'Preencha o nome do plano.' };
   }
-  return 50;
-}
 
-function formatarHoras(min: number): string {
-  if (min <= 0) return '—';
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? `${h}h${m.toString().padStart(2, '0')}min` : `${m}min`;
-}
-
-function findNodePath(nodes: Node[], nodeId: string | number): Node[] {
-  const targetId = String(nodeId);
-  function search(currentPath: Node[], currentNodes: Node[]): Node[] | null {
-    for (const node of currentNodes) {
-      const newPath = [...currentPath, node];
-      if (String(node.id) === targetId) return newPath;
-      if (Array.isArray(node.children) && node.children.length > 0) {
-        const foundPath = search(newPath, node.children);
-        if (foundPath) return foundPath;
-      }
-    }
-    return null;
+  const { error } = await supabase.from('concursos').insert({
+    nome,
+    banca,
+    data_prova: dataProva || null,
+    status,
+    edital_url,
+    prioridades,
+    user_id: user.id,
+  });
+  if (error) {
+    console.error('Erro ao adicionar concurso:', error);
+    return { error: 'Não foi possível adicionar o plano.' };
   }
-  return search([], nodes) || [];
+
+  revalidatePath('/guia-estudos');
+  return { success: true };
 }
 
-function countAllTopics(nodes: Node[]): number {
-  let count = 0;
-  for (const n of nodes) {
-    if (Array.isArray(n.children) && n.children.length > 0) {
-      count += n.children.length + countAllTopics(n.children);
-    }
+export async function updateConcurso(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const id = Number(formData.get('id'));
+  const nome = formData.get('nome') as string;
+  const banca = (formData.get('banca') as string) || '';
+  const dataProva = (formData.get('data_prova') as string) || null;
+  const status = (formData.get('status') as string) || 'ativo';
+  const edital_url = (formData.get('edital_url') as string) || '';
+  const prioridadesRaw = formData.get('prioridades') as string;
+  const prioridades = prioridadesRaw
+    ? prioridadesRaw
+        .split('\n')
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0)
+    : [];
+
+  if (!id || !nome || !status) {
+    return { error: 'Preencha os campos obrigatórios.' };
   }
-  return count;
+
+  const { error } = await supabase
+    .from('concursos')
+    .update({
+      nome,
+      banca,
+      data_prova: dataProva || null,
+      status,
+      edital_url,
+      prioridades,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('Erro ao atualizar concurso:', error);
+    return { error: 'Não foi possível atualizar o plano.' };
+  }
+
+  revalidatePath('/guia-estudos');
+  return { success: true };
 }
 
-function extrairTopicosDoTextoEdital(textoBruto: string): string[] {
-  if (!textoBruto.trim()) return [];
-  const processado = textoBruto
-    .replace(/\r\n/g, '\n')
-    .replace(/;\s*/g, '\n')
-    .replace(/\s+(?=\d+(?:\.\d+)*\s*[-.)]\s*[A-ZÀ-Ú])/g, '\n')
-    .replace(/\s+(?=\d+(?:\.\d+)+\s+[A-ZÀ-Ú])/g, '\n');
-
-  return processado
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 2);
+export async function updateConcursoStatus(
+  id: number,
+  status: 'ativo' | 'previsto' | 'arquivado'
+) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase
+    .from('concursos')
+    .update({ status })
+    .eq('id', id)
+    .eq('user_id', user.id);
+  revalidatePath('/guia-estudos');
 }
 
-export default function DisciplinasClient({ paginaTree, initialPage }: DisciplinasClientProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const supabase = createClient();
-  const [isPending, startTransition] = useTransition();
-  const { planoAtivo, recarregarPlanos } = usePlanoAtivo();
+export async function deleteConcurso(id: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('concursos').delete().eq('id', id).eq('user_id', user.id);
+  revalidatePath('/guia-estudos');
+}
 
-  const [selectedPage, setSelectedPage] = useState<Node | null>(initialPage);
-  const [isMounted, setIsMounted] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+// --- AÇÕES DE DISCIPLINAS ---
+export async function createPagina(
+  parentId: number | null,
+  title: string,
+  emoji: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!(await isOwnedParent(supabase, 'paginas', parentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
-  const [activeSubTab, setActiveSubTab] = useState<'historico' | 'editor'>('historico');
-  const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const { data, error } = await supabase
+    .from('paginas')
+    .insert({
+      title,
+      emoji,
+      parent_id: parentId,
+      user_id: user.id,
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    })
+    .select()
+    .single();
 
-  const [checksMap, setChecksMap] = useState<Record<number, TopicoCheckState>>({});
-  const storageKeyChecks = 'hub_edital_checks_geral';
+  if (error) return { error: error.message };
 
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importDisciplinaModo, setImportDisciplinaModo] = useState<'nova' | 'existente'>('nova');
-  const [importDisciplinaId, setImportDisciplinaId] = useState<string>('');
-  const [importNovaDisciplinaNome, setImportNovaDisciplinaNome] = useState('');
-  const [importTextoBruto, setImportTextoBruto] = useState('');
+  revalidatePath('/disciplinas');
+  revalidatePath('/guia-estudos');
+  return { data };
+}
 
-  const [showNewDiscForm, setShowNewDiscForm] = useState(false);
-  const [novaDiscNome, setNovaDiscNome] = useState('');
-  const [novoTopicoNome, setNovoTopicoNome] = useState('');
+export async function updatePaginaContent(id: number, content: string) {
+  if (isNaN(id)) return { error: 'ID da página inválido.' };
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKeyChecks);
-      if (saved) setChecksMap(JSON.parse(saved));
-    } catch {
-      // ignore
-    }
-  }, []);
+  let parsedContent: JSONContent;
+  try {
+    parsedContent = JSON.parse(content);
+  } catch {
+    return { error: 'Conteúdo inválido.' };
+  }
 
-  const handleToggleCheck = (
-    topicoId: number,
-    campo: 'teoria' | 'revisao' | 'questoes'
-  ) => {
-    setChecksMap((prev) => {
-      const atual = prev[topicoId] || {
-        teoria: false,
-        revisao: false,
-        questoes: false,
-      };
-      const proximo = {
-        ...prev,
-        [topicoId]: { ...atual, [campo]: !atual[campo] },
-      };
-      localStorage.setItem(storageKeyChecks, JSON.stringify(proximo));
-      return proximo;
-    });
-  };
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-  const fetchSessoes = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from('ciclo_sessoes')
-      .select('*')
+  const { error } = await supabase
+    .from('paginas')
+    .update({ content: parsedContent })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Erro ao salvar conteúdo da página:', error);
+    return { error: error.message };
+  }
+
+  return { success: true };
+}
+
+export async function deletePagina(id: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('paginas').delete().eq('id', id).eq('user_id', user.id);
+  revalidatePath('/disciplinas');
+}
+
+// --- AÇÕES DE VÍNCULO ---
+export async function linkPastaToConcurso(concursoId: number, paginaId: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  const [{ data: concurso }, { data: pagina }] = await Promise.all([
+    supabase
+      .from('concursos')
+      .select('id')
+      .eq('id', concursoId)
       .eq('user_id', user.id)
-      .order('data_estudo', { ascending: false });
-    if (data) setSessoes(data as SessaoEstudo[]);
-  }, [supabase]);
+      .maybeSingle(),
+    supabase
+      .from('paginas')
+      .select('id')
+      .eq('id', paginaId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+  ]);
+  if (!concurso || !pagina) return;
 
-  useEffect(() => {
-    setIsMounted(true);
-    fetchSessoes();
+  const { data: existingLink } = await supabase
+    .from('concurso_paginas')
+    .select()
+    .match({ concurso_id: concursoId, pagina_id: paginaId })
+    .maybeSingle();
 
-    const handleRefresh = () => {
-      setTimeout(fetchSessoes, 600);
-    };
-    window.addEventListener('open-registro-estudo', handleRefresh);
-    return () => window.removeEventListener('open-registro-estudo', handleRefresh);
-  }, [fetchSessoes]);
+  if (existingLink) return;
 
-  const activeId = searchParams.get('page');
+  await supabase
+    .from('concurso_paginas')
+    .insert({ concurso_id: concursoId, pagina_id: paginaId });
+  revalidatePath('/guia-estudos');
+}
 
-  const breadcrumbPath = useMemo(() => {
-    if (!activeId) return [];
-    return findNodePath(paginaTree, activeId);
-  }, [paginaTree, activeId]);
+export async function unlinkPastaFromConcurso(
+  concursoId: number,
+  paginaId: number
+) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  const [{ data: concurso }, { data: pagina }] = await Promise.all([
+    supabase
+      .from('concursos')
+      .select('id')
+      .eq('id', concursoId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    supabase
+      .from('paginas')
+      .select('id')
+      .eq('id', paginaId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+  ]);
+  if (!concurso || !pagina) return;
+  await supabase
+    .from('concurso_paginas')
+    .delete()
+    .match({ concurso_id: concursoId, pagina_id: paginaId });
+  revalidatePath('/guia-estudos');
+}
 
-  // Busca sempre o nó da árvore paginaTree para manter a lista de tópicos filhos (children) atualizada!
-  useEffect(() => {
-    const id = searchParams.get('page');
-    if (id) {
-      const path = findNodePath(paginaTree, id);
-      if (path.length > 0) {
-        const treeNode = path[path.length - 1];
-        setSelectedPage({
-          ...treeNode,
-          content:
-            initialPage && Number(initialPage.id) === Number(treeNode.id)
-              ? initialPage.content
-              : treeNode.content,
-        });
-      } else if (initialPage && Number(id) === Number(initialPage.id)) {
-        setSelectedPage(initialPage);
-      }
+// --- AÇÕES DO CICLO DE ESTUDOS ---
+export async function updateSessaoEstudo(
+  sessaoData: Partial<SessaoEstudo> & { id: number }
+) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const { id, ...data } = sessaoData;
+  if (!id) return { error: 'ID da sessão é necessário para atualização.' };
+
+  const updateData = {
+    disciplina_id: data.disciplina_id,
+    materia_nome: data.materia_nome,
+    foco_sugerido: data.foco_sugerido,
+    diario_de_bordo: data.diario_de_bordo,
+    questoes_acertos: data.questoes_acertos,
+    questoes_total: data.questoes_total,
+    materia_finalizada: data.materia_finalizada,
+  };
+
+  const { error } = await supabase
+    .from('ciclo_sessoes')
+    .update(updateData)
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('Erro no auto-save da sessão:', error);
+    return { error: 'Falha ao salvar alterações da sessão.' };
+  }
+  revalidatePath('/ciclo');
+}
+
+export async function updateDatasSessaoEstudo(
+  sessaoId: number,
+  campoAlterado:
+    | 'data_estudo'
+    | 'data_revisao_1'
+    | 'data_revisao_2'
+    | 'data_revisao_3',
+  novaData: string
+) {
+  if (!novaData) return { error: 'Data inválida.' };
+
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const dataFormatada = new Date(novaData + 'T03:00:00');
+
+  try {
+    if (campoAlterado === 'data_estudo') {
+      const rev1 = add(dataFormatada, { days: 1 });
+      const rev7 = add(dataFormatada, { days: 7 });
+      const rev30 = add(dataFormatada, { days: 30 });
+
+      await supabase
+        .from('ciclo_sessoes')
+        .update({
+          data_estudo: dataFormatada.toISOString(),
+          data_revisao_1: rev1.toISOString(),
+          data_revisao_2: rev7.toISOString(),
+          data_revisao_3: rev30.toISOString(),
+        })
+        .eq('id', sessaoId)
+        .eq('user_id', user.id);
+
+      await Promise.all([
+        supabase
+          .from('revisoes')
+          .update({ data_revisao: rev1.toISOString().split('T')[0] })
+          .match({
+            ciclo_sessao_id: sessaoId,
+            tipo_revisao: '24h',
+            user_id: user.id,
+          }),
+        supabase
+          .from('revisoes')
+          .update({ data_revisao: rev7.toISOString().split('T')[0] })
+          .match({
+            ciclo_sessao_id: sessaoId,
+            tipo_revisao: '7 dias',
+            user_id: user.id,
+          }),
+        supabase
+          .from('revisoes')
+          .update({ data_revisao: rev30.toISOString().split('T')[0] })
+          .match({
+            ciclo_sessao_id: sessaoId,
+            tipo_revisao: '30 dias',
+            user_id: user.id,
+          }),
+      ]);
     } else {
-      setSelectedPage(null);
-    }
-  }, [searchParams, initialPage, paginaTree]);
-
-  const handleSave = async (newContent: JSONContent) => {
-    if (!selectedPage) return;
-    const contentAsString = JSON.stringify(newContent);
-    await updatePaginaContent(selectedPage.id, contentAsString);
-  };
-
-  const handleRenameNode = (node: Node) => {
-    const novoNome = window.prompt('Novo nome para a disciplina / tópico:', node.title);
-    if (!novoNome || !novoNome.trim() || novoNome.trim() === node.title) return;
-    startTransition(async () => {
-      const res = await updateItemTitle('paginas', Number(node.id), novoNome.trim());
-      if (res.error) toast.error(res.error);
-      else {
-        toast.success('Renomeado com sucesso!');
-        router.refresh();
-      }
-    });
-  };
-
-  const handleDeleteNode = (node: Node) => {
-    if (!confirm(`Tem certeza que deseja excluir "${node.title}" e todas as subpáginas dele?`)) {
-      return;
-    }
-    startTransition(async () => {
-      const res = await deleteItem('paginas', Number(node.id));
-      if (res.error) toast.error(res.error);
-      else {
-        toast.success(`"${node.title}" foi excluído.`);
-        if (selectedPage && Number(selectedPage.id) === Number(node.id)) {
-          router.push('/disciplinas');
-        } else {
-          router.refresh();
-        }
-      }
-    });
-  };
-
-  const calcularMetricasNode = useCallback(
-    (node: Node) => {
-      const topicosFilhos = Array.isArray(node.children) ? node.children : [];
-      const sessoesDaMateria = sessoes.filter(
-        (s) =>
-          s.disciplina_id === node.id ||
-          s.materia_nome?.trim().toLowerCase() === node.title.trim().toLowerCase()
-      );
-
-      const concluidas = sessoesDaMateria.filter((s) => s.concluida);
-      let minutos = 0;
-      let acertos = 0;
-      let questoes = 0;
-
-      concluidas.forEach((s) => {
-        minutos += extrairMinutos(s.diario_de_bordo);
-        acertos += Number(s.questoes_acertos) || 0;
-        questoes += Number(s.questoes_total) || 0;
-      });
-
-      let avancoPerc = 0;
-      if (topicosFilhos.length > 0) {
-        const topicosConcluidos = topicosFilhos.filter((t) => {
-          if (checksMap[Number(t.id)]?.teoria) return true;
-          return concluidas.some((s) =>
-            (s.foco_sugerido || '').toLowerCase().includes(t.title.toLowerCase())
-          );
-        }).length;
-        avancoPerc = Math.min(100, Math.round((topicosConcluidos / topicosFilhos.length) * 100));
-      } else if (sessoesDaMateria.length > 0) {
-        avancoPerc = Math.min(100, Math.round((concluidas.length / sessoesDaMateria.length) * 100));
-      }
-
-      const desempenhoPerc = questoes > 0 ? Math.round((acertos / questoes) * 100) : null;
-
-      return {
-        topicosFilhos,
-        topicosCount: topicosFilhos.length,
-        minutos,
-        acertos,
-        questoes,
-        avancoPerc,
-        desempenhoPerc,
-        historico: concluidas,
+      const mapaRevisao = {
+        data_revisao_1: { tipo: '24h', campoDB: 'data_revisao_1' },
+        data_revisao_2: { tipo: '7 dias', campoDB: 'data_revisao_2' },
+        data_revisao_3: { tipo: '30 dias', campoDB: 'data_revisao_3' },
       };
-    },
-    [sessoes, checksMap]
-  );
+      const infoRevisao = mapaRevisao[campoAlterado];
 
-  const resumoGeral = useMemo(() => {
-    let totalMinutos = 0;
-    let totalAcertos = 0;
-    let totalQuestoes = 0;
-    let somaAvanco = 0;
+      await supabase
+        .from('ciclo_sessoes')
+        .update({
+          [infoRevisao.campoDB]: dataFormatada.toISOString(),
+        })
+        .eq('id', sessaoId)
+        .eq('user_id', user.id);
 
-    paginaTree.forEach((d) => {
-      const m = calcularMetricasNode(d);
-      totalMinutos += m.minutos;
-      totalAcertos += m.acertos;
-      totalQuestoes += m.questoes;
-      somaAvanco += m.avancoPerc;
-    });
-
-    const avancoGeral =
-      paginaTree.length > 0 ? Math.round(somaAvanco / paginaTree.length) : 0;
-    const desempenhoGeral =
-      totalQuestoes > 0 ? Math.round((totalAcertos / totalQuestoes) * 100) : null;
-    const totalTopicos = countAllTopics(paginaTree) || paginaTree.length;
-
-    return {
-      disciplinasCount: paginaTree.length,
-      topicosCount: totalTopicos,
-      minutos: totalMinutos,
-      acertos: totalAcertos,
-      questoes: totalQuestoes,
-      avancoPerc: avancoGeral,
-      desempenhoPerc: desempenhoGeral,
-    };
-  }, [paginaTree, calcularMetricasNode]);
-
-  const topicosExtraidosPreview = useMemo(
-    () => extrairTopicosDoTextoEdital(importTextoBruto),
-    [importTextoBruto]
-  );
-
-  const handleConfirmarImportacaoMassa = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (topicosExtraidosPreview.length === 0) {
-      toast.error('Cole o conteúdo do edital para extrair os tópicos.');
-      return;
+      await supabase
+        .from('revisoes')
+        .update({
+          data_revisao: dataFormatada.toISOString().split('T')[0],
+        })
+        .match({
+          ciclo_sessao_id: sessaoId,
+          tipo_revisao: infoRevisao.tipo,
+          user_id: user.id,
+        });
     }
 
-    startTransition(async () => {
-      let targetDiscId: number | null = null;
+    revalidatePath('/ciclo');
+    revalidatePath('/revisoes');
+    revalidatePath('/calendario');
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Erro ao atualizar datas:', errorMessage);
+    return { error: errorMessage };
+  }
+}
 
-      if (importDisciplinaModo === 'nova') {
-        if (!importNovaDisciplinaNome.trim()) {
-          toast.error('Digite o nome da disciplina.');
-          return;
-        }
-        const novaRes = await createPagina(null, importNovaDisciplinaNome.trim(), '📘');
-        if (novaRes.error || !novaRes.data) {
-          toast.error(novaRes.error || 'Erro ao criar a disciplina.');
-          return;
-        }
-        targetDiscId = Number(novaRes.data.id);
+export async function toggleConclusaoSessao(
+  sessaoId: number,
+  isCompleting: boolean
+) {
+  const { supabase, user } = await getAuth();
 
-        if (planoAtivo) {
-          await linkPastaToConcurso(planoAtivo.id, targetDiscId);
-        }
-      } else {
-        if (!importDisciplinaId) {
-          toast.error('Selecione uma disciplina existente.');
-          return;
-        }
-        targetDiscId = Number(importDisciplinaId);
-      }
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (isNaN(sessaoId)) return { error: 'Ação inválida.' };
 
-      let criados = 0;
-      for (const rawTitulo of topicosExtraidosPreview) {
-        const tituloLimpo = rawTitulo.replace(/^[•*-]\s*/, '').trim().slice(0, 240);
-        if (tituloLimpo) {
-          const res = await createPagina(targetDiscId, tituloLimpo, '📄');
-          if (!res.error) criados += 1;
-        }
-      }
+  try {
+    if (isCompleting) {
+      const studyDate = new Date();
+      const { data: sessao, error: sessaoError } = await supabase
+        .from('ciclo_sessoes')
+        .select('disciplina_id, foco_sugerido, materia_nome')
+        .eq('id', sessaoId)
+        .eq('user_id', user.id)
+        .single();
+      if (sessaoError)
+        throw new Error(`Falha ao buscar sessão: ${sessaoError.message}`);
+      if (!sessao) throw new Error('Sessão de estudo não encontrada.');
 
-      if (criados === 0) {
-        toast.error('Não foi possível criar os tópicos.');
-      } else {
-        toast.success(`${criados} tópicos do edital importados com sucesso!`);
-        setImportTextoBruto('');
-        setImportNovaDisciplinaNome('');
-        setImportModalOpen(false);
-        recarregarPlanos();
-        router.refresh();
-      }
-    });
-  };
+      const rev1 = add(studyDate, { days: 1 });
+      const rev7 = add(studyDate, { days: 7 });
+      const rev30 = add(studyDate, { days: 30 });
 
-  const handleCreateRootDisciplina = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!novaDiscNome.trim()) return;
-    startTransition(async () => {
-      const res = await createPagina(null, novaDiscNome.trim(), '📘');
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        if (planoAtivo && res.data?.id) {
-          await linkPastaToConcurso(planoAtivo.id, Number(res.data.id));
-        }
-        toast.success(`Disciplina "${novaDiscNome}" criada!`);
-        setNovaDiscNome('');
-        setShowNewDiscForm(false);
-        recarregarPlanos();
-        router.refresh();
-      }
-    });
-  };
+      await supabase
+        .from('ciclo_sessoes')
+        .update({
+          concluida: true,
+          data_estudo: studyDate.toISOString(),
+          data_revisao_1: rev1.toISOString(),
+          data_revisao_2: rev7.toISOString(),
+          data_revisao_3: rev30.toISOString(),
+        })
+        .eq('id', sessaoId)
+        .eq('user_id', user.id);
 
-  const handleCreateSubTopico = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPage || !novoTopicoNome.trim()) return;
-    startTransition(async () => {
-      const res = await createPagina(Number(selectedPage.id), novoTopicoNome.trim(), '📄');
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success('Tópico adicionado!');
-        setNovoTopicoNome('');
-        router.refresh();
-      }
-    });
-  };
+      await supabase
+        .from('revisoes')
+        .delete()
+        .eq('ciclo_sessao_id', sessaoId)
+        .eq('user_id', user.id);
 
-  // Modal reutilizável em ambas as telas
-  const renderImportModal = () => {
-    if (!importModalOpen) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
-        <div
-          className="w-full max-w-[780px] max-h-[90vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl overflow-hidden text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
-            <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-emerald-500" />
-                <span>Importar Tópicos do Edital em Massa</span>
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Cole o conteúdo copiado do PDF do edital que separamos todos os tópicos automaticamente!
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setImportModalOpen(false)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+      const revisoesParaInserir = [
+        {
+          ciclo_sessao_id: sessaoId,
+          user_id: user.id,
+          data_revisao: rev1.toISOString().split('T')[0],
+          tipo_revisao: '24h',
+          concluida: false,
+          materia_nome: sessao.materia_nome,
+          foco_sugerido: sessao.foco_sugerido,
+        },
+        {
+          ciclo_sessao_id: sessaoId,
+          user_id: user.id,
+          data_revisao: rev7.toISOString().split('T')[0],
+          tipo_revisao: '7 dias',
+          concluida: false,
+          materia_nome: sessao.materia_nome,
+          foco_sugerido: sessao.foco_sugerido,
+        },
+        {
+          ciclo_sessao_id: sessaoId,
+          user_id: user.id,
+          data_revisao: rev30.toISOString().split('T')[0],
+          tipo_revisao: '30 dias',
+          concluida: false,
+          materia_nome: sessao.materia_nome,
+          foco_sugerido: sessao.foco_sugerido,
+        },
+      ];
 
-          <form
-            onSubmit={handleConfirmarImportacaoMassa}
-            className="p-6 space-y-4 overflow-y-auto flex-1 text-xs"
-          >
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setImportDisciplinaModo('nova')}
-                className={cn(
-                  'px-3.5 py-1.5 rounded-xl font-bold transition-all',
-                  importDisciplinaModo === 'nova'
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-secondary text-muted-foreground'
-                )}
-              >
-                Criar Nova Disciplina
-              </button>
-              <button
-                type="button"
-                onClick={() => setImportDisciplinaModo('existente')}
-                className={cn(
-                  'px-3.5 py-1.5 rounded-xl font-bold transition-all',
-                  importDisciplinaModo === 'existente'
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-secondary text-muted-foreground'
-                )}
-              >
-                Adicionar em Disciplina Existente
-              </button>
-            </div>
+      const { error: insertError } = await supabase
+        .from('revisoes')
+        .insert(revisoesParaInserir);
+      if (insertError)
+        throw new Error(`Falha ao inserir novas revisões: ${insertError.message}`);
+    } else {
+      await supabase
+        .from('ciclo_sessoes')
+        .update({
+          concluida: false,
+          data_estudo: null,
+          data_revisao_1: null,
+          data_revisao_2: null,
+          data_revisao_3: null,
+        })
+        .eq('id', sessaoId)
+        .eq('user_id', user.id);
+      await supabase
+        .from('revisoes')
+        .delete()
+        .eq('ciclo_sessao_id', sessaoId)
+        .eq('user_id', user.id);
+    }
 
-            {importDisciplinaModo === 'nova' ? (
-              <div className="space-y-1.5">
-                <label className="font-semibold block">Nome da Nova Disciplina *</label>
-                <Input
-                  value={importNovaDisciplinaNome}
-                  onChange={(e) => setImportNovaDisciplinaNome(e.target.value)}
-                  placeholder="Ex.: Direito Administrativo, Língua Portuguesa..."
-                  className="h-10 text-xs bg-secondary/30 rounded-xl"
-                  required
-                />
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <label className="font-semibold block">Selecione a Disciplina *</label>
-                <select
-                  value={importDisciplinaId}
-                  onChange={(e) => setImportDisciplinaId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl border border-border bg-secondary/30 text-xs font-medium text-foreground"
-                  required
-                >
-                  <option value="">Escolha uma matéria...</option>
-                  {paginaTree.map((d) => (
-                    <option key={d.id} value={String(d.id)} className="bg-card">
-                      {d.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+    revalidatePath('/ciclo');
+    revalidatePath('/revisoes');
+    revalidatePath('/calendario');
+    revalidatePath('/');
+    return { success: true };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : 'Ocorreu um erro desconhecido.';
+    console.error('[toggleConclusaoSessao] Erro Capturado:', errorMessage);
+    return { error: errorMessage };
+  }
+}
 
-            <div className="space-y-1.5">
-              <label className="font-semibold block">
-                Cole aqui o conteúdo programático copiado do Edital (PDF) *
-              </label>
-              <textarea
-                rows={6}
-                value={importTextoBruto}
-                onChange={(e) => setImportTextoBruto(e.target.value)}
-                placeholder="Ex.: 1. Compreensão e interpretação de textos. 2. Tipologia textual. 3. Ortografia oficial..."
-                className="w-full rounded-xl border border-border bg-secondary/30 p-3 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                required
-              />
-            </div>
+export async function toggleFinalizarSessao(id: number, finalizada: boolean) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-            {topicosExtraidosPreview.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/30 space-y-2">
-                <span className="font-bold text-emerald-400 block">
-                  ✓ {topicosExtraidosPreview.length} tópicos identificados automaticamente:
-                </span>
-                <div className="max-h-36 overflow-y-auto space-y-1 pr-1 text-[11px] text-muted-foreground">
-                  {topicosExtraidosPreview.map((t, i) => (
-                    <div key={i} className="truncate">
-                      • {t.replace(/^[•*-]\s*/, '')}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+  const { error } = await supabase
+    .from('ciclo_sessoes')
+    .update({ materia_finalizada: finalizada })
+    .eq('id', id)
+    .eq('user_id', user.id);
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setImportModalOpen(false)}
-                className="h-9 text-xs rounded-xl"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="h-9 px-5 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl gap-1.5"
-              >
-                {isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5" />
-                )}
-                <span>Importar {topicosExtraidosPreview.length} Tópicos</span>
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // =========================================================================
-  // 1. QUANDO UMA DISCIPLINA OU TÓPICO ESTÁ SELECIONADO (?page=ID)
-  // =========================================================================
-  if (selectedPage && isMounted) {
-    const rootDisciplina = breadcrumbPath[0] || selectedPage;
-    const m = calcularMetricasNode(rootDisciplina);
-
-    return (
-      <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-6.5rem)] w-full">
-        {renderImportModal()}
-
-        <div
-          className={cn(
-            'transition-all duration-300 ease-in-out flex-shrink-0',
-            isSidebarOpen
-              ? 'w-full lg:w-80 h-72 lg:h-[calc(100vh-6.5rem)]'
-              : 'w-0 hidden lg:block overflow-hidden'
-          )}
-        >
-          <div className="h-full rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
-            <HierarchicalSidebar
-              treeData={paginaTree}
-              table="paginas"
-              title="Estrutura do Caderno"
-              activeId={activeId}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-card border border-border shadow-xs">
-            <div className="flex items-center gap-2 overflow-x-auto text-xs font-medium text-muted-foreground no-scrollbar">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="h-8 w-8 text-muted-foreground hover:text-foreground flex-shrink-0"
-              >
-                {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
-              </Button>
-
-              <div className="h-4 w-px bg-border flex-shrink-0" />
-
-              <Link
-                href="/disciplinas"
-                className="hover:text-foreground flex items-center gap-1.5 transition-colors flex-shrink-0 font-semibold"
-              >
-                <FolderTree className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Todas as Disciplinas</span>
-              </Link>
-
-              {breadcrumbPath.map((node, index) => (
-                <React.Fragment key={node.id}>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0" />
-                  <Link
-                    href={`/disciplinas?page=${node.id}`}
-                    className={cn(
-                      'px-2 py-0.5 rounded-md transition-colors truncate max-w-[200px]',
-                      index === breadcrumbPath.length - 1
-                        ? 'font-bold text-foreground bg-secondary'
-                        : 'hover:text-foreground hover:bg-secondary/40'
-                    )}
-                  >
-                    {node.title}
-                  </Link>
-                </React.Fragment>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="inline-flex p-0.5 rounded-xl bg-secondary/60 border border-border text-xs">
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('historico')}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
-                    activeSubTab === 'historico'
-                      ? 'bg-emerald-500 text-white shadow-2xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Edital & Histórico</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('editor')}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
-                    activeSubTab === 'editor'
-                      ? 'bg-emerald-500 text-white shadow-2xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Caderno de Resumos</span>
-                </button>
-              </div>
-
-              <Button
-                size="sm"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent('open-registro-estudo', {
-                      detail: {
-                        disciplinaId: String(rootDisciplina.id),
-                        topico: selectedPage.id !== rootDisciplina.id ? selectedPage.title : '',
-                      },
-                    })
-                  )
-                }
-                className="h-8 px-3 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Registrar Estudo</span>
-              </Button>
-            </div>
-          </div>
-
-          {activeSubTab === 'historico' ? (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="p-4 rounded-2xl bg-card border border-border">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-                    Avanço no Edital
-                  </span>
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="h-2 flex-1 rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{ width: `${m.avancoPerc}%` }}
-                      />
-                    </div>
-                    <span className="text-lg font-extrabold">{m.avancoPerc}%</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-card border border-border">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-                    Horas de Estudo
-                  </span>
-                  <span className="text-xl font-extrabold text-foreground mt-1 block">
-                    {formatarHoras(m.minutos)}
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-card border border-border">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-                    Questões Respondidas
-                  </span>
-                  <span className="text-xl font-extrabold text-foreground mt-1 block">
-                    {m.questoes > 0 ? `${m.acertos} / ${m.questoes}` : '—'}
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-card border border-border">
-                  <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-                    Desempenho
-                  </span>
-                  <span
-                    className={cn(
-                      'text-xl font-extrabold mt-1 block',
-                      m.desempenhoPerc === null
-                        ? 'text-muted-foreground'
-                        : m.desempenhoPerc >= 80
-                        ? 'text-emerald-400'
-                        : m.desempenhoPerc >= 60
-                        ? 'text-amber-400'
-                        : 'text-rose-400'
-                    )}
-                  >
-                    {m.desempenhoPerc !== null ? `${m.desempenhoPerc}%` : '—'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                <div className="lg:col-span-7 p-5 rounded-2xl bg-card border border-border space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Tópicos do Edital — {selectedPage.title} ({(selectedPage.children || []).length})
-                    </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setImportDisciplinaModo('existente');
-                        setImportDisciplinaId(String(selectedPage.id));
-                        setImportModalOpen(true);
-                      }}
-                      className="h-7 px-2.5 text-[11px] font-bold gap-1 rounded-lg text-emerald-400 border-emerald-500/30"
-                    >
-                      <Wand2 className="w-3 h-3" />
-                      <span>Colar Vários Tópicos do PDF</span>
-                    </Button>
-                  </div>
-
-                  <form onSubmit={handleCreateSubTopico} className="flex gap-2">
-                    <Input
-                      value={novoTopicoNome}
-                      onChange={(e) => setNovoTopicoNome(e.target.value)}
-                      placeholder="Adicionar novo tópico avulso..."
-                      className="h-9 text-xs bg-secondary/30 rounded-xl"
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={isPending}
-                      className="h-9 px-3 text-xs font-bold bg-emerald-500 text-white rounded-xl"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </form>
-
-                  {(selectedPage.children || []).length > 0 ? (
-                    <div className="rounded-xl border border-border overflow-hidden">
-                      <table className="w-full text-xs text-left">
-                        <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-secondary/40 border-b border-border">
-                          <tr>
-                            <th className="py-2 px-3">Tópico</th>
-                            <th className="py-2 px-2 text-center w-14" title="Teoria Concluída">Teoria</th>
-                            <th className="py-2 px-2 text-center w-14" title="Revisão Concluída">Rev.</th>
-                            <th className="py-2 px-2 text-center w-14" title="Questões Feitas">Quest.</th>
-                            <th className="py-2 px-3 text-right w-28">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/60">
-                          {(selectedPage.children || []).map((topico, idx) => {
-                            const tid = Number(topico.id);
-                            const st = checksMap[tid] || {
-                              teoria: false,
-                              revisao: false,
-                              questoes: false,
-                            };
-
-                            return (
-                              <tr
-                                key={topico.id}
-                                className={cn(
-                                  'hover:bg-secondary/20 transition-colors group',
-                                  st.teoria && 'bg-emerald-500/[0.04]'
-                                )}
-                              >
-                                <td className="py-2.5 px-3">
-                                  <Link
-                                    href={`/disciplinas?page=${topico.id}`}
-                                    onClick={() => setActiveSubTab('editor')}
-                                    className={cn(
-                                      'font-medium text-foreground hover:text-emerald-400 block truncate max-w-[260px]',
-                                      st.teoria && 'text-emerald-400 font-semibold'
-                                    )}
-                                  >
-                                    {idx + 1}. {topico.title}
-                                  </Link>
-                                </td>
-
-                                <td className="py-2.5 px-2 text-center">
-                                  <Checkbox
-                                    checked={st.teoria}
-                                    onCheckedChange={() => handleToggleCheck(tid, 'teoria')}
-                                    className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                                  />
-                                </td>
-
-                                <td className="py-2.5 px-2 text-center">
-                                  <Checkbox
-                                    checked={st.revisao}
-                                    onCheckedChange={() => handleToggleCheck(tid, 'revisao')}
-                                    className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
-                                  />
-                                </td>
-
-                                <td className="py-2.5 px-2 text-center">
-                                  <Checkbox
-                                    checked={st.questoes}
-                                    onCheckedChange={() => handleToggleCheck(tid, 'questoes')}
-                                    className="data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
-                                  />
-                                </td>
-
-                                <td className="py-2.5 px-3 text-right">
-                                  <div className="flex items-center justify-end gap-1">
-                                    <Link
-                                      href={`/disciplinas?page=${topico.id}`}
-                                      onClick={() => setActiveSubTab('editor')}
-                                      title="Abrir Caderno de Resumo"
-                                    >
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-primary">
-                                        <FileText className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </Link>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRenameNode(topico)}
-                                      className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-                                      title="Renomear"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteNode(topico)}
-                                      className="p-1 rounded hover:bg-rose-500/15 text-muted-foreground hover:text-rose-400"
-                                      title="Excluir"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground py-6 text-center">
-                      Nenhum sub-tópico cadastrado aqui. Use o campo acima ou clique em &ldquo;Colar Vários Tópicos do PDF&rdquo;!
-                    </p>
-                  )}
-                </div>
-
-                <div className="lg:col-span-5 p-5 rounded-2xl bg-card border border-border space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Histórico de Registros ({m.historico.length})
-                  </h3>
-
-                  {m.historico.length > 0 ? (
-                    <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
-                      {m.historico.map((reg) => {
-                        const mins = extrairMinutos(reg.diario_de_bordo);
-                        const ac = Number(reg.questoes_acertos) || 0;
-                        const tot = Number(reg.questoes_total) || 0;
-                        const perc = tot > 0 ? Math.round((ac / tot) * 100) : null;
-
-                        return (
-                          <div
-                            key={reg.id}
-                            className="p-3.5 rounded-xl bg-secondary/30 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-[10px] font-mono">
-                                  {reg.data_estudo
-                                    ? new Date(reg.data_estudo + 'T12:00:00Z').toLocaleDateString('pt-BR')
-                                    : 'Sem data'}
-                                </Badge>
-                                <span className="font-bold text-foreground truncate">
-                                  {reg.foco_sugerido || 'Estudo Geral'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="font-mono font-bold text-emerald-400">
-                                {formatarHoras(mins)}
-                              </span>
-                              {tot > 0 && (
-                                <Badge variant="outline" className="text-[10px] font-bold">
-                                  {ac}/{tot} ({perc}%)
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="py-12 text-center rounded-xl bg-secondary/20 border border-border/50 space-y-2">
-                      <Clock className="w-6 h-6 text-emerald-500 mx-auto" />
-                      <p className="text-xs font-bold text-foreground">
-                        Nenhum estudo registrado para esta disciplina ainda.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 min-h-[560px] rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col">
-              <TextEditor
-                key={selectedPage.id}
-                pageId={Number(selectedPage.id)}
-                pageTitle={selectedPage.title}
-                initialContent={selectedPage.content ?? null}
-                onSave={handleSave}
-                onClose={() => router.push('/disciplinas')}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  if (error) {
+    console.error('Erro ao atualizar finalização da sessão:', error);
+    return { error: 'Falha ao atualizar a sessão.' };
   }
 
-  // =========================================================================
-  // 2. VISÃO PRINCIPAL DE "/disciplinas"
-  // =========================================================================
-  const disciplinasFiltradas = paginaTree.filter((d) =>
-    d.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  revalidatePath('/ciclo');
+  return { success: true };
+}
 
-  return (
-    <div className="space-y-6">
-      {renderImportModal()}
+export async function seedFase1Ciclo() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            Disciplinas & Edital
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Gerencie suas matérias, tópicos verticalizados do edital, histórico e cadernos de resumo
-          </p>
-        </div>
+  const { count } = await supabase
+    .from('ciclo_sessoes')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id);
+  if (count && count > 0) return { message: 'O ciclo já possui dados.' };
 
-        <Button
-          size="sm"
-          onClick={() => {
-            setImportDisciplinaModo('nova');
-            setImportModalOpen(true);
-          }}
-          className="self-start sm:self-auto h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
-        >
-          <Wand2 className="w-4 h-4" />
-          <span>Importar Edital em Massa</span>
-        </Button>
-      </div>
+  const fase1Template = [
+    {
+      ordem: 1,
+      materia_nome: 'LP',
+      foco_sugerido:
+        '1.1 Interpretação de Textos: Análise de textos complexos (jornalísticos).',
+    },
+  ];
+  const sessoesParaInserir = fase1Template.map((sessao) => ({
+    ...sessao,
+    user_id: user.id,
+  }));
+  await supabase.from('ciclo_sessoes').insert(sessoesParaInserir);
+  revalidatePath('/ciclo');
+}
 
-      <div className="p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-2xl flex-shrink-0">
-            📚
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-extrabold text-foreground">
-                Base Geral de Disciplinas
-              </h2>
-              <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
-                ✓ ATIVO
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Todas as matérias sincronizadas com seus planos e ciclos
-            </p>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1">
-              <span className="flex items-center gap-1">
-                <BookOpen className="w-3.5 h-3.5" />
-                <strong className="text-foreground">{resumoGeral.disciplinasCount}</strong> disciplinas
-              </span>
-              <span className="flex items-center gap-1">
-                <ListChecks className="w-3.5 h-3.5" />
-                <strong className="text-foreground">{resumoGeral.topicosCount}</strong> tópicos
-              </span>
-            </div>
-          </div>
-        </div>
+export async function addSessaoCiclo() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: ultimaSessao } = await supabase
+    .from('ciclo_sessoes')
+    .select('ordem')
+    .eq('user_id', user.id)
+    .order('ordem', { ascending: false })
+    .limit(1)
+    .single();
+  const proximaOrdem = (ultimaSessao?.ordem || 0) + 1;
+  await supabase
+    .from('ciclo_sessoes')
+    .insert({ ordem: proximaOrdem, user_id: user.id });
+  revalidatePath('/ciclo');
+}
 
-        <div className="flex flex-wrap items-center gap-6 lg:border-l lg:border-border lg:pl-6">
-          <div>
-            <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-              Avanço no Edital
-            </span>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="w-16 h-1.5 rounded-full bg-secondary overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full"
-                  style={{ width: `${resumoGeral.avancoPerc}%` }}
-                />
-              </div>
-              <span className="text-sm font-extrabold">{resumoGeral.avancoPerc}%</span>
-            </div>
-          </div>
+export async function deleteSessaoCiclo(id: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  if (isNaN(id)) return;
+  await supabase
+    .from('ciclo_sessoes')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+  revalidatePath('/ciclo');
+}
 
-          <div>
-            <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-              Horas de Estudo
-            </span>
-            <span className="text-sm font-extrabold block mt-1">
-              {formatarHoras(resumoGeral.minutos)}
-            </span>
-          </div>
+export async function deleteSessoesEmMassa(ids: number[]) {
+  if (!ids || ids.length === 0) {
+    return { error: 'Nenhum ID fornecido para exclusão.' };
+  }
 
-          <div>
-            <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-              Questões
-            </span>
-            <span className="text-sm font-extrabold block mt-1">
-              {resumoGeral.questoes > 0 ? resumoGeral.questoes : '—'}
-            </span>
-          </div>
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
 
-          <div>
-            <span className="text-[10px] font-bold uppercase text-muted-foreground block">
-              Desempenho
-            </span>
-            <span
-              className={cn(
-                'text-sm font-extrabold block mt-1',
-                resumoGeral.desempenhoPerc !== null ? 'text-emerald-400' : 'text-muted-foreground'
-              )}
-            >
-              {resumoGeral.desempenhoPerc !== null ? `${resumoGeral.desempenhoPerc}%` : '—'}
-            </span>
-          </div>
-        </div>
-      </div>
+  try {
+    const { error } = await supabase
+      .from('ciclo_sessoes')
+      .delete()
+      .in('id', ids)
+      .eq('user_id', user.id);
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar disciplina..."
-            className="h-10 pl-10 text-xs bg-card border-border rounded-xl"
-          />
-        </div>
+    if (error) throw error;
 
-        {showNewDiscForm ? (
-          <form onSubmit={handleCreateRootDisciplina} className="flex items-center gap-2">
-            <Input
-              value={novaDiscNome}
-              onChange={(e) => setNovaDiscNome(e.target.value)}
-              placeholder="Nome da nova disciplina..."
-              className="h-10 w-64 text-xs bg-card rounded-xl"
-              autoFocus
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isPending}
-              className="h-10 px-4 text-xs font-bold bg-emerald-500 text-white rounded-xl"
-            >
-              Salvar
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowNewDiscForm(false)}
-              className="h-10 w-10 rounded-xl"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </form>
-        ) : (
-          <Button
-            onClick={() => setShowNewDiscForm(true)}
-            variant="outline"
-            className="h-10 px-4 text-xs font-bold rounded-xl gap-1.5 self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4 text-emerald-500" />
-            <span>Nova Disciplina Individual</span>
-          </Button>
-        )}
-      </div>
+    revalidatePath('/ciclo');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Falha ao excluir sessoes em massa:', message);
+    return { error: message };
+  }
+}
 
-      <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left whitespace-nowrap">
-            <thead className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-secondary/40 border-b border-border">
-              <tr>
-                <th className="py-3.5 px-5 text-emerald-500">Disciplina ▲</th>
-                <th className="py-3.5 px-4 w-48">Avanço no Edital</th>
-                <th className="py-3.5 px-4 text-center w-36">Horas de Estudo</th>
-                <th className="py-3.5 px-4 text-center w-32">Questões</th>
-                <th className="py-3.5 px-4 text-center w-32">Desempenho</th>
-                <th className="py-3.5 px-4 text-right w-44">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {disciplinasFiltradas.length > 0 ? (
-                disciplinasFiltradas.map((disc, idx) => {
-                  const md = calcularMetricasNode(disc);
-                  const colorClass = ICON_COLORS[idx % ICON_COLORS.length];
+// --- AÇÕES DO CALENDÁRIO ---
+export async function addLembrete(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const titulo = formData.get('titulo') as string;
+  const data = formData.get('data') as string;
+  const cor = formData.get('cor') as string;
+  if (!titulo || !data)
+    return { error: 'Preencha o título e a data do lembrete.' };
+  const { error } = await supabase
+    .from('lembretes')
+    .insert({ titulo, data, cor, user_id: user.id });
+  if (error) {
+    console.error('Erro ao adicionar lembrete:', error);
+    return { error: 'Não foi possível adicionar o lembrete.' };
+  }
+  revalidatePath('/calendario');
+  return { success: true };
+}
 
-                  return (
-                    <tr
-                      key={disc.id}
-                      onClick={() => {
-                        setActiveSubTab('historico');
-                        router.push(`/disciplinas?page=${disc.id}`);
-                      }}
-                      className="hover:bg-secondary/30 transition-colors cursor-pointer group"
-                    >
-                      <td className="py-3.5 px-5">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={cn(
-                              'w-8 h-8 rounded-lg border flex items-center justify-center text-sm flex-shrink-0',
-                              colorClass
-                            )}
-                          >
-                            {disc.emoji || '📘'}
-                          </span>
-                          <div>
-                            <span className="font-bold text-foreground group-hover:text-emerald-400 transition-colors block truncate max-w-[340px]">
-                              {disc.title}
-                            </span>
-                            {md.topicosCount > 0 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                {md.topicosCount} tópicos no edital
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
+export async function updateLembrete(
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const id = Number(formData.get('id'));
+  const titulo = formData.get('titulo') as string;
+  const cor = formData.get('cor') as string;
+  if (!id || !titulo)
+    return { error: 'Informe um título e um lembrete válido.' };
+  const { error } = await supabase
+    .from('lembretes')
+    .update({ titulo, cor })
+    .eq('id', id)
+    .eq('user_id', user.id);
+  if (error) {
+    console.error('Erro ao atualizar lembrete:', error);
+    return { error: 'Não foi possível atualizar o lembrete.' };
+  }
+  revalidatePath('/calendario');
+  return { success: true };
+}
 
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-500 rounded-full"
-                              style={{ width: `${md.avancoPerc}%` }}
-                            />
-                          </div>
-                          <span className="font-bold text-foreground">{md.avancoPerc}%</span>
-                        </div>
-                      </td>
+export async function deleteLembrete(id: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  if (isNaN(id)) return;
+  await supabase.from('lembretes').delete().eq('id', id).eq('user_id', user.id);
+  revalidatePath('/calendario');
+}
 
-                      <td className="py-3.5 px-4 text-center font-medium text-muted-foreground">
-                        {formatarHoras(md.minutos)}
-                      </td>
+export async function updateRevisaoStatus(revisaoId: number, status: boolean) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  const { error } = await supabase
+    .from('revisoes')
+    .update({ concluida: status })
+    .eq('id', revisaoId)
+    .eq('user_id', user.id);
+  if (error) return { error: error.message };
+  revalidatePath('/revisoes');
+  revalidatePath('/calendario');
+  return { success: true };
+}
 
-                      <td className="py-3.5 px-4 text-center font-mono">
-                        {md.questoes > 0 ? (
-                          <span>
-                            <strong className="text-emerald-400">{md.acertos}</strong> / {md.questoes}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
+type TableName = 'paginas';
 
-                      <td className="py-3.5 px-4 text-center">
-                        {md.desempenhoPerc !== null ? (
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[11px] font-bold',
-                              md.desempenhoPerc >= 80
-                                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
-                                : md.desempenhoPerc >= 60
-                                ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
-                                : 'border-rose-500/40 bg-rose-500/15 text-rose-400'
-                            )}
-                          >
-                            {md.desempenhoPerc}%
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
+export async function createItem(table: TableName, parentId: number | null) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!(await isOwnedParent(supabase, table, parentId, user.id))) {
+    return { error: 'Pasta de destino inválida.' };
+  }
 
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setActiveSubTab('editor');
-                              router.push(`/disciplinas?page=${disc.id}`);
-                            }}
-                            className="h-7 px-2.5 text-[11px] font-semibold text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg"
-                          >
-                            Caderno
-                          </Button>
+  const newItemData = {
+    title: 'Novo Item',
+    user_id: user.id,
+    parent_id: parentId,
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+    emoji: '📄',
+  };
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRenameNode(disc)}
-                            disabled={isPending}
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
-                            title="Renomear Disciplina"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .insert(newItemData)
+      .select('id')
+      .single();
 
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteNode(disc)}
-                            disabled={isPending}
-                            className="h-7 w-7 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded-lg"
-                            title="Excluir Disciplina"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
-                    <p className="font-bold text-sm text-foreground">Nenhuma disciplina encontrada.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+    if (error) throw error;
+    revalidatePath('/disciplinas');
+    return { success: true, newItem: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error(`Falha ao criar item na tabela ${table}:`, error);
+    return { error: `Falha ao criar: ${message}` };
+  }
+}
+
+export async function updateItemTitle(
+  table: TableName,
+  id: number,
+  newTitle: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ title: newTitle })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath('/disciplinas');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return { error: `Falha ao salvar título: ${message}` };
+  }
+}
+
+export async function deleteItem(table: TableName, id: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+    if (error) throw error;
+
+    revalidatePath('/disciplinas');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return { error: `Falha ao deletar: ${message}` };
+  }
+}
+
+export async function toggleFavoriteStatus(table: TableName, id: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  try {
+    const { data: currentItem, error: fetchError } = await supabase
+      .from(table)
+      .select('is_favorite')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError || !currentItem) {
+      throw new Error('Item não encontrado ou falha ao obter dados.');
+    }
+
+    const newFavoriteStatus = !currentItem.is_favorite;
+
+    const { error: updateError } = await supabase
+      .from(table)
+      .update({ is_favorite: newFavoriteStatus })
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (updateError) throw updateError;
+
+    revalidatePath('/disciplinas');
+    return { success: true, isFavorite: newFavoriteStatus };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return { error: `Falha ao alternar favorito: ${message}` };
+  }
+}
+
+// --- AÇÕES PARA TAREFAS ---
+export async function addTarefa(formData: FormData) {
+  const title = formData.get('title') as string;
+  const dueDate = formData.get('due_date') as string;
+  if (!title) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase
+    .from('tarefas')
+    .insert({ title, due_date: dueDate || null, user_id: user.id });
+  revalidatePath('/tarefas');
+}
+
+export async function toggleTarefa(id: number, currentState: boolean) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase
+    .from('tarefas')
+    .update({ completed: !currentState })
+    .eq('id', id)
+    .eq('user_id', user.id);
+  revalidatePath('/tarefas');
+}
+
+export async function deleteTarefa(id: number) {
+  const { supabase, user } = await getAuth();
+  if (!user) return;
+  await supabase.from('tarefas').delete().eq('id', id).eq('user_id', user.id);
+  revalidatePath('/tarefas');
+}
+
+// --- AÇÕES DE PERFIL ---
+export async function updateProfile({
+  id,
+  fullName,
+  avatarUrl,
+}: {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+}) {
+  const { supabase, user } = await getAuth();
+
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (user.id !== id) {
+    return { error: 'Operação não autorizada.' };
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      full_name: fullName,
+      avatar_url: avatarUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath('/perfil');
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateItemParent(
+  table: TableName,
+  itemId: number,
+  newParentId: number | null
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (
+    newParentId === itemId ||
+    !(await isOwnedParent(supabase, table, newParentId, user.id))
+  ) {
+    return { error: 'Pasta de destino inválida.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from(table)
+      .update({ parent_id: newParentId })
+      .eq('id', itemId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    revalidatePath('/disciplinas');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return { error: `Falha ao mover: ${message}` };
+  }
+}
+
+// ==================================================================
+// --- AÇÕES PARA GERADOR DE ANKI ---
+export async function generateAnkiCards(formData: FormData) {
+  const sourceTextValue = formData.get('sourceText');
+  const sourceText =
+    typeof sourceTextValue === 'string' ? sourceTextValue.trim() : '';
+  const numCards = Number(formData.get('numCards'));
+  const cardStyle = (formData.get('cardStyle') as string) || 'objetivo';
+
+  const { user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!sourceText) return { error: 'Informe um texto de estudo.' };
+  if (sourceText.length > 25000)
+    return { error: 'O texto deve ter no máximo 25000 caracteres.' };
+  if (!Number.isInteger(numCards) || numCards < 1 || numCards > 50) {
+    return { error: 'O número de flashcards deve ser entre 1 e 50.' };
+  }
+
+  const rawKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = rawKey.replace(/["']/g, '').trim();
+  if (!apiKey)
+    return { error: 'Chave GEMINI_API_KEY não configurada no ambiente.' };
+
+  const styleInstruction =
+    cardStyle === 'cespe'
+      ? 'Crie afirmações no estilo Certo/Errado de banca de concurso (Cebraspe), colocando na resposta o gabarito (CERTO ou ERRADO) seguido da justificativa.'
+      : cardStyle === 'pratico'
+      ? 'Crie perguntas focadas em casos práticos, exceções de lei, prazos e pegadinhas clássicas de concursos.'
+      : 'Crie perguntas diretas, claras e objetivas na frente, e respostas concisas e completas no verso.';
+
+  const prompt = `Você é um especialista em preparação para concursos públicos e repetição espaçada (Anki).
+${styleInstruction}
+Baseado no texto de estudo abaixo, gere exatamente ${numCards} flashcards em português.
+Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+{"cards": [{"question": "pergunta aqui", "answer": "resposta aqui"}]}
+
+Texto de estudo:
+"""
+${sourceText}
+"""`;
+
+  const payload = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      maxOutputTokens: 8192,
+      temperature: 0.4,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  const candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash-latest',
+  ];
+
+  const callModel = async (modelName: string) => {
+    const cleanModel = modelName.replace(/^models\//, '');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(
+      apiKey
+    )}`;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  };
+
+  try {
+    let response: Response | null = null;
+
+    for (const model of candidateModels) {
+      response = await callModel(model);
+      if (response.status !== 404) {
+        break;
+      }
+    }
+
+    if (!response || response.status === 404) {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(
+          apiKey
+        )}`
+      );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const availableModel = (listData?.models || []).find(
+          (m: any) =>
+            Array.isArray(m.supportedGenerationMethods) &&
+            m.supportedGenerationMethods.includes('generateContent') &&
+            m.name?.includes('gemini')
+        );
+        if (availableModel?.name) {
+          response = await callModel(availableModel.name);
+        }
+      }
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status || 500;
+      const errorBody = response ? await response.text() : '';
+      console.error('Erro na API do Gemini:', status, errorBody);
+
+      if (status === 429) {
+        return {
+          error:
+            'Limite de uso gratuito da IA atingido. Aguarde 1 minuto e tente novamente.',
+        };
+      }
+      if (status === 400 || status === 403) {
+        return {
+          error:
+            'Chave GEMINI_API_KEY inválida ou sem permissão no Google AI Studio.',
+        };
+      }
+      return {
+        error: `Falha ao gerar flashcards (código ${status}). Verifique sua GEMINI_API_KEY.`,
+      };
+    }
+
+    const result = await response.json();
+    const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+      return { error: 'A IA retornou uma resposta vazia. Tente novamente.' };
+    }
+
+    const cleanJsonText = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    const parsed = JSON.parse(cleanJsonText);
+    const cardsArray = Array.isArray(parsed) ? parsed : parsed?.cards;
+
+    if (!Array.isArray(cardsArray) || cardsArray.length === 0) {
+      return { error: 'Formato inesperado da IA. Tente gerar novamente.' };
+    }
+
+    const validCards: Flashcard[] = cardsArray
+      .filter(
+        (c: any) =>
+          c && typeof c.question === 'string' && typeof c.answer === 'string'
+      )
+      .map((c: any) => ({
+        question: c.question.trim(),
+        answer: c.answer.trim(),
+      }));
+
+    return { data: validCards };
+  } catch (error) {
+    console.error('Falha ao gerar flashcards:', error);
+    return {
+      error: 'Erro de conexão ao gerar flashcards. Tente novamente.',
+    };
+  }
+}
+
+export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!title.trim()) return { error: 'O título é obrigatório.' };
+  if (cards.length === 0) return { error: 'Não há flashcards para guardar.' };
+
+  const { data, error } = await supabase
+    .from('anki_decks')
+    .insert({ title, cards, user_id: user.id })
+    .select('id')
+    .single();
+  if (error) return { error: 'Falha ao guardar o deck de flashcards.' };
+
+  revalidatePath('/anki');
+  return { success: true, newDeckId: data.id };
+}
+
+export async function deleteAnkiDeck(deckId: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .delete()
+    .match({ id: deckId, user_id: user.id });
+
+  if (error) {
+    return { error: 'Falha ao apagar o deck.' };
+  }
+
+  revalidatePath('/anki');
+  return { success: true };
+}
+
+export async function updateAnkiDeck(
+  deckId: number,
+  title: string,
+  cards: Flashcard[]
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  if (!title.trim()) return { error: 'O título é obrigatório.' };
+  if (cards.length === 0) return { error: 'Não há flashcards para guardar.' };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .update({ title, cards })
+    .match({ id: deckId, user_id: user.id });
+
+  if (error) {
+    return { error: 'Falha ao atualizar o deck.' };
+  }
+
+  revalidatePath('/anki');
+  return { success: true };
+}
+
+export async function updateTarefaStatus(
+  id: number,
+  status: 'pendente' | 'concluida' | 'arquivada'
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const isCompleted = status === 'concluida';
+
+  const { error } = await supabase
+    .from('tarefas')
+    .update({ status: status, completed: isCompleted })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: 'Falha ao atualizar o status da tarefa.' };
+  }
+
+  revalidatePath('/tarefas');
+  return { success: true };
+}
+
+// ==================================================================
+// --- AÇÕES PARA METAS DE ESTUDO ---
+type StudyGoalValues = {
+  title: string;
+  type: string;
+  target_value: number;
+  current_value: number;
+  start_date: string;
+  end_date: string;
+};
+
+function parseStudyGoalValues(
+  formData: FormData
+): { data: StudyGoalValues } | { error: string } {
+  const getString = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === 'string' ? value.trim() : '';
+  };
+
+  const title = getString('title');
+  const targetValue = Number(getString('target_value'));
+  const currentValueField = formData.get('current_value');
+  const currentValue =
+    currentValueField === null || currentValueField === ''
+      ? 0
+      : typeof currentValueField === 'string'
+      ? Number(currentValueField)
+      : NaN;
+  const startDate = getString('start_date');
+  const endDate = getString('end_date');
+  const type = getString('type') || 'monthly_questions';
+
+  if (!title || title.length > 200) {
+    return { error: 'Informe um título com até 200 caracteres.' };
+  }
+  if (!Number.isInteger(targetValue) || targetValue <= 0) {
+    return { error: 'A meta deve ser um número inteiro maior que zero.' };
+  }
+  if (
+    !Number.isInteger(currentValue) ||
+    currentValue < 0 ||
+    currentValue > targetValue
+  ) {
+    return {
+      error: 'O progresso atual deve estar entre zero e o valor da meta.',
+    };
+  }
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (
+    !datePattern.test(startDate) ||
+    !datePattern.test(endDate) ||
+    endDate < startDate
+  ) {
+    return { error: 'Informe um período válido para a meta.' };
+  }
+
+  return {
+    data: {
+      title,
+      type,
+      target_value: targetValue,
+      current_value: currentValue,
+      start_date: startDate,
+      end_date: endDate,
+    },
+  };
+}
+
+export async function addStudyGoal(formData: FormData) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const parsed = parseStudyGoalValues(formData);
+  if ('error' in parsed) return parsed;
+
+  const { error } = await supabase.from('study_goals').insert({
+    user_id: user.id,
+    ...parsed.data,
+  });
+
+  if (error) {
+    console.error('Erro ao criar meta:', error);
+    return { error: 'Falha ao criar a meta de estudo.' };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateStudyGoalValue(id: number, new_value: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { error } = await supabase
+    .from('study_goals')
+    .update({ current_value: new_value })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: 'Falha ao atualizar o progresso da meta.' };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function deleteStudyGoal(id: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { error } = await supabase
+    .from('study_goals')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { error: 'Falha ao apagar a meta.' };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function updateStudyGoal(formData: FormData) {
+  const { supabase, user } = await getAuth();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const idValue = formData.get('id');
+  const id = typeof idValue === 'string' ? Number(idValue.trim()) : NaN;
+  if (!Number.isInteger(id) || id <= 0) return { error: 'Meta inválida.' };
+
+  const parsed = parseStudyGoalValues(formData);
+  if ('error' in parsed) return parsed;
+
+  const { error } = await supabase
+    .from('study_goals')
+    .update({
+      title: parsed.data.title,
+      target_value: parsed.data.target_value,
+      current_value: parsed.data.current_value,
+      start_date: parsed.data.start_date,
+      end_date: parsed.data.end_date,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Erro ao atualizar meta:', error);
+    return { error: 'Falha ao atualizar a meta de estudo.' };
+  }
+
+  revalidatePath('/');
+  return { success: true };
+}
+
+export async function searchPaginas(query: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  if (!query) {
+    const { data, error } = await supabase
+      .from('paginas')
+      .select('id, title')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Erro na pesquisa de páginas:', error);
+      return [];
+    }
+    return (data || []).map((page) => ({ ...page, type: 'paginas' as const }));
+  }
+
+  const searchTerm = `%${query}%`;
+  const { data, error } = await supabase
+    .from('paginas')
+    .select('id, title')
+    .eq('user_id', user.id)
+    .ilike('title', searchTerm)
+    .limit(5);
+
+  if (error) {
+    console.error('Erro na pesquisa de páginas:', error);
+    return [];
+  }
+
+  return (data || []).map((page) => ({ ...page, type: 'paginas' as const }));
+}
+
+export async function updateConcursosOrdem(
+  updates: { id: number; ordem: number }[]
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  try {
+    const updatePromises = updates.map((item) =>
+      supabase
+        .from('concursos')
+        .update({ ordem: item.ordem })
+        .eq('id', item.id)
+        .eq('user_id', user.id)
+    );
+
+    const results = await Promise.all(updatePromises);
+    const firstError = results.find((res) => res.error);
+    if (firstError) throw firstError.error;
+
+    revalidatePath('/guia-estudos');
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro desconhecido';
+    return { error: `Falha ao salvar a nova ordem: ${message}` };
+  }
 }
