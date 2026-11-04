@@ -18,22 +18,39 @@ import {
   ListChecks,
   Pencil,
   Trash2,
+  Wand2,
+  Play,
+  Check,
+  Loader2,
   X,
 } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
-import { updatePaginaContent, updateItemTitle, deleteItem } from '@/app/actions';
+import {
+  updatePaginaContent,
+  updateItemTitle,
+  deleteItem,
+  linkPastaToConcurso,
+} from '@/app/actions';
+import { usePlanoAtivo } from '@/lib/plano-ativo';
 import { type JSONContent } from '@tiptap/react';
 import { type Node, type SessaoEstudo } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 
 interface DisciplinasClientProps {
   paginaTree: Node[];
   initialPage: Node | null;
+}
+
+interface TopicoCheckState {
+  teoria: boolean;
+  revisao: boolean;
+  questoes: boolean;
 }
 
 const ICON_COLORS = [
@@ -91,11 +108,26 @@ function countAllTopics(nodes: Node[]): number {
   return count;
 }
 
+function extrairTopicosDoTextoEdital(textoBruto: string): string[] {
+  if (!textoBruto.trim()) return [];
+  const processado = textoBruto
+    .replace(/\r\n/g, '\n')
+    .replace(/;\s*/g, '\n')
+    .replace(/\s+(?=\d+(?:\.\d+)*\s*[-.)]\s*[A-ZÀ-Ú])/g, '\n')
+    .replace(/\s+(?=\d+(?:\.\d+)+\s+[A-ZÀ-Ú])/g, '\n');
+
+  return processado
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 2);
+}
+
 export default function DisciplinasClient({ paginaTree, initialPage }: DisciplinasClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
   const [isPending, startTransition] = useTransition();
+  const { planoAtivo, recarregarPlanos } = usePlanoAtivo();
 
   const [selectedPage, setSelectedPage] = useState<Node | null>(initialPage);
   const [isMounted, setIsMounted] = useState(false);
@@ -105,12 +137,53 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Checkboxes do Edital Verticalizado (Teoria, Revisão, Questões por Tópico)
+  const [checksMap, setChecksMap] = useState<Record<number, TopicoCheckState>>({});
+  const storageKeyChecks = 'hub_edital_checks_geral';
+
+  // Modal de Importar Edital em Massa
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importDisciplinaModo, setImportDisciplinaModo] = useState<'nova' | 'existente'>('nova');
+  const [importDisciplinaId, setImportDisciplinaId] = useState<string>('');
+  const [importNovaDisciplinaNome, setImportNovaDisciplinaNome] = useState('');
+  const [importTextoBruto, setImportTextoBruto] = useState('');
+
   const [showNewDiscForm, setShowNewDiscForm] = useState(false);
   const [novaDiscNome, setNovaDiscNome] = useState('');
   const [novoTopicoNome, setNovoTopicoNome] = useState('');
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKeyChecks);
+      if (saved) setChecksMap(JSON.parse(saved));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleToggleCheck = (
+    topicoId: number,
+    campo: 'teoria' | 'revisao' | 'questoes'
+  ) => {
+    setChecksMap((prev) => {
+      const atual = prev[topicoId] || {
+        teoria: false,
+        revisao: false,
+        questoes: false,
+      };
+      const proximo = {
+        ...prev,
+        [topicoId]: { ...atual, [campo]: !atual[campo] },
+      };
+      localStorage.setItem(storageKeyChecks, JSON.stringify(proximo));
+      return proximo;
+    });
+  };
+
   const fetchSessoes = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase
       .from('ciclo_sessoes')
@@ -189,6 +262,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     });
   };
 
+  // Cálculo de métricas por disciplina (usando os checkboxes de Teoria do Edital Verticalizado quando houver tópicos!)
   const calcularMetricasNode = useCallback(
     (node: Node) => {
       const topicosFilhos = Array.isArray(node.children) ? node.children : [];
@@ -209,11 +283,19 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         questoes += Number(s.questoes_total) || 0;
       });
 
-      const totalRef = Math.max(topicosFilhos.length, sessoesDaMateria.length, 1);
-      const avancoPerc =
-        sessoesDaMateria.length > 0
-          ? Math.min(100, Math.round((concluidas.length / totalRef) * 100))
-          : 0;
+      let avancoPerc = 0;
+      if (topicosFilhos.length > 0) {
+        const topicosConcluidos = topicosFilhos.filter((t) => {
+          if (checksMap[Number(t.id)]?.teoria) return true;
+          return concluidas.some((s) =>
+            (s.foco_sugerido || '').toLowerCase().includes(t.title.toLowerCase())
+          );
+        }).length;
+        avancoPerc = Math.min(100, Math.round((topicosConcluidos / topicosFilhos.length) * 100));
+      } else if (sessoesDaMateria.length > 0) {
+        avancoPerc = Math.min(100, Math.round((concluidas.length / sessoesDaMateria.length) * 100));
+      }
+
       const desempenhoPerc = questoes > 0 ? Math.round((acertos / questoes) * 100) : null;
 
       return {
@@ -227,7 +309,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         historico: concluidas,
       };
     },
-    [sessoes]
+    [sessoes, checksMap]
   );
 
   const resumoGeral = useMemo(() => {
@@ -261,10 +343,91 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     };
   }, [paginaTree, calcularMetricasNode]);
 
+  const topicosExtraidosPreview = useMemo(
+    () => extrairTopicosDoTextoEdital(importTextoBruto),
+    [importTextoBruto]
+  );
+
+  const handleConfirmarImportacaoMassa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (topicosExtraidosPreview.length === 0) {
+      toast.error('Cole o conteúdo do edital para extrair os tópicos.');
+      return;
+    }
+
+    startTransition(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let targetDiscId: number | null = null;
+
+      if (importDisciplinaModo === 'nova') {
+        if (!importNovaDisciplinaNome.trim()) {
+          toast.error('Digite o nome da disciplina.');
+          return;
+        }
+        const { data: novaDisc, error: discErr } = await supabase
+          .from('paginas')
+          .insert({
+            user_id: user.id,
+            title: importNovaDisciplinaNome.trim(),
+            emoji: '📘',
+            parent_id: null,
+          })
+          .select('id')
+          .single();
+
+        if (discErr || !novaDisc) {
+          toast.error('Erro ao criar a disciplina.');
+          return;
+        }
+        targetDiscId = novaDisc.id;
+
+        if (planoAtivo) {
+          await linkPastaToConcurso(planoAtivo.id, novaDisc.id);
+        }
+      } else {
+        if (!importDisciplinaId) {
+          toast.error('Selecione uma disciplina existente.');
+          return;
+        }
+        targetDiscId = Number(importDisciplinaId);
+      }
+
+      const linhasParaInserir = topicosExtraidosPreview.map((titulo) => ({
+        user_id: user.id,
+        title: titulo.slice(0, 240),
+        parent_id: targetDiscId,
+        emoji: '📄',
+      }));
+
+      const { error: insertErr } = await supabase
+        .from('paginas')
+        .insert(linhasParaInserir);
+
+      if (insertErr) {
+        toast.error('Erro ao importar tópicos.');
+      } else {
+        toast.success(
+          `${linhasParaInserir.length} tópicos do edital importados com sucesso!`
+        );
+        setImportTextoBruto('');
+        setImportNovaDisciplinaNome('');
+        setImportModalOpen(false);
+        recarregarPlanos();
+        router.refresh();
+      }
+    });
+  };
+
   const handleCreateRootDisciplina = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novaDiscNome.trim()) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { error } = await supabase.from('paginas').insert({
@@ -287,7 +450,9 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   const handleCreateSubTopico = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPage || !novoTopicoNome.trim()) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { error } = await supabase.from('paginas').insert({
@@ -314,7 +479,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
     return (
       <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-6.5rem)] w-full">
-        {/* SIDEBAR DE ESTRUTURA MAIS LARGA (320px) COM BOTÕES VISÍVEIS */}
+        {/* SIDEBAR DE ESTRUTURA */}
         <div
           className={cn(
             'transition-all duration-300 ease-in-out flex-shrink-0',
@@ -335,7 +500,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
         {/* ÁREA PRINCIPAL */}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
-          {/* BARRA SUPERIOR: Toggle + Breadcrumb + Alternador */}
+          {/* BARRA SUPERIOR */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-card border border-border shadow-xs">
             <div className="flex items-center gap-2 overflow-x-auto text-xs font-medium text-muted-foreground no-scrollbar">
               <Button
@@ -343,7 +508,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                 size="icon"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="h-8 w-8 text-muted-foreground hover:text-foreground flex-shrink-0"
-                title={isSidebarOpen ? 'Ocultar estrutura lateral' : 'Mostrar estrutura lateral'}
               >
                 {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
               </Button>
@@ -389,7 +553,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                   )}
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Histórico & Tópicos</span>
+                  <span>Edital & Histórico</span>
                 </button>
                 <button
                   type="button"
@@ -426,7 +590,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
             </div>
           </div>
 
-          {/* ABA 1: HISTÓRICO & TÓPICOS */}
+          {/* ABA 1: EDITAL VERTICALIZADO DA MATÉRIA + HISTÓRICO */}
           {activeSubTab === 'historico' ? (
             <div className="space-y-5 animate-in fade-in duration-150">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
@@ -485,18 +649,32 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                <div className="lg:col-span-5 p-5 rounded-2xl bg-card border border-border space-y-4">
-                  <div className="flex items-center justify-between">
+                {/* TÓPICOS DO EDITAL COM CHECKBOXES (TEORIA, REVISÃO, QUESTÕES) */}
+                <div className="lg:col-span-7 p-5 rounded-2xl bg-card border border-border space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Tópicos de {selectedPage.title} ({ (selectedPage.children || []).length })
+                      Tópicos do Edital — {selectedPage.title} ({(selectedPage.children || []).length})
                     </h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setImportDisciplinaModo('existente');
+                        setImportDisciplinaId(String(selectedPage.id));
+                        setImportModalOpen(true);
+                      }}
+                      className="h-7 px-2.5 text-[11px] font-bold gap-1 rounded-lg text-emerald-400 border-emerald-500/30"
+                    >
+                      <Wand2 className="w-3 h-3" />
+                      <span>Colar Vários Tópicos do PDF</span>
+                    </Button>
                   </div>
 
                   <form onSubmit={handleCreateSubTopico} className="flex gap-2">
                     <Input
                       value={novoTopicoNome}
                       onChange={(e) => setNovoTopicoNome(e.target.value)}
-                      placeholder="Adicionar novo tópico..."
+                      placeholder="Adicionar novo tópico avulso..."
                       className="h-9 text-xs bg-secondary/30 rounded-xl"
                     />
                     <Button
@@ -508,57 +686,116 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                     </Button>
                   </form>
 
-                  <div className="divide-y divide-border/60 max-h-96 overflow-y-auto">
-                    {(selectedPage.children || []).length > 0 ? (
-                      (selectedPage.children || []).map((topico, idx) => (
-                        <div
-                          key={topico.id}
-                          className="py-2.5 flex items-center justify-between gap-2 text-xs group"
-                        >
-                          <Link
-                            href={`/disciplinas?page=${topico.id}`}
-                            onClick={() => setActiveSubTab('editor')}
-                            className="font-medium text-foreground hover:text-emerald-400 truncate flex-1"
-                          >
-                            {idx + 1}. {topico.title}
-                          </Link>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <Link
-                              href={`/disciplinas?page=${topico.id}`}
-                              onClick={() => setActiveSubTab('editor')}
-                            >
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-primary">
-                                Resumo
-                              </Button>
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleRenameNode(topico)}
-                              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
-                              title="Renomear tópico"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteNode(topico)}
-                              className="p-1.5 rounded hover:bg-rose-500/15 text-muted-foreground hover:text-rose-400"
-                              title="Excluir tópico"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-muted-foreground py-6 text-center">
-                        Nenhum sub-tópico cadastrado aqui. Use o campo acima para criar!
-                      </p>
-                    )}
-                  </div>
+                  {(selectedPage.children || []).length > 0 ? (
+                    <div className="rounded-xl border border-border overflow-hidden">
+                      <table className="w-full text-xs text-left">
+                        <thead className="text-[10px] font-bold uppercase text-muted-foreground bg-secondary/40 border-b border-border">
+                          <tr>
+                            <th className="py-2 px-3">Tópico</th>
+                            <th className="py-2 px-2 text-center w-14" title="Teoria Concluída">Teoria</th>
+                            <th className="py-2 px-2 text-center w-14" title="Revisão Concluída">Rev.</th>
+                            <th className="py-2 px-2 text-center w-14" title="Questões Feitas">Quest.</th>
+                            <th className="py-2 px-3 text-right w-28">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {(selectedPage.children || []).map((topico, idx) => {
+                            const tid = Number(topico.id);
+                            const st = checksMap[tid] || {
+                              teoria: false,
+                              revisao: false,
+                              questoes: false,
+                            };
+
+                            return (
+                              <tr
+                                key={topico.id}
+                                className={cn(
+                                  'hover:bg-secondary/20 transition-colors group',
+                                  st.teoria && 'bg-emerald-500/[0.04]'
+                                )}
+                              >
+                                <td className="py-2.5 px-3">
+                                  <Link
+                                    href={`/disciplinas?page=${topico.id}`}
+                                    onClick={() => setActiveSubTab('editor')}
+                                    className={cn(
+                                      'font-medium text-foreground hover:text-emerald-400 block truncate max-w-[260px]',
+                                      st.teoria && 'text-emerald-400 font-semibold'
+                                    )}
+                                  >
+                                    {idx + 1}. {topico.title}
+                                  </Link>
+                                </td>
+
+                                <td className="py-2.5 px-2 text-center">
+                                  <Checkbox
+                                    checked={st.teoria}
+                                    onCheckedChange={() => handleToggleCheck(tid, 'teoria')}
+                                    className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                                  />
+                                </td>
+
+                                <td className="py-2.5 px-2 text-center">
+                                  <Checkbox
+                                    checked={st.revisao}
+                                    onCheckedChange={() => handleToggleCheck(tid, 'revisao')}
+                                    className="data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                                  />
+                                </td>
+
+                                <td className="py-2.5 px-2 text-center">
+                                  <Checkbox
+                                    checked={st.questoes}
+                                    onCheckedChange={() => handleToggleCheck(tid, 'questoes')}
+                                    className="data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
+                                  />
+                                </td>
+
+                                <td className="py-2.5 px-3 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Link
+                                      href={`/disciplinas?page=${topico.id}`}
+                                      onClick={() => setActiveSubTab('editor')}
+                                      title="Abrir Caderno de Resumo"
+                                    >
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-primary">
+                                        <FileText className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRenameNode(topico)}
+                                      className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                                      title="Renomear"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteNode(topico)}
+                                      className="p-1 rounded hover:bg-rose-500/15 text-muted-foreground hover:text-rose-400"
+                                      title="Excluir"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground py-6 text-center">
+                      Nenhum sub-tópico cadastrado aqui. Use o campo acima ou clique em &ldquo;Colar Vários Tópicos do PDF&rdquo;!
+                    </p>
+                  )}
                 </div>
 
-                <div className="lg:col-span-7 p-5 rounded-2xl bg-card border border-border space-y-4">
+                {/* HISTÓRICO DE REGISTROS */}
+                <div className="lg:col-span-5 p-5 rounded-2xl bg-card border border-border space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Histórico de Registros ({m.historico.length})
                   </h3>
@@ -587,14 +824,9 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                                   {reg.foco_sugerido || 'Estudo Geral'}
                                 </span>
                               </div>
-                              {reg.diario_de_bordo && (
-                                <p className="text-[11px] text-muted-foreground line-clamp-2">
-                                  {reg.diario_de_bordo}
-                                </p>
-                              )}
                             </div>
 
-                            <div className="flex items-center gap-3 flex-shrink-0">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="font-mono font-bold text-emerald-400">
                                 {formatarHoras(mins)}
                               </span>
@@ -620,7 +852,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
               </div>
             </div>
           ) : (
-            /* ABA 2: O NOVO CADERNO DE RESUMOS (COM TÍTULO E BOTÕES DE AÇÃO) */
+            /* ABA 2: CADERNO DE RESUMOS */
             <div className="flex-1 min-h-[560px] rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col">
               <TextEditor
                 key={selectedPage.id}
@@ -638,7 +870,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   }
 
   // =========================================================================
-  // 2. VISÃO PRINCIPAL DE "/disciplinas" (COM BOTÕES DE RENOMEAR E EXCLUIR)
+  // 2. VISÃO PRINCIPAL DE "/disciplinas"
   // =========================================================================
   const disciplinasFiltradas = paginaTree.filter((d) =>
     d.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -646,13 +878,27 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-          Disciplinas
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-          As disciplinas, o histórico de progresso e os cadernos de estudo
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+            Disciplinas & Edital
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Gerencie suas matérias, tópicos verticalizados do edital, histórico e cadernos de resumo
+          </p>
+        </div>
+
+        <Button
+          size="sm"
+          onClick={() => {
+            setImportDisciplinaModo('nova');
+            setImportModalOpen(true);
+          }}
+          className="self-start sm:self-auto h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
+        >
+          <Wand2 className="w-4 h-4" />
+          <span>Importar Edital em Massa</span>
+        </Button>
       </div>
 
       {/* BANNER SUPERIOR CONSOLIDADO */}
@@ -777,15 +1023,16 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         ) : (
           <Button
             onClick={() => setShowNewDiscForm(true)}
-            className="h-10 px-4 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl gap-1.5 self-start sm:self-auto"
+            variant="outline"
+            className="h-10 px-4 text-xs font-bold rounded-xl gap-1.5 self-start sm:self-auto"
           >
-            <Plus className="w-4 h-4" />
-            <span>Nova Disciplina</span>
+            <Plus className="w-4 h-4 text-emerald-500" />
+            <span>Nova Disciplina Individual</span>
           </Button>
         )}
       </div>
 
-      {/* TABELA DE DISCIPLINAS COM BOTÕES DE EDITAR E EXCLUIR */}
+      {/* TABELA DE DISCIPLINAS */}
       <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left whitespace-nowrap">
@@ -830,7 +1077,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                             </span>
                             {md.topicosCount > 0 && (
                               <span className="text-[10px] text-muted-foreground">
-                                {md.topicosCount} tópicos no caderno
+                                {md.topicosCount} tópicos no edital
                               </span>
                             )}
                           </div>
@@ -883,7 +1130,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                         )}
                       </td>
 
-                      {/* AÇÕES VISÍVEIS: CADERNO | RENOMEAR | EXCLUIR */}
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
@@ -935,6 +1181,149 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
           </table>
         </div>
       </div>
+
+      {/* MODAL DE IMPORTAR EDITAL EM MASSA */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-[780px] max-h-[90vh] flex flex-col rounded-2xl bg-card border border-border shadow-2xl overflow-hidden text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2">
+                  <Wand2 className="w-5 h-5 text-emerald-500" />
+                  <span>Importar Tópicos do Edital em Massa</span>
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Cole o conteúdo copiado do PDF do edital que separamos todos os tópicos automaticamente!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImportModalOpen(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleConfirmarImportacaoMassa}
+              className="p-6 space-y-4 overflow-y-auto flex-1 text-xs"
+            >
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImportDisciplinaModo('nova')}
+                  className={cn(
+                    'px-3.5 py-1.5 rounded-xl font-bold transition-all',
+                    importDisciplinaModo === 'nova'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-secondary text-muted-foreground'
+                  )}
+                >
+                  Criar Nova Disciplina
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportDisciplinaModo('existente')}
+                  className={cn(
+                    'px-3.5 py-1.5 rounded-xl font-bold transition-all',
+                    importDisciplinaModo === 'existente'
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-secondary text-muted-foreground'
+                  )}
+                >
+                  Adicionar em Disciplina Existente
+                </button>
+              </div>
+
+              {importDisciplinaModo === 'nova' ? (
+                <div className="space-y-1.5">
+                  <label className="font-semibold block">Nome da Nova Disciplina *</label>
+                  <Input
+                    value={importNovaDisciplinaNome}
+                    onChange={(e) => setImportNovaDisciplinaNome(e.target.value)}
+                    placeholder="Ex.: Direito Administrativo, Língua Portuguesa..."
+                    className="h-10 text-xs bg-secondary/30 rounded-xl"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="font-semibold block">Selecione a Disciplina *</label>
+                  <select
+                    value={importDisciplinaId}
+                    onChange={(e) => setImportDisciplinaId(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-secondary/30 text-xs font-medium text-foreground"
+                    required
+                  >
+                    <option value="">Escolha uma matéria...</option>
+                    {paginaTree.map((d) => (
+                      <option key={d.id} value={String(d.id)} className="bg-card">
+                        {d.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="font-semibold block">
+                  Cole aqui o conteúdo programático copiado do Edital (PDF) *
+                </label>
+                <textarea
+                  rows={6}
+                  value={importTextoBruto}
+                  onChange={(e) => setImportTextoBruto(e.target.value)}
+                  placeholder="Ex.: 1. Compreensão e interpretação de textos. 2. Tipologia textual. 3. Ortografia oficial. 4. Acentuação gráfica..."
+                  className="w-full rounded-xl border border-border bg-secondary/30 p-3 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  required
+                />
+              </div>
+
+              {topicosExtraidosPreview.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/30 space-y-2">
+                  <span className="font-bold text-emerald-400 block">
+                    ✓ {topicosExtraidosPreview.length} tópicos identificados automaticamente:
+                  </span>
+                  <div className="max-h-36 overflow-y-auto space-y-1 pr-1 text-[11px] text-muted-foreground">
+                    {topicosExtraidosPreview.map((t, i) => (
+                      <div key={i} className="truncate">
+                        • {t}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setImportModalOpen(false)}
+                  className="h-9 text-xs rounded-xl"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className="h-9 px-5 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl gap-1.5"
+                >
+                  {isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>Importar {topicosExtraidosPreview.length} Tópicos</span>
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -46,7 +46,6 @@ const navItems = [
   { name: 'Home', href: '/', icon: LayoutDashboard },
   { name: 'Planos', href: '/guia-estudos', icon: FolderKanban },
   { name: 'Disciplinas', href: '/disciplinas', icon: Layers },
-  { name: 'Edital Verticalizado', href: '/edital-verticalizado', icon: ListTodo },
   { name: 'Planejamento', href: '/ciclo', icon: Recycle },
   { name: 'Revisões', href: '/revisoes', icon: RotateCcw },
   { name: 'Histórico', href: '/historico', icon: History },
