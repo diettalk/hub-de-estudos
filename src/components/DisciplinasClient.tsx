@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useTransition } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -15,15 +15,14 @@ import {
   Clock,
   FileText,
   BarChart3,
-  ArrowLeft,
-  Calendar,
   ListChecks,
-  Check,
+  Pencil,
+  Trash2,
   X,
 } from 'lucide-react';
 import { HierarchicalSidebar } from '@/components/HierarchicalSidebar';
 import TextEditor from '@/components/TextEditor';
-import { updatePaginaContent } from '@/app/actions';
+import { updatePaginaContent, updateItemTitle, deleteItem } from '@/app/actions';
 import { type JSONContent } from '@tiptap/react';
 import { type Node, type SessaoEstudo } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -96,19 +95,16 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const [isPending, startTransition] = useTransition();
 
   const [selectedPage, setSelectedPage] = useState<Node | null>(initialPage);
   const [isMounted, setIsMounted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Modo dentro de uma disciplina selecionada: 'editor' (Caderno Tiptap) ou 'historico' (Desempenho, Tópicos e Registros)
   const [activeSubTab, setActiveSubTab] = useState<'historico' | 'editor'>('historico');
-
-  // Sessões carregadas para calcular horas, questões, desempenho e histórico
   const [sessoes, setSessoes] = useState<SessaoEstudo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Estados para criar nova disciplina ou tópico rápido
   const [showNewDiscForm, setShowNewDiscForm] = useState(false);
   const [novaDiscNome, setNovaDiscNome] = useState('');
   const [novoTopicoNome, setNovoTopicoNome] = useState('');
@@ -128,7 +124,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     setIsMounted(true);
     fetchSessoes();
 
-    // Atualiza as métricas sempre que um novo estudo for registrado no modal
     const handleRefresh = () => {
       setTimeout(fetchSessoes, 600);
     };
@@ -163,7 +158,37 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     await updatePaginaContent(selectedPage.id, contentAsString);
   };
 
-  // Cálculo de métricas por disciplina (raiz ou nó selecionado)
+  const handleRenameNode = (node: Node) => {
+    const novoNome = window.prompt('Novo nome para a disciplina / tópico:', node.title);
+    if (!novoNome || !novoNome.trim() || novoNome.trim() === node.title) return;
+    startTransition(async () => {
+      const res = await updateItemTitle('paginas', Number(node.id), novoNome.trim());
+      if (res.error) toast.error(res.error);
+      else {
+        toast.success('Renomeado com sucesso!');
+        router.refresh();
+      }
+    });
+  };
+
+  const handleDeleteNode = (node: Node) => {
+    if (!confirm(`Tem certeza que deseja excluir "${node.title}" e todas as subpáginas dele?`)) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await deleteItem('paginas', Number(node.id));
+      if (res.error) toast.error(res.error);
+      else {
+        toast.success(`"${node.title}" foi excluído.`);
+        if (selectedPage && Number(selectedPage.id) === Number(node.id)) {
+          router.push('/disciplinas');
+        } else {
+          router.refresh();
+        }
+      }
+    });
+  };
+
   const calcularMetricasNode = useCallback(
     (node: Node) => {
       const topicosFilhos = Array.isArray(node.children) ? node.children : [];
@@ -205,7 +230,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
     [sessoes]
   );
 
-  // Resumo Geral de todas as disciplinas
   const resumoGeral = useMemo(() => {
     let totalMinutos = 0;
     let totalAcertos = 0;
@@ -285,34 +309,33 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   // 1. QUANDO UMA DISCIPLINA OU TÓPICO ESTÁ SELECIONADO (?page=ID)
   // =========================================================================
   if (selectedPage && isMounted) {
-    // Usa as métricas da disciplina raiz (se estiver em um sub-tópico, pega a raiz do caminho)
     const rootDisciplina = breadcrumbPath[0] || selectedPage;
     const m = calcularMetricasNode(rootDisciplina);
 
     return (
       <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-6.5rem)] w-full">
-        {/* SIDEBAR DE ÁRVORE RECOLHÍVEL */}
+        {/* SIDEBAR DE ESTRUTURA MAIS LARGA (320px) COM BOTÕES VISÍVEIS */}
         <div
           className={cn(
             'transition-all duration-300 ease-in-out flex-shrink-0',
-            isSidebarOpen ? 'w-full lg:w-72 h-64 lg:h-[calc(100vh-6.5rem)]' : 'w-0 hidden lg:block overflow-hidden'
+            isSidebarOpen
+              ? 'w-full lg:w-80 h-72 lg:h-[calc(100vh-6.5rem)]'
+              : 'w-0 hidden lg:block overflow-hidden'
           )}
         >
           <div className="h-full rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
             <HierarchicalSidebar
               treeData={paginaTree}
               table="paginas"
-              title="Estrutura"
+              title="Estrutura do Caderno"
               activeId={activeId}
-              isMinimized={false}
-              onToggleMinimize={() => setIsSidebarOpen(false)}
             />
           </div>
         </div>
 
-        {/* ÁREA PRINCIPAL DA DISCIPLINA SELECIONADA */}
+        {/* ÁREA PRINCIPAL */}
         <div className="flex-1 min-w-0 flex flex-col gap-4">
-          {/* BARRA SUPERIOR: Toggle + Breadcrumb + Alternador (Histórico vs Editor) */}
+          {/* BARRA SUPERIOR: Toggle + Breadcrumb + Alternador */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-card border border-border shadow-xs">
             <div className="flex items-center gap-2 overflow-x-auto text-xs font-medium text-muted-foreground no-scrollbar">
               <Button
@@ -320,7 +343,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                 size="icon"
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="h-8 w-8 text-muted-foreground hover:text-foreground flex-shrink-0"
-                title={isSidebarOpen ? 'Ocultar árvore lateral' : 'Mostrar árvore lateral'}
+                title={isSidebarOpen ? 'Ocultar estrutura lateral' : 'Mostrar estrutura lateral'}
               >
                 {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
               </Button>
@@ -341,7 +364,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                   <Link
                     href={`/disciplinas?page=${node.id}`}
                     className={cn(
-                      'px-2 py-0.5 rounded-md transition-colors truncate max-w-[180px]',
+                      'px-2 py-0.5 rounded-md transition-colors truncate max-w-[200px]',
                       index === breadcrumbPath.length - 1
                         ? 'font-bold text-foreground bg-secondary'
                         : 'hover:text-foreground hover:bg-secondary/40'
@@ -353,7 +376,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
               ))}
             </div>
 
-            {/* Alternador: Histórico & Tópicos vs Caderno de Resumos */}
             <div className="flex items-center gap-2">
               <div className="inline-flex p-0.5 rounded-xl bg-secondary/60 border border-border text-xs">
                 <button
@@ -404,10 +426,9 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
             </div>
           </div>
 
-          {/* ABA 1: HISTÓRICO DE REGISTROS, DESEMPENHO E TÓPICOS DO EDITAL */}
+          {/* ABA 1: HISTÓRICO & TÓPICOS */}
           {activeSubTab === 'historico' ? (
             <div className="space-y-5 animate-in fade-in duration-150">
-              {/* 4 Cards de Métricas da Disciplina */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
                 <div className="p-4 rounded-2xl bg-card border border-border">
                   <span className="text-[10px] font-bold uppercase text-muted-foreground block">
@@ -463,13 +484,11 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                 </div>
               </div>
 
-              {/* Grid: Tópicos da Disciplina + Histórico de Registros */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-                {/* Tópicos */}
                 <div className="lg:col-span-5 p-5 rounded-2xl bg-card border border-border space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Tópicos de {rootDisciplina.title} ({m.topicosFilhos.length})
+                      Tópicos de {selectedPage.title} ({ (selectedPage.children || []).length })
                     </h3>
                   </div>
 
@@ -490,16 +509,16 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                   </form>
 
                   <div className="divide-y divide-border/60 max-h-96 overflow-y-auto">
-                    {m.topicosFilhos.length > 0 ? (
-                      m.topicosFilhos.map((topico, idx) => (
+                    {(selectedPage.children || []).length > 0 ? (
+                      (selectedPage.children || []).map((topico, idx) => (
                         <div
                           key={topico.id}
-                          className="py-2.5 flex items-center justify-between gap-2 text-xs"
+                          className="py-2.5 flex items-center justify-between gap-2 text-xs group"
                         >
                           <Link
                             href={`/disciplinas?page=${topico.id}`}
                             onClick={() => setActiveSubTab('editor')}
-                            className="font-medium text-foreground hover:text-emerald-400 truncate"
+                            className="font-medium text-foreground hover:text-emerald-400 truncate flex-1"
                           >
                             {idx + 1}. {topico.title}
                           </Link>
@@ -509,38 +528,36 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                               onClick={() => setActiveSubTab('editor')}
                             >
                               <Button variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-primary">
-                                Abrir Nota
+                                Resumo
                               </Button>
                             </Link>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                window.dispatchEvent(
-                                  new CustomEvent('open-registro-estudo', {
-                                    detail: {
-                                      disciplinaId: String(rootDisciplina.id),
-                                      topico: topico.title,
-                                    },
-                                  })
-                                )
-                              }
-                              className="h-7 px-2 text-[11px] text-emerald-500"
+                            <button
+                              type="button"
+                              onClick={() => handleRenameNode(topico)}
+                              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
+                              title="Renomear tópico"
                             >
-                              Estudar
-                            </Button>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteNode(topico)}
+                              className="p-1.5 rounded hover:bg-rose-500/15 text-muted-foreground hover:text-rose-400"
+                              title="Excluir tópico"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))
                     ) : (
                       <p className="text-xs text-muted-foreground py-6 text-center">
-                        Nenhum sub-tópico cadastrado nesta disciplina.
+                        Nenhum sub-tópico cadastrado aqui. Use o campo acima para criar!
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Histórico de Registros da Disciplina */}
                 <div className="lg:col-span-7 p-5 rounded-2xl bg-card border border-border space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Histórico de Registros ({m.historico.length})
@@ -597,19 +614,18 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                       <p className="text-xs font-bold text-foreground">
                         Nenhum estudo registrado para esta disciplina ainda.
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Clique em &ldquo;+ Registrar Estudo&rdquo; acima para gravar seu avanço!
-                      </p>
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ) : (
-            /* ABA 2: O EDITOR DE RESUMOS TIPTAP */
-            <div className="flex-1 min-h-[550px] rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col">
+            /* ABA 2: O NOVO CADERNO DE RESUMOS (COM TÍTULO E BOTÕES DE AÇÃO) */
+            <div className="flex-1 min-h-[560px] rounded-2xl border border-border bg-card shadow-xs overflow-hidden flex flex-col">
               <TextEditor
                 key={selectedPage.id}
+                pageId={Number(selectedPage.id)}
+                pageTitle={selectedPage.title}
                 initialContent={selectedPage.content ?? null}
                 onSave={handleSave}
                 onClose={() => router.push('/disciplinas')}
@@ -622,7 +638,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
   }
 
   // =========================================================================
-  // 2. VISÃO PRINCIPAL DE "/disciplinas" (IGUAL AO PRINT 3)
+  // 2. VISÃO PRINCIPAL DE "/disciplinas" (COM BOTÕES DE RENOMEAR E EXCLUIR)
   // =========================================================================
   const disciplinasFiltradas = paginaTree.filter((d) =>
     d.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -630,7 +646,6 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
           Disciplinas
@@ -640,7 +655,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         </p>
       </div>
 
-      {/* BANNER SUPERIOR CONSOLIDADO (IGUAL AO PRINT 3) */}
+      {/* BANNER SUPERIOR CONSOLIDADO */}
       <div className="p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-2xl flex-shrink-0">
@@ -770,7 +785,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
         )}
       </div>
 
-      {/* TABELA DE TODAS AS DISCIPLINAS (IGUAL AO PRINT 3) */}
+      {/* TABELA DE DISCIPLINAS COM BOTÕES DE EDITAR E EXCLUIR */}
       <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left whitespace-nowrap">
@@ -781,7 +796,7 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                 <th className="py-3.5 px-4 text-center w-36">Horas de Estudo</th>
                 <th className="py-3.5 px-4 text-center w-32">Questões</th>
                 <th className="py-3.5 px-4 text-center w-32">Desempenho</th>
-                <th className="py-3.5 px-4 text-right w-28">Ações</th>
+                <th className="py-3.5 px-4 text-right w-44">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -868,27 +883,42 @@ export default function DisciplinasClient({ paginaTree, initialPage }: Disciplin
                         )}
                       </td>
 
+                      {/* AÇÕES VISÍVEIS: CADERNO | RENOMEAR | EXCLUIR */}
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={() => {
                               setActiveSubTab('editor');
                               router.push(`/disciplinas?page=${disc.id}`);
                             }}
-                            className="h-7 px-2.5 text-[11px] text-primary hover:bg-primary/10 rounded-lg"
-                            title="Abrir Caderno / Editor de Texto"
+                            className="h-7 px-2.5 text-[11px] font-semibold text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg"
                           >
                             Caderno
                           </Button>
-                          <ChevronRight
-                            onClick={() => {
-                              setActiveSubTab('historico');
-                              router.push(`/disciplinas?page=${disc.id}`);
-                            }}
-                            className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-transform group-hover:translate-x-0.5"
-                          />
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRenameNode(disc)}
+                            disabled={isPending}
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+                            title="Renomear Disciplina"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteNode(disc)}
+                            disabled={isPending}
+                            className="h-7 w-7 text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 rounded-lg"
+                            title="Excluir Disciplina"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </td>
                     </tr>

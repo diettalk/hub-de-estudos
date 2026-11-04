@@ -669,163 +669,141 @@ export async function generateAnkiCards(formData: FormData) {
   const sourceTextValue = formData.get('sourceText');
   const sourceText = typeof sourceTextValue === 'string' ? sourceTextValue.trim() : '';
   const numCards = Number(formData.get('numCards'));
+  const cardStyle = (formData.get('cardStyle') as string) || 'objetivo';
 
   const { user } = await getAuth();
   if (!user) return { error: 'Usuário não autenticado.' };
   if (!sourceText) return { error: 'Informe um texto de estudo.' };
-  if (sourceText.length > 20000) return { error: 'O texto deve ter no máximo 20000 caracteres.' };
+  if (sourceText.length > 25000) return { error: 'O texto deve ter no máximo 25000 caracteres.' };
   if (!Number.isInteger(numCards) || numCards < 1 || numCards > 50) {
-    return { error: 'O número de flashcards deve ser um inteiro entre 1 e 50.' };
+    return { error: 'O número de flashcards deve ser entre 1 e 50.' };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { error: "Chave de API do Gemini não encontrada." };
+  const rawKey = process.env.GEMINI_API_KEY || '';
+  const apiKey = rawKey.replace(/["']/g, '').trim();
+  if (!apiKey) return { error: 'Chave GEMINI_API_KEY não configurada no ambiente.' };
 
-  const prompt = `Baseado no seguinte texto de estudo, gere exatamente ${numCards} flashcards no formato JSON para o Anki. O texto é: "${sourceText}". Você é um especialista em criar flashcards para o sistema de repetição espaçada Anki. O JSON deve ter uma chave "cards" que contém um array de objetos, cada um com "question" e "answer".`;
+  const styleInstruction =
+    cardStyle === 'cespe'
+      ? 'Crie afirmações no estilo Certo/Errado de banca de concurso (Cebraspe), colocando na resposta o gabarito (CERTO ou ERRADO) seguido da justificativa.'
+      : cardStyle === 'pratico'
+      ? 'Crie perguntas focadas em casos práticos, exceções de lei, prazos e pegadinhas clássicas de concursos.'
+      : 'Crie perguntas diretas, claras e objetivas na frente, e respostas concisas e completas no verso.';
+
+  const prompt = `Você é um especialista em preparação para concursos públicos e repetição espaçada (Anki).
+${styleInstruction}
+Baseado no texto de estudo abaixo, gere exatamente ${numCards} flashcards em português.
+Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+{"cards": [{"question": "pergunta aqui", "answer": "resposta aqui"}]}
+
+Texto de estudo:
+"""
+${sourceText}
+"""`;
+
+  const payload = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      maxOutputTokens: 8192,
+      temperature: 0.4,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  // Lista de modelos em ordem de prioridade + descoberta automática caso dê 404
+  const candidateModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash-latest',
+  ];
+
+  const callModel = async (modelName: string) => {
+    const cleanModel = modelName.replace(/^models\//, '');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  };
 
   try {
-    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-    const payload = { 
-        contents: chatHistory,
-        generationConfig: {
-            maxOutputTokens: 8192,
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: "OBJECT",
-                properties: {
-                    "cards": {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "question": { "type": "STRING" },
-                                "answer": { "type": "STRING" }
-                            },
-                            required: ["question", "answer"]
-                        }
-                    }
-                }
-            }
-        }
-    };
-    
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-    const sendRequest = () => fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(payload)
-    });
-    let response = await sendRequest();
-    if (response.status === 503 || response.status === 500) {
-      await new Promise<void>(resolve => setTimeout(resolve, 1500));
-      response = await sendRequest();
+    let response: Response | null = null;
+
+    for (const model of candidateModels) {
+      response = await callModel(model);
+      if (response.status !== 404) {
+        break;
+      }
     }
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error('Erro na API do Gemini:', response.status, errorBody);
-      if (response.status === 429) {
-        return { error: 'Limite de uso da IA atingido. Aguarde alguns minutos e tente novamente.' };
+    // Se todos os nomes padrão deram 404, consulta a API para descobrir qual modelo está ativo nesta chave
+    if (!response || response.status === 404) {
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+      );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const availableModel = (listData?.models || []).find(
+          (m: any) =>
+            Array.isArray(m.supportedGenerationMethods) &&
+            m.supportedGenerationMethods.includes('generateContent') &&
+            m.name?.includes('gemini')
+        );
+        if (availableModel?.name) {
+          response = await callModel(availableModel.name);
+        }
       }
-      if (
-        (response.status === 400 || response.status === 403) &&
-        ['API key', 'API_KEY', 'PERMISSION_DENIED'].some(reason => errorBody.includes(reason))
-      ) {
-        return {
-          error: 'A chave da API do Gemini é inválida ou não tem permissão. Verifique a variável GEMINI_API_KEY.',
-        };
+    }
+
+    if (!response || !response.ok) {
+      const status = response?.status || 500;
+      const errorBody = response ? await response.text() : '';
+      console.error('Erro na API do Gemini:', status, errorBody);
+
+      if (status === 429) {
+        return { error: 'Limite de uso gratuito da IA atingido. Aguarde 1 minuto e tente novamente.' };
       }
-      if (response.status === 503 || response.status === 500) {
-        return { error: 'A IA está sobrecarregada no momento. Tente novamente em instantes.' };
+      if (status === 400 || status === 403) {
+        return { error: 'Chave GEMINI_API_KEY inválida ou sem permissão no Google AI Studio.' };
       }
-      return {
-        error: `Falha ao gerar flashcards (código ${response.status}). Tente novamente mais tarde.`,
-      };
+      return { error: `Falha ao gerar flashcards (código ${status}). Verifique sua GEMINI_API_KEY.` };
     }
 
     const result = await response.json();
-    const candidate = result?.candidates?.[0];
-    const finishReason = candidate?.finishReason;
-    const text = candidate?.content?.parts?.[0]?.text;
-    if (finishReason === 'MAX_TOKENS') {
-      return { error: 'O texto gerou uma resposta grande demais. Tente com menos cards ou um texto menor.' };
-    }
-    if (
-      (typeof text !== 'string' || text.trim().length === 0) &&
-      (finishReason === 'SAFETY' || finishReason === 'RECITATION')
-    ) {
-      return { error: 'A IA recusou gerar flashcards para este texto.' };
-    }
-    if (typeof text !== 'string') {
-      return { error: 'A resposta da IA está em um formato inválido.' };
+    const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+      return { error: 'A IA retornou uma resposta vazia. Tente novamente.' };
     }
 
-    try {
-      const parsedJson = JSON.parse(text);
-      if (!Array.isArray(parsedJson?.cards)) {
-        return { error: 'A resposta da IA está em um formato inválido.' };
-      }
-      return { data: parsedJson.cards as Flashcard[] };
-    } catch {
-      return { error: 'A resposta da IA está em um formato inválido.' };
+    // Limpa possíveis blocos markdown ```json ... ```
+    const cleanJsonText = rawText
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    const parsed = JSON.parse(cleanJsonText);
+    const cardsArray = Array.isArray(parsed) ? parsed : parsed?.cards;
+
+    if (!Array.isArray(cardsArray) || cardsArray.length === 0) {
+      return { error: 'Formato inesperado da IA. Tente gerar novamente.' };
     }
-  } catch (error: unknown) {
+
+    const validCards: Flashcard[] = cardsArray
+      .filter((c: any) => c && typeof c.question === 'string' && typeof c.answer === 'string')
+      .map((c: any) => ({
+        question: c.question.trim(),
+        answer: c.answer.trim(),
+      }));
+
+    return { data: validCards };
+  } catch (error) {
     console.error('Falha ao gerar flashcards:', error);
-    return { error: 'Falha ao gerar flashcards. Tente novamente mais tarde.' };
+    return { error: 'Erro de conexão ao gerar flashcards. Tente novamente.' };
   }
-}
-
-export async function saveAnkiDeck(title: string, cards: Flashcard[]) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-  if (!title.trim()) return { error: "O título é obrigatório." };
-  if (cards.length === 0) return { error: "Não há flashcards para guardar." };
-
-  const { data, error } = await supabase.from('anki_decks').insert({ title, cards, user_id: user.id }).select('id').single();
-  if (error) return { error: "Falha ao guardar o deck de flashcards." };
-  
-  revalidatePath('/anki');
-  return { success: true, newDeckId: data.id };
-}
-
-export async function deleteAnkiDeck(deckId: number) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-
-  const { error } = await supabase.from('anki_decks').delete().match({ id: deckId, user_id: user.id });
-
-  if (error) {
-    return { error: "Falha ao apagar o deck." };
-  }
-
-  revalidatePath('/anki');
-  return { success: true };
-}
-
-export async function updateTarefaStatus(
-  id: number,
-  status: 'pendente' | 'concluida' | 'arquivada'
-) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Usuário não autenticado.' };
-
-  const isCompleted = status === 'concluida';
-
-  const { error } = await supabase
-    .from('tarefas')
-    .update({ status: status, completed: isCompleted })
-    .eq('id', id)
-    .eq('user_id', user.id);
-
-  if (error) {
-    return { error: "Falha ao atualizar o status da tarefa." };
-  }
-
-  revalidatePath('/tarefas');
-  return { success: true };
 }
 
 // ==================================================================

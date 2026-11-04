@@ -10,14 +10,8 @@ import {
   sessaoPertenceAoPlano,
   revisaoPertenceAoPlano,
   limparTagPlano,
+  getHojeBrasilISO,
 } from '@/lib/plano-ativo';
-import {
-  type SessaoEstudo,
-  type Tarefa,
-  type Revisao,
-  type StudyGoal,
-  type Lembrete,
-} from '@/lib/types';
 import {
   CalendarCheck,
   ArrowRight,
@@ -199,7 +193,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     kpiEditalMes,
   } = useMemo(() => {
     const now = new Date();
-    const todayISO = now.toISOString().split('T')[0];
+    const todayISO = getHojeBrasilISO(0);
     const currentMonth = now.getUTCMonth();
     const currentYear = now.getUTCFullYear();
 
@@ -305,7 +299,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     inicioPeriodo.setDate(fimPeriodo.getDate() - 29);
 
     const dias: { dateISO: string; label: string; studied: boolean; isToday: boolean }[] = [];
-    const todayISO = hoje.toISOString().split('T')[0];
+    const todayISO = getHojeBrasilISO(0);
 
     for (let i = 0; i < 30; i++) {
       const d = new Date(inicioPeriodo);
@@ -419,7 +413,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
   // -------------------------------------------------------------
   const { linhasTabelaSemanal, labelSemanaTabela, resumoSemanal } = useMemo(() => {
     const hoje = new Date();
-    const todayISO = hoje.toISOString().split('T')[0];
+    const todayISO = getHojeBrasilISO(0);
     const segundaBase = getMondayOfCurrentWeek(hoje, weekOffset);
     const domingoBase = new Date(segundaBase);
     domingoBase.setDate(segundaBase.getDate() + 6);
@@ -508,7 +502,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
   // -------------------------------------------------------------
   const distribuicaoMaterias = useMemo(() => {
     const hoje = new Date();
-    const todayISO = hoje.toISOString().split('T')[0];
+    const todayISO = getHojeBrasilISO(0);
     const segundaAtual = getMondayOfCurrentWeek(hoje, 0);
     const segundaISO = segundaAtual.toISOString().split('T')[0];
     const mesAtual = hoje.getUTCMonth();

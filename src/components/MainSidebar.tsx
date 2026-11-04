@@ -46,6 +46,7 @@ const navItems = [
   { name: 'Home', href: '/', icon: LayoutDashboard },
   { name: 'Planos', href: '/guia-estudos', icon: FolderKanban },
   { name: 'Disciplinas', href: '/disciplinas', icon: Layers },
+  { name: 'Edital Verticalizado', href: '/edital-verticalizado', icon: ListTodo },
   { name: 'Planejamento', href: '/ciclo', icon: Recycle },
   { name: 'Revisões', href: '/revisoes', icon: RotateCcw },
   { name: 'Histórico', href: '/historico', icon: History },
@@ -56,7 +57,6 @@ const navItems = [
   { name: 'Tarefas', href: '/tarefas', icon: ListTodo },
   { name: 'Calendário', href: '/calendario', icon: Calendar },
 ];
-
 interface Profile {
   full_name: string | null;
   avatar_url: string | null;

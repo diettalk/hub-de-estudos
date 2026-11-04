@@ -11,6 +11,7 @@ const inter = Inter({ subsets: ['latin'], display: 'swap' });
 export const metadata: Metadata = {
   title: 'HUB de Estudos | Sua Plataforma Centralizada para a Aprovação',
   description: 'Gerencie disciplinas, ciclos de estudo, revisões espaçadas, caderno de erros e flashcards em um só lugar.',
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
@@ -34,7 +35,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   let profile: ProfileData = null;
   if (user) {

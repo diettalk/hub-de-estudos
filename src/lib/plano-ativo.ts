@@ -14,7 +14,20 @@ export interface PlanoAtivoInfo {
   disciplinaNomes: string[];
 }
 
-// Extrai o ID do plano se estiver gravado na sessão (ex: "[PLANO:12]")
+// Retorna a data de hoje (YYYY-MM-DD) sempre no fuso horário de Brasília (evita o bug das 21h UTC)
+export function getHojeBrasilISO(offsetDays = 0): string {
+  const now = new Date();
+  if (offsetDays !== 0) {
+    now.setDate(now.getDate() + offsetDays);
+  }
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
 export function extrairPlanoIdDaSessao(sessao: {
   diario_de_bordo?: string | null;
   foco_sugerido?: string | null;
@@ -24,32 +37,26 @@ export function extrairPlanoIdDaSessao(sessao: {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// Remove a tag técnica "[PLANO:12]" apenas na hora de exibir na tela para ficar limpo
 export function limparTagPlano(texto: string | null | undefined): string {
   if (!texto) return '';
   return texto.replace(/\[PLANO:\d+\]\s*/g, '').trim();
 }
 
-// Verifica se uma sessão pertence ao Plano Ativo selecionado
 export function sessaoPertenceAoPlano(
   sessao: SessaoEstudo,
   plano: PlanoAtivoInfo | null
 ): boolean {
-  // Se nenhum plano específico estiver filtrado (Visão Geral), aceita todas
   if (!plano) return true;
 
-  // 1. Se a sessão tem carimbo explícito de um plano
   const planoCarimbado = extrairPlanoIdDaSessao(sessao);
   if (planoCarimbado !== null) {
     return planoCarimbado === plano.id;
   }
 
-  // 2. Se a sessão tem disciplina_id vinculada a este plano
   if (sessao.disciplina_id && plano.disciplinaIds.includes(Number(sessao.disciplina_id))) {
     return true;
   }
 
-  // 3. Se o nome da matéria coincide com uma das disciplinas vinculadas ao plano
   if (sessao.materia_nome?.trim()) {
     const nomeNorm = sessao.materia_nome.trim().toLowerCase();
     if (plano.disciplinaNomes.some((n) => n.toLowerCase() === nomeNorm)) {
@@ -60,7 +67,6 @@ export function sessaoPertenceAoPlano(
   return false;
 }
 
-// Verifica se uma revisão pertence ao Plano Ativo selecionado
 export function revisaoPertenceAoPlano(
   revisao: Revisao,
   plano: PlanoAtivoInfo | null,
@@ -68,7 +74,11 @@ export function revisaoPertenceAoPlano(
 ): boolean {
   if (!plano) return true;
 
-  // Verifica pelo nome da matéria ou foco
+  const match = (revisao.foco_sugerido || '').match(/\[PLANO:(\d+)\]/);
+  if (match) {
+    return parseInt(match[1], 10) === plano.id;
+  }
+
   if (revisao.materia_nome?.trim()) {
     const nomeNorm = revisao.materia_nome.trim().toLowerCase();
     if (plano.disciplinaNomes.some((n) => n.toLowerCase() === nomeNorm)) {
@@ -82,89 +92,122 @@ export function revisaoPertenceAoPlano(
   return false;
 }
 
-// Hook reativo que sincroniza o Plano Ativo em qualquer tela do Hub
+// Cache compartilhado em memória para evitar múltiplas chamadas simultâneas ao Supabase
+let cachedPlanos: PlanoAtivoInfo[] | null = null;
+let cachedUserId: string | null = null;
+let inflightPromise: Promise<PlanoAtivoInfo[]> | null = null;
+
 export function usePlanoAtivo() {
-  const [planos, setPlanos] = useState<PlanoAtivoInfo[]>([]);
+  const [planos, setPlanos] = useState<PlanoAtivoInfo[]>(cachedPlanos || []);
   const [planoAtivoId, setPlanoAtivoId] = useState<number | 'all' | null>(null);
-  const [userId, setUserId] = useState<string>('anon');
-  const [isLoadingPlano, setIsLoadingPlano] = useState(true);
+  const [userId, setUserId] = useState<string>(cachedUserId || 'anon');
+  const [isLoadingPlano, setIsLoadingPlano] = useState(!cachedPlanos);
   const supabase = createClient();
 
-  const carregarPlanos = useCallback(async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setIsLoadingPlano(false);
+  const selecionarPlanoSalvo = useCallback((lista: PlanoAtivoInfo[], uid: string) => {
+    if (lista.length === 0) {
+      setPlanoAtivoId('all');
       return;
     }
+    const storageKey = `hub_plano_ativo_id_${uid}`;
+    const saved =
+      localStorage.getItem(storageKey) || localStorage.getItem('hub_plano_ativo_id');
+    if (saved === 'all') {
+      setPlanoAtivoId('all');
+    } else if (saved && lista.some((p) => String(p.id) === saved)) {
+      setPlanoAtivoId(Number(saved));
+    } else {
+      const primeiroAtivo = lista.find((p) => p.status === 'ativo') || lista[0];
+      setPlanoAtivoId(primeiroAtivo.id);
+      localStorage.setItem(storageKey, String(primeiroAtivo.id));
+    }
+  }, []);
 
-    setUserId(user.id);
-    const storageKey = `hub_plano_ativo_id_${user.id}`;
+  const carregarPlanos = useCallback(
+    async (forceRefresh = false) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoadingPlano(false);
+        return;
+      }
 
-    const { data } = await supabase
-      .from('concursos')
-      .select(
-        'id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))'
-      )
-      .eq('user_id', user.id)
-      .order('ordem', { ascending: true, nullsFirst: false });
+      setUserId(user.id);
 
-    if (data && data.length > 0) {
-      const formatados: PlanoAtivoInfo[] = data.map((c: any) => {
-        const dIds: number[] = [];
-        const dNomes: string[] = [];
-        (c.concurso_paginas || []).forEach((cp: any) => {
-          if (cp.pagina_id) dIds.push(Number(cp.pagina_id));
-          if (cp.paginas?.id && !dIds.includes(Number(cp.paginas.id))) {
-            dIds.push(Number(cp.paginas.id));
-          }
-          if (cp.paginas?.title) {
-            dNomes.push(cp.paginas.title.trim());
-          }
+      if (!forceRefresh && cachedPlanos && cachedUserId === user.id) {
+        setPlanos(cachedPlanos);
+        selecionarPlanoSalvo(cachedPlanos, user.id);
+        setIsLoadingPlano(false);
+        return;
+      }
+
+      if (!forceRefresh && inflightPromise) {
+        const res = await inflightPromise;
+        setPlanos(res);
+        selecionarPlanoSalvo(res, user.id);
+        setIsLoadingPlano(false);
+        return;
+      }
+
+      inflightPromise = (async () => {
+        const { data } = await supabase
+          .from('concursos')
+          .select(
+            'id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))'
+          )
+          .eq('user_id', user.id)
+          .order('ordem', { ascending: true, nullsFirst: false });
+
+        const formatados: PlanoAtivoInfo[] = (data || []).map((c: any) => {
+          const dIds: number[] = [];
+          const dNomes: string[] = [];
+          (c.concurso_paginas || []).forEach((cp: any) => {
+            if (cp.pagina_id) dIds.push(Number(cp.pagina_id));
+            if (cp.paginas?.id && !dIds.includes(Number(cp.paginas.id))) {
+              dIds.push(Number(cp.paginas.id));
+            }
+            if (cp.paginas?.title) {
+              dNomes.push(cp.paginas.title.trim());
+            }
+          });
+
+          return {
+            id: c.id,
+            nome: c.nome,
+            banca: c.banca,
+            data_prova: c.data_prova,
+            status: c.status,
+            disciplinaIds: dIds,
+            disciplinaNomes: dNomes,
+          };
         });
 
-        return {
-          id: c.id,
-          nome: c.nome,
-          banca: c.banca,
-          data_prova: c.data_prova,
-          status: c.status,
-          disciplinaIds: dIds,
-          disciplinaNomes: dNomes,
-        };
-      });
+        cachedPlanos = formatados;
+        cachedUserId = user.id;
+        inflightPromise = null;
+        return formatados;
+      })();
 
-      setPlanos(formatados);
-
-      const saved =
-        localStorage.getItem(storageKey) || localStorage.getItem('hub_plano_ativo_id');
-      if (saved === 'all') {
-        setPlanoAtivoId('all');
-      } else if (saved && formatados.some((p) => String(p.id) === saved)) {
-        setPlanoAtivoId(Number(saved));
-      } else {
-        const primeiroAtivo =
-          formatados.find((p) => p.status === 'ativo') || formatados[0];
-        setPlanoAtivoId(primeiroAtivo.id);
-        localStorage.setItem(storageKey, String(primeiroAtivo.id));
-      }
-    } else {
-      setPlanos([]);
-      setPlanoAtivoId('all');
-    }
-    setIsLoadingPlano(false);
-  }, [supabase]);
+      const listaFinal = await inflightPromise;
+      setPlanos(listaFinal);
+      selecionarPlanoSalvo(listaFinal, user.id);
+      setIsLoadingPlano(false);
+    },
+    [supabase, selecionarPlanoSalvo]
+  );
 
   useEffect(() => {
-    carregarPlanos();
+    carregarPlanos(false);
 
     const handlePlanoChanged = (e: Event) => {
-      const custom = e as CustomEvent<{ id: number | 'all' }>;
+      const custom = e as CustomEvent<{ id: number | 'all'; forceRefresh?: boolean }>;
       if (custom.detail?.id !== undefined) {
         setPlanoAtivoId(custom.detail.id);
       }
-      carregarPlanos();
+      if (custom.detail?.forceRefresh) {
+        carregarPlanos(true);
+      }
     };
 
     window.addEventListener('plano-ativo-changed', handlePlanoChanged);
@@ -191,6 +234,6 @@ export function usePlanoAtivo() {
     planoAtivoId,
     isLoadingPlano,
     alterarPlanoAtivo,
-    recarregarPlanos: carregarPlanos,
+    recarregarPlanos: () => carregarPlanos(true),
   };
 }

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toggleConclusaoSessao, linkPastaToConcurso } from '@/app/actions';
-import { usePlanoAtivo } from '@/lib/plano-ativo';
+import { usePlanoAtivo, getHojeBrasilISO } from '@/lib/plano-ativo';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -136,16 +136,15 @@ export function RegistroEstudoModal() {
     return paginas.filter((p) => p.parent_id === numId);
   }, [paginas, disciplinaId]);
 
-  const getSelectedDateISO = () => {
-    const now = new Date();
-    if (datePreset === 'hoje') return now.toISOString().split('T')[0];
-    if (datePreset === 'ontem') {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      return yesterday.toISOString().split('T')[0];
-    }
-    return customDate || now.toISOString().split('T')[0];
-  };
+const getSelectedDateISO = () => {
+  if (datePreset === 'hoje') {
+    return getHojeBrasilISO(0);
+  }
+  if (datePreset === 'ontem') {
+    return getHojeBrasilISO(-1);
+  }
+  return customDate || getHojeBrasilISO(0);
+};
 
   const handleOnlyNumbers = (val: string, setter: (v: string) => void) => {
     setter(val.replace(/\D/g, '').slice(0, 5));
