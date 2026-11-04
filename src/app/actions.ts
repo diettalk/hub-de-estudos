@@ -1057,4 +1057,26 @@ export async function saveAnkiDeck(
     .single();
   if (error) return { error: 'Falha ao guardar o deck de flashcards.' };
 
-  revalidate
+  revalidatePath('/anki');
+  return { success: true, newDeckId: data.id };
+}
+
+export async function deleteAnkiDeck(deckId: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+
+  const { error } = await supabase
+    .from('anki_decks')
+    .delete()
+    .match({ id: deckId, user_id: user.id });
+
+  if (error) {
+    return { error: 'Falha ao apagar o deck.' };
+  }
+
+  revalidatePath('/anki');
+  return { success: true };
+}
