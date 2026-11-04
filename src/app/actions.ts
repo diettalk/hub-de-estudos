@@ -1037,3 +1037,24 @@ export async function updateAnkiDeck(deckId: number, title: string, cards: Flash
     revalidatePath('/anki');
     return { success: true };
 }
+
+export async function saveAnkiDeck(
+  title: string,
+  cards: { question: string; answer: string }[]
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não autenticado.' };
+  if (!title.trim()) return { error: 'O título é obrigatório.' };
+  if (cards.length === 0) return { error: 'Não há flashcards para guardar.' };
+
+  const { data, error } = await supabase
+    .from('anki_decks')
+    .insert({ title, cards, user_id: user.id })
+    .select('id')
+    .single();
+  if (error) return { error: 'Falha ao guardar o deck de flashcards.' };
+
+  revalidate
