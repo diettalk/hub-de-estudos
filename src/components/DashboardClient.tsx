@@ -6,6 +6,13 @@ import { createClient } from '@/lib/supabase/client';
 import { DashboardListItem } from '@/components/ui/DashboardListItem';
 import { updateRevisaoStatus, toggleTarefa, toggleConclusaoSessao } from '@/app/actions';
 import {
+  type SessaoEstudo,
+  type Tarefa,
+  type Revisao,
+  type StudyGoal,
+  type Lembrete,
+} from '@/lib/types';
+import {
   usePlanoAtivo,
   sessaoPertenceAoPlano,
   revisaoPertenceAoPlano,
