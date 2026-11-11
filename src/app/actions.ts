@@ -5,7 +5,13 @@ import { revalidatePath } from 'next/cache';
 import { add } from 'date-fns';
 import { type SessaoEstudo } from '@/lib/types';
 import { JSONContent } from '@tiptap/react';
-
+import {
+  type SessaoEstudo,
+  type Tarefa,
+  type Revisao,
+  type StudyGoal,
+  type Lembrete,
+} from '@/lib/types';
 
 type Flashcard = {
   question: string;
