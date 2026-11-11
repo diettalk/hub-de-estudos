@@ -13,6 +13,13 @@ import {
   getHojeBrasilISO,
 } from '@/lib/plano-ativo';
 import {
+  type SessaoEstudo,
+  type Tarefa,
+  type Revisao,
+  type StudyGoal,
+  type Lembrete,
+} from '@/lib/types';
+import {
   CalendarCheck,
   ArrowRight,
   RotateCcw,
