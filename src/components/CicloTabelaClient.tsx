@@ -150,13 +150,11 @@ export function CicloTabelaClient({
     [sessoes, planoAtivo]
   );
 
+// Exibe sempre todas as pastas primárias de disciplinas para nenhuma ficar de fora do planejamento
   const disciplinasDoPlano = useMemo(() => {
-    if (planoAtivo && planoAtivo.disciplinaIds.length > 0) {
-      return disciplinaTree.filter((d) => planoAtivo.disciplinaIds.includes(Number(d.id)));
-    }
     return disciplinaTree;
-  }, [disciplinaTree, planoAtivo]);
-
+  }, [disciplinaTree]);
+  
   const sessoesCicloAtivo = useMemo(
     () => sessoesDoPlano.filter((s) => !s.materia_finalizada),
     [sessoesDoPlano]

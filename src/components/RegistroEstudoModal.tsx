@@ -121,15 +121,10 @@ export function RegistroEstudoModal() {
     fetchPaginas();
   }, [open, supabase]);
 
-  // Se houver um Plano Ativo com disciplinas vinculadas, exibe apenas as disciplinas daquele plano (ou todas se o plano ainda estiver vazio)
-  const disciplinasRaiz = useMemo(() => {
-    const todasRaiz = paginas.filter((p) => p.parent_id === null);
-    if (planoAtivo && planoAtivo.disciplinaIds.length > 0) {
-      return todasRaiz.filter((p) => planoAtivo.disciplinaIds.includes(p.id));
-    }
-    return todasRaiz;
-  }, [paginas, planoAtivo]);
-
+const disciplinasRaiz = useMemo(() => {
+    return paginas.filter((p) => p.parent_id === null);
+  }, [paginas]);
+  
   const topicosDaDisciplina = useMemo(() => {
     if (!disciplinaId || disciplinaId === 'nova') return [];
     const numId = Number(disciplinaId);
