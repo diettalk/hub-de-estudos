@@ -25,6 +25,9 @@ import {
   X,
   Check,
   Loader2,
+  FileText,
+  Video,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -42,17 +45,26 @@ const ICON_COLORS = [
   'bg-amber-500/20 text-amber-400 border-amber-500/30',
 ];
 
-function extrairMinutos(diario: string | null): number {
+// Extrai a duração exata (lendo tanto ⏱️ HH:MM:SS quanto [PROG:XX] e [MIN:XX])
+function extrairMinutosExatos(diario: string | null): number {
   if (diario) {
-    const match = diario.match(/⏱️\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    if (match) {
-      const hrs = parseInt(match[1], 10) || 0;
-      const mins = parseInt(match[2], 10) || 0;
-      const secs = parseInt(match[3] || '0', 10) || 0;
-      return hrs * 60 + mins + Math.round(secs / 60);
+    const matchTime = diario.match(/⏱️\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (matchTime) {
+      const hrs = parseInt(matchTime[1], 10) || 0;
+      const mins = parseInt(matchTime[2], 10) || 0;
+      const secs = parseInt(matchTime[3] || '0', 10) || 0;
+      return Math.max(1, hrs * 60 + mins + Math.round(secs / 60));
+    }
+    const matchProg = diario.match(/\[PROG:(\d+)\]/);
+    if (matchProg) {
+      return parseInt(matchProg[1], 10) || 45;
+    }
+    const matchMin = diario.match(/\[MIN:(\d+)\]/);
+    if (matchMin) {
+      return parseInt(matchMin[1], 10) || 45;
     }
   }
-  return 50;
+  return 45;
 }
 
 function extrairPaginasLidas(diario: string | null): number {
@@ -66,21 +78,70 @@ function extrairPaginasLidas(diario: string | null): number {
   return 0;
 }
 
-function extrairCategoriaETopico(foco: string | null): { categoria: string; topico: string } {
-  const limpo = limparTagPlano(foco);
-  const match = limpo.match(/^\[([^\]]+)\]\s*(.*)$/);
-  if (match) {
-    return { categoria: match[1], topico: match[2] || 'Estudo Geral' };
+// Extrai todos os metadados ricos de cada sessão (Categoria, Tópico, Material, Páginas, Vídeo e Comentários)
+function extrairDetalhesSessao(sessao: SessaoEstudo) {
+  const focoLimpo = limparTagPlano(sessao.foco_sugerido);
+  let categoria = 'Teoria';
+  let restoFoco = focoLimpo;
+
+  const matchCat = restoFoco.match(/^\[([^\]]+)\]\s*(.*)$/);
+  if (matchCat) {
+    categoria = matchCat[1];
+    restoFoco = matchCat[2];
   }
-  return { categoria: 'Teoria', topico: limpo || 'Estudo Geral' };
+
+  let material = '';
+  const matchMat = restoFoco.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (matchMat) {
+    restoFoco = matchMat[1];
+    material = matchMat[2];
+  }
+
+  const topico = restoFoco.trim() || 'Estudo Geral';
+
+  const diario = sessao.diario_de_bordo || '';
+  const matchPags = diario.match(/📄\s*(Págs:\s*\d+\s*a\s*\d+)/i);
+  const paginasTexto = matchPags ? matchPags[1] : '';
+
+  const matchVideo = diario.match(/🎥\s*Vídeo:\s*([^|]+)/i);
+  const videoTexto = matchVideo ? matchVideo[1].trim() : '';
+
+  // Comentário limpo sem tags técnicas
+  const comentario = diario
+    .replace(/\[HISTORICO\]\s*\|?\s*/g, '')
+    .replace(/\[PLANO:\d+\]\s*\|?\s*/g, '')
+    .replace(/\[MIN:\d+\]\s*\|?\s*/g, '')
+    .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+    .replace(/\[DIA:[^\]]+\]\s*\|?\s*/g, '')
+    .replace(/\[SIMULADO:[^\]]+\]\s*\|?\s*/g, '')
+    .replace(/⏱️\s*\d{1,2}:\d{2}(?::\d{2})?\s*\|?\s*/g, '')
+    .replace(/📄\s*Págs:\s*\d+\s*a\s*\d+\s*\|?\s*/gi, '')
+    .replace(/🎥\s*Vídeo:\s*[^|]+\|?\s*/gi, '')
+    .replace(/^\|\s*|\s*\|$/g, '')
+    .trim();
+
+  return {
+    categoria,
+    topico,
+    material,
+    paginasTexto,
+    videoTexto,
+    comentario,
+  };
 }
 
 function extrairTempoString(diario: string | null): string {
   if (diario) {
     const match = diario.match(/⏱️\s*(\d{1,2}:\d{2}(?::\d{2})?)/);
     if (match) return match[1];
+    const mins = extrairMinutosExatos(diario);
+    const h = Math.floor(mins / 60)
+      .toString()
+      .padStart(2, '0');
+    const m = (mins % 60).toString().padStart(2, '0');
+    return `${h}:${m}:00`;
   }
-  return '00:50:00';
+  return '00:45:00';
 }
 
 function formatarHoras(min: number): string {
@@ -102,7 +163,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
   const [disciplinaFilter, setDisciplinaFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal de Edição
   const [editingSessao, setEditingSessao] = useState<SessaoEstudo | null>(null);
   const [editMateria, setEditMateria] = useState('');
   const [editFoco, setEditFoco] = useState('');
@@ -112,10 +172,36 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
   const [editTotal, setEditTotal] = useState('0');
   const [editNotas, setEditNotas] = useState('');
 
-  const sessoesDoPlano = useMemo(
-    () => sessoes.filter((s) => s.concluida && sessaoPertenceAoPlano(s, planoAtivo)),
-    [sessoes, planoAtivo]
-  );
+  // Filtra pelo Plano Ativo e remove duplicatas entre molde da sequência e registro [HISTORICO]
+  const sessoesDoPlano = useMemo(() => {
+    const concluidasPlano = sessoes.filter(
+      (s) => s.concluida && sessaoPertenceAoPlano(s, planoAtivo)
+    );
+
+    // Se já existem registros com [HISTORICO] ou ⏱️ naquele dia para aquela matéria, oculta o molde genérico [MIN:XX] para não duplicar!
+    const temHistoricoNoDia = new Set<string>();
+    concluidasPlano.forEach((s) => {
+      const diario = s.diario_de_bordo || '';
+      if (diario.includes('[HISTORICO]') || diario.includes('⏱️')) {
+        const dISO = s.data_estudo ? s.data_estudo.split('T')[0] : '';
+        temHistoricoNoDia.add(`${dISO}__${(s.materia_nome || '').trim().toLowerCase()}`);
+      }
+    });
+
+    return concluidasPlano.filter((s) => {
+      const diario = s.diario_de_bordo || '';
+      const isMoldePuro =
+        diario.includes('[MIN:') &&
+        !diario.includes('[HISTORICO]') &&
+        !diario.includes('⏱️');
+      if (isMoldePuro) {
+        const dISO = s.data_estudo ? s.data_estudo.split('T')[0] : '';
+        const chave = `${dISO}__${(s.materia_nome || '').trim().toLowerCase()}`;
+        if (temHistoricoNoDia.has(chave)) return false;
+      }
+      return true;
+    });
+  }, [sessoes, planoAtivo]);
 
   const sessoesFiltradas = useMemo(() => {
     const hoje = new Date();
@@ -138,7 +224,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     });
   }, [sessoesDoPlano, periodoFilter, disciplinaFilter, searchQuery]);
 
-  // Cálculo dos 4 KPIs Superiores (Idêntico ao Print 1)
   const kpis = useMemo(() => {
     let totalMinutos = 0;
     let totalAcertos = 0;
@@ -147,7 +232,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     const materiasSet = new Set<string>();
 
     sessoesFiltradas.forEach((s) => {
-      totalMinutos += extrairMinutos(s.diario_de_bordo);
+      totalMinutos += extrairMinutosExatos(s.diario_de_bordo);
       totalAcertos += Number(s.questoes_acertos) || 0;
       totalQuestoes += Number(s.questoes_total) || 0;
       totalPaginas += extrairPaginasLidas(s.diario_de_bordo);
@@ -158,7 +243,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     const percDesempenho =
       totalQuestoes > 0 ? Math.round((totalAcertos / totalQuestoes) * 100) : 0;
 
-    // Tópicos do edital (subpáginas das disciplinas do plano)
     const subtopicos = disciplinas.filter((d) => {
       if (!d.parent_id) return false;
       if (planoAtivo && planoAtivo.disciplinaIds.length > 0) {
@@ -191,19 +275,19 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     };
   }, [sessoesFiltradas, disciplinas, planoAtivo, sessoesDoPlano.length]);
 
-  // Agrupamento por Dia (Idêntico ao Print 1: "14/05 Qui — 🕒 1h30min")
   const gruposPorDia = useMemo(() => {
     const mapa: Record<string, { dataISO: string; minutosDia: number; itens: SessaoEstudo[] }> = {};
     sessoesFiltradas.forEach((s) => {
       const k = s.data_estudo ? s.data_estudo.split('T')[0] : 'Sem Data';
       if (!mapa[k]) mapa[k] = { dataISO: k, minutosDia: 0, itens: [] };
-      mapa[k].minutosDia += extrairMinutos(s.diario_de_bordo);
+      mapa[k].minutosDia += extrairMinutosExatos(s.diario_de_bordo);
       mapa[k].itens.push(s);
     });
     return Object.values(mapa).sort((a, b) => b.dataISO.localeCompare(a.dataISO));
   }, [sessoesFiltradas]);
 
   const handleOpenEdit = (s: SessaoEstudo) => {
+    const det = extrairDetalhesSessao(s);
     setEditingSessao(s);
     setEditMateria(s.materia_nome || '');
     setEditFoco(limparTagPlano(s.foco_sugerido));
@@ -211,10 +295,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     setEditTempo(extrairTempoString(s.diario_de_bordo));
     setEditAcertos(String(s.questoes_acertos ?? 0));
     setEditTotal(String(s.questoes_total ?? 0));
-    const comentarioLimpo = limparTagPlano(s.diario_de_bordo)
-      .replace(/⏱️\s*\d{1,2}:\d{2}(?::\d{2})?\s*\|?\s*/, '')
-      .trim();
-    setEditNotas(comentarioLimpo);
+    setEditNotas(det.comentario);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -222,7 +303,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
     if (!editingSessao) return;
 
     startTransition(async () => {
-      const partesDiario: string[] = [];
+      const partesDiario: string[] = ['[HISTORICO]'];
       if (planoAtivo) partesDiario.push(`[PLANO:${planoAtivo.id}]`);
       partesDiario.push(`⏱️ ${editTempo.trim() || '00:45:00'}`);
       if (editNotas.trim()) partesDiario.push(editNotas.trim());
@@ -280,7 +361,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO IGUAL AO PRINT 1 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -292,7 +372,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Registros detalhados dos seus estudos
+            Registros detalhados e individualizados de cada sessão de estudo
           </p>
         </div>
 
@@ -306,9 +386,8 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
         </Button>
       </div>
 
-      {/* OS 4 CARDS DE TOPO IDÊNTICOS AO PRINT 1 */}
+      {/* OS 4 CARDS DE TOPO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* 1. TEMPO DE ESTUDO */}
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -322,11 +401,10 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
             {formatarHoras(kpis.totalMinutos)}
           </span>
           <span className="text-xs text-muted-foreground">
-            acumulado nos registros
+            em {sessoesFiltradas.length} sessões registradas
           </span>
         </div>
 
-        {/* 2. DESEMPENHO */}
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -349,7 +427,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
           </span>
         </div>
 
-        {/* 3. PROGRESSO NO EDITAL */}
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -372,7 +449,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
           </span>
         </div>
 
-        {/* 4. PÁGINAS LIDAS */}
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -396,7 +472,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
         </div>
       </div>
 
-      {/* BOTÃO DE FILTROS NO CANTO DIREITO (IGUAL AO PRINT 1) */}
+      {/* FILTROS */}
       <div className="flex flex-col gap-3">
         <div className="flex justify-end">
           <Button
@@ -457,7 +533,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
         )}
       </div>
 
-      {/* LISTA DE REGISTROS AGRUPADOS POR DIA (ESTILO PRINT 1) */}
+      {/* LISTA DE REGISTROS AGRUPADOS POR DIA COM DIFERENCIAÇÃO COMPLETA DE SESSÕES */}
       <div className="space-y-4">
         {gruposPorDia.length > 0 ? (
           gruposPorDia.map((grupo) => {
@@ -474,58 +550,117 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                   .replace('.', '')
               : '';
 
+            // Conta quantas vezes cada matéria foi estudada no mesmo dia para numerar (1ª sessão, 2ª sessão...)
+            const contagemPorMateriaNoDia: Record<string, number> = {};
+            grupo.itens.forEach((it) => {
+              const m = (it.materia_nome || 'Geral').trim();
+              contagemPorMateriaNoDia[m] = (contagemPorMateriaNoDia[m] || 0) + 1;
+            });
+            const indiceAtualMateriaNoDia: Record<string, number> = {};
+
+            // Ordena do primeiro ao último registro do dia para numerar na ordem certa
+            const itensOrdenados = [...grupo.itens].sort((a, b) => a.id - b.id);
+
             return (
               <div
                 key={grupo.dataISO}
                 className="rounded-2xl bg-card border border-border shadow-xs overflow-hidden"
               >
-                {/* Topo do Card do Dia: "14/05 Qui — 🕒 1h30min" */}
-                <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between text-xs">
+                <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between text-xs bg-secondary/20">
                   <div className="flex items-baseline gap-2">
                     <span className="font-extrabold text-sm text-foreground">{diaMes}</span>
                     <span className="text-muted-foreground capitalize font-medium">
                       {diaSemana}
                     </span>
+                    <Badge variant="outline" className="text-[10px] ml-1">
+                      {grupo.itens.length} {grupo.itens.length === 1 ? 'registro' : 'registros'}
+                    </Badge>
                   </div>
-                  <div className="flex items-center gap-1.5 font-bold text-foreground">
-                    <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                    <Clock className="w-3.5 h-3.5" />
                     <span>{formatarHoras(grupo.minutosDia)}</span>
                   </div>
                 </div>
 
-                {/* Itens estudados naquele dia */}
                 <div className="divide-y divide-border/50">
-                  {grupo.itens.map((reg, idx) => {
-                    const mins = extrairMinutos(reg.diario_de_bordo);
+                  {itensOrdenados.map((reg, idx) => {
+                    const mins = extrairMinutosExatos(reg.diario_de_bordo);
                     const ac = Number(reg.questoes_acertos) || 0;
                     const tot = Number(reg.questoes_total) || 0;
                     const perc = tot > 0 ? Math.round((ac / tot) * 100) : null;
-                    const { categoria, topico } = extrairCategoriaETopico(reg.foco_sugerido);
+                    const det = extrairDetalhesSessao(reg);
                     const catLabel =
-                      tot > 0 && categoria === 'Teoria' ? 'Teoria + Questões' : categoria;
+                      tot > 0 && det.categoria === 'Teoria'
+                        ? 'Teoria + Questões'
+                        : det.categoria;
                     const colorClass = ICON_COLORS[idx % ICON_COLORS.length];
+
+                    const matKey = (reg.materia_nome || 'Geral').trim();
+                    indiceAtualMateriaNoDia[matKey] = (indiceAtualMateriaNoDia[matKey] || 0) + 1;
+                    const numSessao = indiceAtualMateriaNoDia[matKey];
+                    const totalSessoesDestaMatNoDia = contagemPorMateriaNoDia[matKey];
 
                     return (
                       <div
                         key={reg.id}
                         className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-secondary/20 transition-colors group"
                       >
-                        <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
                           <span
                             className={cn(
-                              'w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold flex-shrink-0',
+                              'w-9 h-9 rounded-xl border flex items-center justify-center text-xs font-extrabold flex-shrink-0 mt-0.5',
                               colorClass
                             )}
                           >
                             A-Z
                           </span>
-                          <div className="min-w-0">
-                            <h3 className="text-sm font-bold text-foreground truncate">
-                              {reg.materia_nome || 'Disciplina'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide truncate mt-0.5">
-                              {topico}
+                          <div className="min-w-0 space-y-1 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-sm font-bold text-foreground truncate">
+                                {reg.materia_nome || 'Disciplina'}
+                              </h3>
+
+                              {/* Se estudou a mesma matéria mais de 1 vez no dia, especifica qual sessão foi! */}
+                              {totalSessoesDestaMatNoDia > 1 && (
+                                <Badge className="bg-indigo-500/15 text-indigo-400 border-indigo-500/30 text-[10px] font-bold">
+                                  {numSessao}ª sessão do dia
+                                </Badge>
+                              )}
+                            </div>
+
+                            <p className="text-xs text-muted-foreground font-medium">
+                              {det.topico}
                             </p>
+
+                            {/* Especificações extras daquela sessão (Material, Páginas, Videoaula e Comentários) */}
+                            {(det.material || det.paginasTexto || det.videoTexto || det.comentario) && (
+                              <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
+                                {det.material && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/60">
+                                    <BookOpen className="w-3 h-3 text-emerald-500" />
+                                    {det.material}
+                                  </span>
+                                )}
+                                {det.paginasTexto && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/60">
+                                    <FileText className="w-3 h-3 text-sky-400" />
+                                    {det.paginasTexto}
+                                  </span>
+                                )}
+                                {det.videoTexto && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/60">
+                                    <Video className="w-3 h-3 text-rose-400" />
+                                    {det.videoTexto}
+                                  </span>
+                                )}
+                                {det.comentario && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/60 max-w-md truncate">
+                                    <MessageSquare className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                    {det.comentario}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -534,7 +669,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                             {catLabel}
                           </Badge>
 
-                          <span className="font-semibold text-muted-foreground w-16 text-right">
+                          <span className="font-mono font-bold text-emerald-400 w-16 text-right">
                             {formatarHoras(mins)}
                           </span>
 
@@ -563,7 +698,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100">
+                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
                             <Button
                               variant="ghost"
                               size="icon"
