@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo, useTransition } from 'react';
+import React, { useState, useMemo, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { updateRevisaoStatus } from '@/app/actions';
 import {
   usePlanoAtivo,
@@ -23,6 +24,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   CalendarCheck,
   AlertTriangle,
   Clock,
@@ -32,8 +41,11 @@ import {
   Check,
   RotateCcw,
   Calendar,
-  Sparkles,
   Plus,
+  Edit,
+  Trash2,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -43,31 +55,51 @@ interface RevisoesClientProps {
   todasSessoes: SessaoEstudo[];
 }
 
-type TabId = 'hoje' | 'atrasadas' | 'proximos' | 'concluidas' | 'todas';
+type TabId = 'hoje' | 'atrasadas' | 'proximos' | 'todas' | 'concluidas';
 
 export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientProps) {
   const router = useRouter();
+  const supabase = createClient();
   const [isPending, startTransition] = useTransition();
   const { planoAtivo } = usePlanoAtivo();
 
+  const [revisoesState, setRevisoesState] = useState<Revisao[]>(todasRevisoes);
   const [activeTab, setActiveTab] = useState<TabId>('hoje');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filtra sessões e revisões exclusivamente para o Plano Ativo
+  // Modal de Edição de Revisão (Alterar data, matéria, foco ou tipo)
+  const [editingRevisao, setEditingRevisao] = useState<Revisao | null>(null);
+  const [editMateria, setEditMateria] = useState('');
+  const [editFoco, setEditFoco] = useState('');
+  const [editData, setEditData] = useState('');
+  const [editTipo, setEditTipo] = useState('24h');
+
+  useEffect(() => {
+    setRevisoesState(todasRevisoes);
+  }, [todasRevisoes]);
+
   const sessoesDoPlano = useMemo(
     () => todasSessoes.filter((s) => sessaoPertenceAoPlano(s, planoAtivo)),
     [todasSessoes, planoAtivo]
   );
 
-  const revisoesDoPlano = useMemo(
-    () =>
-      todasRevisoes.filter((r) =>
-        revisaoPertenceAoPlano(r, planoAtivo, sessoesDoPlano)
-      ),
-    [todasRevisoes, planoAtivo, sessoesDoPlano]
-  );
+  // Filtra pelo Plano Ativo e evita exibir revisões duplicadas (mesma matéria + foco + data)
+  const revisoesDoPlano = useMemo(() => {
+    const filtradas = revisoesState.filter((r) =>
+      revisaoPertenceAoPlano(r, planoAtivo, sessoesDoPlano)
+    );
 
-  // Classificação por data (Hoje, Atrasadas, Próximos 7 Dias, Concluídas)
+    const vistas = new Set<string>();
+    return filtradas.filter((r) => {
+      const chave = `${r.data_revisao}__${(r.materia_nome || '').trim().toLowerCase()}__${limparTagPlano(
+        r.foco_sugerido
+      ).toLowerCase()}__${r.concluida}`;
+      if (vistas.has(chave)) return false;
+      vistas.add(chave);
+      return true;
+    });
+  }, [revisoesState, planoAtivo, sessoesDoPlano]);
+
   const { atrasadas, paraHoje, proximos7Dias, concluidas, pendentesTotal } = useMemo(() => {
     const hoje = startOfToday();
     const fim7Dias = addDays(hoje, 7);
@@ -94,7 +126,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
           prox.push(r);
         }
       } catch {
-        // Se data inválida, ignora
+        // ignore
       }
     });
 
@@ -127,12 +159,114 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
 
   const handleToggleStatus = (revisao: Revisao) => {
     const novoStatus = !revisao.concluida;
+    setRevisoesState((prev) =>
+      prev.map((r) => (r.id === revisao.id ? { ...r, concluida: novoStatus } : r))
+    );
     startTransition(async () => {
       const res = await updateRevisaoStatus(revisao.id, novoStatus);
       if (res?.error) {
         toast.error(res.error);
       } else {
-        toast.success(novoStatus ? 'Revisão concluída com sucesso!' : 'Revisão reaberta.');
+        toast.success(novoStatus ? 'Revisão concluída!' : 'Revisão reaberta.');
+        router.refresh();
+      }
+    });
+  };
+
+  const handleOpenEdit = (rev: Revisao) => {
+    setEditingRevisao(rev);
+    setEditMateria(rev.materia_nome || '');
+    setEditFoco(limparTagPlano(rev.foco_sugerido));
+    setEditData(rev.data_revisao ? rev.data_revisao.split('T')[0] : '');
+    setEditTipo(rev.tipo_revisao || '24h');
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRevisao || !editData) return;
+
+    startTransition(async () => {
+      const focoComPlano = planoAtivo
+        ? `[PLANO:${planoAtivo.id}] ${editFoco.trim()}`
+        : editFoco.trim();
+
+      const { error } = await supabase
+        .from('revisoes')
+        .update({
+          materia_nome: editMateria.trim(),
+          foco_sugerido: focoComPlano,
+          data_revisao: editData,
+          tipo_revisao: editTipo,
+        })
+        .eq('id', editingRevisao.id);
+
+      if (error) {
+        toast.error('Erro ao atualizar revisão.');
+      } else {
+        setRevisoesState((prev) =>
+          prev.map((r) =>
+            r.id === editingRevisao.id
+              ? {
+                  ...r,
+                  materia_nome: editMateria.trim(),
+                  foco_sugerido: focoComPlano,
+                  data_revisao: editData,
+                  tipo_revisao: editTipo,
+                }
+              : r
+          )
+        );
+        toast.success('Revisão reagendada/atualizada com sucesso!');
+        setEditingRevisao(null);
+        router.refresh();
+      }
+    });
+  };
+
+  const handleDeleteIndividual = (id: number) => {
+    if (!confirm('Deseja excluir esta revisão da sua agenda?')) return;
+    startTransition(async () => {
+      const { error } = await supabase.from('revisoes').delete().eq('id', id);
+      if (error) {
+        toast.error('Erro ao excluir revisão.');
+      } else {
+        setRevisoesState((prev) => prev.filter((r) => r.id !== id));
+        toast.success('Revisão removida da agenda.');
+        router.refresh();
+      }
+    });
+  };
+
+  const handleResetRevisoes = (modo: 'todas' | 'atrasadas' | 'concluidas') => {
+    const alvos =
+      modo === 'atrasadas'
+        ? atrasadas
+        : modo === 'concluidas'
+        ? concluidas
+        : revisoesDoPlano;
+
+    if (alvos.length === 0) {
+      toast.info('Nenhuma revisão nesta categoria para limpar.');
+      return;
+    }
+
+    const msg =
+      modo === 'atrasadas'
+        ? `Deseja limpar todas as ${alvos.length} revisões atrasadas deste plano?`
+        : modo === 'concluidas'
+        ? `Deseja limpar o histórico de ${alvos.length} revisões já concluídas?`
+        : `Tem certeza que deseja ZERAR todas as ${alvos.length} revisões deste plano?`;
+
+    if (!confirm(msg)) return;
+
+    startTransition(async () => {
+      const ids = alvos.map((r) => r.id);
+      const { error } = await supabase.from('revisoes').delete().in('id', ids);
+      if (error) {
+        toast.error('Erro ao limpar revisões.');
+      } else {
+        setRevisoesState((prev) => prev.filter((r) => !ids.includes(r.id)));
+        toast.success(`${ids.length} revisões foram removidas!`);
         router.refresh();
       }
     });
@@ -157,7 +291,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO DO PAINEL DE REVISÕES */}
+      {/* CABEÇALHO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -169,27 +303,69 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Controle suas revisões espaçadas de 24 horas, 7 dias e 30 dias
+            Controle, reagende a data ou limpe suas revisões espaçadas
           </p>
         </div>
 
-        <Button
-          size="sm"
-          onClick={() => window.dispatchEvent(new CustomEvent('open-registro-estudo'))}
-          className="self-start sm:self-auto h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Revisão</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {revisoesDoPlano.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Resetar Revisões</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60 text-xs">
+                <DropdownMenuLabel>Escolha o que deseja limpar</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handleResetRevisoes('atrasadas')}
+                  className="cursor-pointer py-2"
+                >
+                  Limpar apenas Atrasadas ({atrasadas.length})
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleResetRevisoes('concluidas')}
+                  className="cursor-pointer py-2"
+                >
+                  Limpar apenas Concluídas ({concluidas.length})
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => handleResetRevisoes('todas')}
+                  className="cursor-pointer py-2 text-rose-400 font-bold focus:text-rose-400"
+                >
+                  Zerar TODAS as Revisões ({revisoesDoPlano.length})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          <Button
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-registro-estudo'))}
+            className="h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Registrar Revisão</span>
+          </Button>
+        </div>
       </div>
 
-      {/* 4 CARDS DE RESUMO RÁPIDO */}
+      {/* 4 CARDS DE RESUMO */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div
           onClick={() => setActiveTab('hoje')}
           className={cn(
             'p-4 rounded-2xl bg-card border transition-all cursor-pointer',
-            activeTab === 'hoje' ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-border hover:border-border/80'
+            activeTab === 'hoje'
+              ? 'border-emerald-500 ring-1 ring-emerald-500/30'
+              : 'border-border hover:border-border/80'
           )}
         >
           <div className="flex items-center justify-between">
@@ -208,7 +384,9 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
           onClick={() => setActiveTab('atrasadas')}
           className={cn(
             'p-4 rounded-2xl bg-card border transition-all cursor-pointer',
-            activeTab === 'atrasadas' ? 'border-rose-500 ring-1 ring-rose-500/30' : 'border-border hover:border-border/80'
+            activeTab === 'atrasadas'
+              ? 'border-rose-500 ring-1 ring-rose-500/30'
+              : 'border-border hover:border-border/80'
           )}
         >
           <div className="flex items-center justify-between">
@@ -232,11 +410,15 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
           onClick={() => setActiveTab('proximos')}
           className={cn(
             'p-4 rounded-2xl bg-card border transition-all cursor-pointer',
-            activeTab === 'proximos' ? 'border-indigo-500 ring-1 ring-indigo-500/30' : 'border-border hover:border-border/80'
+            activeTab === 'proximos'
+              ? 'border-indigo-500 ring-1 ring-indigo-500/30'
+              : 'border-border hover:border-border/80'
           )}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase text-muted-foreground">Próximos 7 Dias</span>
+            <span className="text-[11px] font-bold uppercase text-muted-foreground">
+              Próximos 7 Dias
+            </span>
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
               <Clock className="w-4 h-4" />
             </div>
@@ -251,7 +433,9 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
           onClick={() => setActiveTab('concluidas')}
           className={cn(
             'p-4 rounded-2xl bg-card border transition-all cursor-pointer',
-            activeTab === 'concluidas' ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-border hover:border-border/80'
+            activeTab === 'concluidas'
+              ? 'border-emerald-500 ring-1 ring-emerald-500/30'
+              : 'border-border hover:border-border/80'
           )}
         >
           <div className="flex items-center justify-between">
@@ -268,7 +452,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
         </div>
       </div>
 
-      {/* BARRA DE ABAS E FILTRO DE BUSCA */}
+      {/* BARRA DE ABAS E FILTRO */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-2xl bg-card border border-border shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {[
@@ -293,7 +477,9 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
               <span
                 className={cn(
                   'px-1.5 py-0.2 rounded-full text-[10px]',
-                  activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-secondary text-muted-foreground'
+                  activeTab === tab.id
+                    ? 'bg-white/20 text-white'
+                    : 'bg-secondary text-muted-foreground'
                 )}
               >
                 {tab.count}
@@ -313,7 +499,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
         </div>
       </div>
 
-      {/* LISTA DE REVISÕES */}
+      {/* LISTA DE CARDS DE REVISÃO */}
       <div className="space-y-2.5">
         {listaDaAba.length > 0 ? (
           listaDaAba.map((rev) => {
@@ -326,7 +512,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
               <div
                 key={rev.id}
                 className={cn(
-                  'p-4 rounded-2xl bg-card border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs',
+                  'p-4 rounded-2xl bg-card border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs group',
                   rev.concluida
                     ? 'border-emerald-500/30 bg-emerald-500/[0.02] opacity-80'
                     : isLate
@@ -337,7 +523,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div
                     className={cn(
-                      'w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-xs flex-shrink-0 mt-0.5 border',
+                      'w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-[11px] flex-shrink-0 mt-0.5 border',
                       rev.concluida
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                         : isLate
@@ -360,7 +546,10 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
                       </h3>
 
                       {isLate && (
-                        <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px]">
+                        <Badge
+                          variant="outline"
+                          className="border-rose-500/40 bg-rose-500/10 text-rose-400 text-[10px]"
+                        >
                           Atrasada há {Math.abs(diffDias)} {Math.abs(diffDias) === 1 ? 'dia' : 'dias'}
                         </Badge>
                       )}
@@ -376,7 +565,7 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
                     </p>
 
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-0.5">
-                      <Calendar className="w-3 h-3" />
+                      <Calendar className="w-3 h-3 text-emerald-500" />
                       <span>
                         Data programada:{' '}
                         <strong className="text-foreground">
@@ -387,17 +576,17 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
                   </div>
                 </div>
 
-                {/* Botões de Ação */}
-                <div className="flex items-center gap-2 self-end sm:self-center flex-shrink-0">
+                {/* BOTÕES DE AÇÃO: ESTUDAR | CONCLUIR | EDITAR DATA | EXCLUIR */}
+                <div className="flex items-center gap-1.5 self-end sm:self-center flex-shrink-0">
                   {!rev.concluida && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleIniciarRevisao(rev)}
-                      className="h-9 px-3.5 text-xs font-semibold gap-1.5 rounded-xl"
+                      className="h-8 px-3 text-xs font-semibold gap-1.5 rounded-xl"
                     >
                       <Play className="w-3 h-3 text-emerald-500 fill-emerald-500" />
-                      <span>Estudar / Registrar</span>
+                      <span>Estudar</span>
                     </Button>
                   )}
 
@@ -407,21 +596,42 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
                     disabled={isPending}
                     onClick={() => handleToggleStatus(rev)}
                     className={cn(
-                      'h-9 px-4 text-xs font-bold gap-1.5 rounded-xl',
+                      'h-8 px-3.5 text-xs font-bold gap-1.5 rounded-xl',
                       !rev.concluida && 'bg-emerald-500 hover:bg-emerald-600 text-white'
                     )}
                   >
                     {rev.concluida ? (
                       <>
-                        <RotateCcw className="w-3.5 h-3.5" />
+                        <RotateCcw className="w-3 h-3" />
                         <span>Reabrir</span>
                       </>
                     ) : (
                       <>
-                        <Check className="w-3.5 h-3.5" />
+                        <Check className="w-3 h-3" />
                         <span>Concluir</span>
                       </>
                     )}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleOpenEdit(rev)}
+                    className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground"
+                    title="Editar data ou tópico desta revisão"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteIndividual(rev.id)}
+                    disabled={isPending}
+                    className="h-8 w-8 rounded-xl text-muted-foreground hover:text-destructive"
+                    title="Excluir esta revisão"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
@@ -432,13 +642,102 @@ export function RevisoesClient({ todasRevisoes, todasSessoes }: RevisoesClientPr
             <RotateCcw className="w-8 h-8 text-emerald-500 mx-auto" />
             <p className="text-sm font-bold text-foreground">Tudo em dia nesta categoria!</p>
             <p className="text-xs text-muted-foreground">
-              {planoAtivo
-                ? `Nenhuma revisão encontrada para o plano ${planoAtivo.nome}.`
-                : 'Nenhuma revisão encontrada para este filtro.'}
+              Nenhuma revisão encontrada para este filtro.
             </p>
           </div>
         )}
       </div>
+
+      {/* MODAL PARA EDITAR DATA OU TÓPICO DA REVISÃO */}
+      {editingRevisao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-[520px] rounded-2xl bg-card border border-border shadow-2xl overflow-hidden text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
+              <h2 className="text-lg font-bold">Editar / Reagendar Revisão</h2>
+              <button
+                type="button"
+                onClick={() => setEditingRevisao(null)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold block">Matéria</label>
+                <Input
+                  value={editMateria}
+                  onChange={(e) => setEditMateria(e.target.value)}
+                  className="h-10 text-xs bg-secondary/30 rounded-xl"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold block">Tópico / Foco da Revisão</label>
+                <Input
+                  value={editFoco}
+                  onChange={(e) => setEditFoco(e.target.value)}
+                  className="h-10 text-xs bg-secondary/30 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-1.5">
+                  <label className="font-semibold block">Nova Data Programada</label>
+                  <Input
+                    type="date"
+                    value={editData}
+                    onChange={(e) => setEditData(e.target.value)}
+                    className="h-10 text-xs bg-secondary/30 rounded-xl"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold block">Ciclo / Tipo</label>
+                  <select
+                    value={editTipo}
+                    onChange={(e) => setEditTipo(e.target.value)}
+                    className="w-full h-10 px-3 rounded-xl border border-border bg-secondary/30 text-xs font-medium text-foreground"
+                  >
+                    <option value="24h" className="bg-card">24h</option>
+                    <option value="7d" className="bg-card">7 dias</option>
+                    <option value="15d" className="bg-card">15 dias</option>
+                    <option value="30d" className="bg-card">30 dias</option>
+                    <option value="60d" className="bg-card">60 dias</option>
+                    <option value="90d" className="bg-card">90 dias</option>
+                    <option value="Reta Final" className="bg-card">Reta Final</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setEditingRevisao(null)}
+                  className="h-9 text-xs rounded-xl"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  className="h-9 px-5 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl gap-1.5"
+                >
+                  {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>Salvar Revisão</span>
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

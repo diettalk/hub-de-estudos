@@ -28,6 +28,7 @@ import {
   FileText,
   Video,
   MessageSquare,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -45,7 +46,6 @@ const ICON_COLORS = [
   'bg-amber-500/20 text-amber-400 border-amber-500/30',
 ];
 
-// Extrai a duração exata (lendo tanto ⏱️ HH:MM:SS quanto [PROG:XX] e [MIN:XX])
 function extrairMinutosExatos(diario: string | null): number {
   if (diario) {
     const matchTime = diario.match(/⏱️\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -78,7 +78,6 @@ function extrairPaginasLidas(diario: string | null): number {
   return 0;
 }
 
-// Extrai todos os metadados ricos de cada sessão (Categoria, Tópico, Material, Páginas, Vídeo e Comentários)
 function extrairDetalhesSessao(sessao: SessaoEstudo) {
   const focoLimpo = limparTagPlano(sessao.foco_sugerido);
   let categoria = 'Teoria';
@@ -106,7 +105,6 @@ function extrairDetalhesSessao(sessao: SessaoEstudo) {
   const matchVideo = diario.match(/🎥\s*Vídeo:\s*([^|]+)/i);
   const videoTexto = matchVideo ? matchVideo[1].trim() : '';
 
-  // Comentário limpo sem tags técnicas
   const comentario = diario
     .replace(/\[HISTORICO\]\s*\|?\s*/g, '')
     .replace(/\[PLANO:\d+\]\s*\|?\s*/g, '')
@@ -172,13 +170,11 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
   const [editTotal, setEditTotal] = useState('0');
   const [editNotas, setEditNotas] = useState('');
 
-  // Filtra pelo Plano Ativo e remove duplicatas entre molde da sequência e registro [HISTORICO]
   const sessoesDoPlano = useMemo(() => {
     const concluidasPlano = sessoes.filter(
       (s) => s.concluida && sessaoPertenceAoPlano(s, planoAtivo)
     );
 
-    // Se já existem registros com [HISTORICO] ou ⏱️ naquele dia para aquela matéria, oculta o molde genérico [MIN:XX] para não duplicar!
     const temHistoricoNoDia = new Set<string>();
     concluidasPlano.forEach((s) => {
       const diario = s.diario_de_bordo || '';
@@ -342,19 +338,140 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
               : item
           )
         );
-        toast.success('Registro atualizado!');
+        toast.success('Registro atualizado em todo o sistema!');
         setEditingSessao(null);
         router.refresh();
       }
     });
   };
 
-  const handleDelete = (id: number) => {
-    if (!confirm('Deseja realmente excluir este registro do histórico?')) return;
+  // EXCLUSÃO INTEGRADA: Desconta minutos do Bloco do Planejamento + Apaga do Histórico e Dashboard!
+  const handleDelete = (reg: SessaoEstudo) => {
+    if (
+      !confirm(
+        `Deseja excluir este estudo de "${reg.materia_nome}"? Os minutos também serão descontados da sua Dashboard, Estatísticas e do seu Planejamento!`
+      )
+    )
+      return;
+
     startTransition(async () => {
-      await deleteSessaoCiclo(id);
-      setSessoes((prev) => prev.filter((s) => s.id !== id));
-      toast.success('Registro excluído.');
+      const minsParaDescontar = extrairMinutosExatos(reg.diario_de_bordo);
+      const diario = reg.diario_de_bordo || '';
+      const isMoldeSequencia =
+        diario.includes('[MIN:') && !diario.includes('[HISTORICO]');
+
+      if (isMoldeSequencia) {
+        // Se a linha era um próprio bloco da sequência marcado como concluído, apenas desmarca ele!
+        const dLimpo = diario.replace(/\[PROG:\d+\]\s*\|?\s*/g, '').trim();
+        await supabase
+          .from('ciclo_sessoes')
+          .update({ concluida: false, data_estudo: null, diario_de_bordo: dLimpo })
+          .eq('id', reg.id);
+      } else {
+        // 1. Procura o bloco dessa matéria no Planejamento para descontar os minutos abatidos
+        const { data: blocosMateria } = await supabase
+          .from('ciclo_sessoes')
+          .select('*')
+          .eq('materia_nome', reg.materia_nome || '')
+          .order('ordem', { ascending: false });
+
+        const blocoMolde = (blocosMateria || []).find(
+          (b) =>
+            b.id !== reg.id &&
+            !(b.diario_de_bordo || '').includes('[HISTORICO]') &&
+            ((b.diario_de_bordo || '').includes('[PROG:') || b.concluida)
+        );
+
+        if (blocoMolde) {
+          const dBloco = blocoMolde.diario_de_bordo || '';
+          const matchMeta = dBloco.match(/\[MIN:(\d+)\]/);
+          const metaMin = matchMeta ? parseInt(matchMeta[1], 10) || 45 : 45;
+          const matchProg = dBloco.match(/\[PROG:(\d+)\]/);
+          const progAtual = matchProg
+            ? parseInt(matchProg[1], 10) || 0
+            : blocoMolde.concluida
+            ? metaMin
+            : 0;
+
+          const novoProg = Math.max(0, progAtual - minsParaDescontar);
+          const baseSemProg = dBloco.replace(/\[PROG:\d+\]\s*\|?\s*/g, '').trim();
+          const novoDiarioBloco =
+            novoProg > 0 ? `[PROG:${novoProg}] | ${baseSemProg}` : baseSemProg;
+
+          await supabase
+            .from('ciclo_sessoes')
+            .update({
+              concluida: novoProg >= metaMin,
+              diario_de_bordo: novoDiarioBloco,
+            })
+            .eq('id', blocoMolde.id);
+        }
+
+        // 2. Exclui o registro do histórico (e revisões diretamente atreladas a ele)
+        await supabase.from('revisoes').delete().eq('ciclo_sessao_id', reg.id);
+        await deleteSessaoCiclo(reg.id);
+      }
+
+      setSessoes((prev) => prev.filter((s) => s.id !== reg.id));
+      toast.success(
+        'Estudo excluído! Horas descontadas da Dashboard, Estatísticas e Planejamento.'
+      );
+      router.refresh();
+    });
+  };
+
+  // BOTÃO RESETAR TODO O HISTÓRICO DO PLANO
+  const handleResetHistoricoDoPlano = () => {
+    if (
+      !confirm(
+        `Tem certeza que deseja ZERAR todo o Histórico de Estudos ${
+          planoAtivo ? `do plano "${planoAtivo.nome}"` : 'geral'
+        }? Isso também zerará os minutos cumpridos na volta atual do Planejamento e na Dashboard.`
+      )
+    )
+      return;
+
+    startTransition(async () => {
+      const idsHistoricoPuro: number[] = [];
+      const idsMoldesParaDesmarcar: number[] = [];
+
+      sessoesDoPlano.forEach((s) => {
+        const d = s.diario_de_bordo || '';
+        if (d.includes('[MIN:') && !d.includes('[HISTORICO]')) {
+          idsMoldesParaDesmarcar.push(s.id);
+        } else {
+          idsHistoricoPuro.push(s.id);
+        }
+      });
+
+      if (idsHistoricoPuro.length > 0) {
+        await supabase.from('ciclo_sessoes').delete().in('id', idsHistoricoPuro);
+      }
+
+      // Também desmarca todos os blocos da sequência do plano para voltar a 0%
+      const { data: todosBlocos } = await supabase
+        .from('ciclo_sessoes')
+        .select('*');
+
+      const blocosDoPlano = ((todosBlocos || []) as SessaoEstudo[]).filter(
+        (b) =>
+          !(b.diario_de_bordo || '').includes('[HISTORICO]') &&
+          sessaoPertenceAoPlano(b, planoAtivo)
+      );
+
+      for (const b of blocosDoPlano) {
+        const dLimpo = (b.diario_de_bordo || '')
+          .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+          .trim();
+        await supabase
+          .from('ciclo_sessoes')
+          .update({ concluida: false, data_estudo: null, diario_de_bordo: dLimpo })
+          .eq('id', b.id);
+      }
+
+      localStorage.removeItem(`hub_ciclos_completos_${planoAtivo?.id || 'all'}`);
+      setSessoes((prev) => prev.filter((s) => !sessoesDoPlano.some((sp) => sp.id === s.id)));
+      toast.success('Histórico, Dashboard e progresso atual do ciclo foram zerados!');
       router.refresh();
     });
   };
@@ -372,18 +489,33 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Registros detalhados e individualizados de cada sessão de estudo
+            Registros detalhados e integrados ao seu Planejamento e Estatísticas
           </p>
         </div>
 
-        <Button
-          size="sm"
-          onClick={() => window.dispatchEvent(new CustomEvent('open-registro-estudo'))}
-          className="self-start sm:self-auto h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Adicionar Estudo</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {sessoesDoPlano.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={handleResetHistoricoDoPlano}
+              className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Zerar Histórico</span>
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-registro-estudo'))}
+            className="h-9 px-4 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Adicionar Estudo</span>
+          </Button>
+        </div>
       </div>
 
       {/* OS 4 CARDS DE TOPO */}
@@ -533,7 +665,7 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
         )}
       </div>
 
-      {/* LISTA DE REGISTROS AGRUPADOS POR DIA COM DIFERENCIAÇÃO COMPLETA DE SESSÕES */}
+      {/* LISTA DE REGISTROS AGRUPADOS POR DIA */}
       <div className="space-y-4">
         {gruposPorDia.length > 0 ? (
           gruposPorDia.map((grupo) => {
@@ -550,7 +682,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                   .replace('.', '')
               : '';
 
-            // Conta quantas vezes cada matéria foi estudada no mesmo dia para numerar (1ª sessão, 2ª sessão...)
             const contagemPorMateriaNoDia: Record<string, number> = {};
             grupo.itens.forEach((it) => {
               const m = (it.materia_nome || 'Geral').trim();
@@ -558,7 +689,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
             });
             const indiceAtualMateriaNoDia: Record<string, number> = {};
 
-            // Ordena do primeiro ao último registro do dia para numerar na ordem certa
             const itensOrdenados = [...grupo.itens].sort((a, b) => a.id - b.id);
 
             return (
@@ -620,7 +750,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                                 {reg.materia_nome || 'Disciplina'}
                               </h3>
 
-                              {/* Se estudou a mesma matéria mais de 1 vez no dia, especifica qual sessão foi! */}
                               {totalSessoesDestaMatNoDia > 1 && (
                                 <Badge className="bg-indigo-500/15 text-indigo-400 border-indigo-500/30 text-[10px] font-bold">
                                   {numSessao}ª sessão do dia
@@ -632,7 +761,6 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                               {det.topico}
                             </p>
 
-                            {/* Especificações extras daquela sessão (Material, Páginas, Videoaula e Comentários) */}
                             {(det.material || det.paginasTexto || det.videoTexto || det.comentario) && (
                               <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-muted-foreground">
                                 {det.material && (
@@ -711,10 +839,10 @@ export function HistoricoClient({ sessoesIniciais, disciplinas }: HistoricoClien
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleDelete(reg.id)}
+                              onClick={() => handleDelete(reg)}
                               disabled={isPending}
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              title="Excluir registro"
+                              title="Excluir estudo (desconta do planejamento e dashboard)"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>

@@ -3,14 +3,17 @@
 import React, { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { deleteSessoesEmMassa } from '@/app/actions';
-import { type PlanoAtivoInfo } from '@/lib/plano-ativo';
-import { type SessaoEstudo, type Node as DisciplinaNode } from '@/lib/types';
+import {
+  type PlanoAtivoInfo,
+  sessaoPertenceAoPlano,
+  revisaoPertenceAoPlano,
+} from '@/lib/plano-ativo';
+import { type SessaoEstudo, type Revisao, type Node as DisciplinaNode } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Check, X } from 'lucide-react';
+import { Check, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -42,16 +45,18 @@ interface PlanejamentoWizardModalProps {
   sessoesCicloAtivo: SessaoEstudo[];
   planoAtivo: PlanoAtivoInfo | null;
   sugerirTopicosAuto: boolean;
-  onCreated: (novosBlocos: SessaoEstudo[], idsRemovidos: number[], formato: 'ciclo' | 'quadro') => void;
+  onCreated: (
+    novosBlocos: SessaoEstudo[],
+    idsRemovidos: number[],
+    formato: 'ciclo' | 'quadro'
+  ) => void;
 }
 
 export function PlanejamentoWizardModal({
   open,
   onClose,
   disciplinasDoPlano,
-  sessoesCicloAtivo,
   planoAtivo,
-  sugerirTopicosAuto,
   onCreated,
 }: PlanejamentoWizardModalProps) {
   const router = useRouter();
@@ -70,6 +75,10 @@ export function PlanejamentoWizardModal({
   const [termino, setTermino] = useState<'continuo' | 'data'>('continuo');
   const [dataTermino, setDataTermino] = useState('');
 
+  // Opções de Reset ao Replanejar
+  const [resetarHistoricoEDashboard, setResetarHistoricoEDashboard] = useState(false);
+  const [resetarRevisoes, setResetarRevisoes] = useState(false);
+
   useEffect(() => {
     if (open) {
       const ids = disciplinasDoPlano.map((d) => Number(d.id));
@@ -82,18 +91,13 @@ export function PlanejamentoWizardModal({
       if (planoAtivo?.data_prova) {
         setDataTermino(planoAtivo.data_prova.split('T')[0]);
       }
+      setResetarHistoricoEDashboard(false);
+      setResetarRevisoes(false);
       setStep(1);
     }
   }, [open, disciplinasDoPlano, planoAtivo]);
 
   if (!open) return null;
-
-  const obterTopicoSugerido = (disc: DisciplinaNode): string => {
-    if (Array.isArray(disc.children) && disc.children.length > 0) {
-      return `Aula / Tópico: ${disc.children[0].title}`;
-    }
-    return '';
-  };
 
   const handleConfirmar = () => {
     if (selectedDiscIds.length === 0) {
@@ -102,14 +106,80 @@ export function PlanejamentoWizardModal({
     }
 
     startTransition(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
-      const idsAntigosPendentes = sessoesCicloAtivo.filter((s) => !s.concluida).map((s) => s.id);
-      if (idsAntigosPendentes.length > 0) {
-        await deleteSessoesEmMassa(idsAntigosPendentes);
+      // 1. Busca todas as sessões atuais do usuário para saber exatamente o que apagar neste plano
+      const { data: todasSessoesBanco } = await supabase
+        .from('ciclo_sessoes')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const sessoesDestePlano = ((todasSessoesBanco || []) as SessaoEstudo[]).filter((s) =>
+        sessaoPertenceAoPlano(s, planoAtivo)
+      );
+
+      // Separa os blocos da sequência (planejamento) dos registros do histórico
+      const idsParaApagar: number[] = [];
+
+      sessoesDestePlano.forEach((s) => {
+        const diario = s.diario_de_bordo || '';
+        const foco = s.foco_sugerido || '';
+        const isHistoricoOuSimulado =
+          diario.includes('[HISTORICO]') ||
+          diario.includes('[SIMULADO:') ||
+          foco.includes('[Simulado]') ||
+          (diario.includes('⏱️') && !diario.includes('[MIN:'));
+
+        if (isHistoricoOuSimulado) {
+          // Só apaga o histórico/dashboard se o usuário marcou a opção!
+          if (resetarHistoricoEDashboard) {
+            idsParaApagar.push(s.id);
+          }
+        } else {
+          // SEMPRE apaga todos os blocos antigos da sequência (concluídos e pendentes) para não duplicar 8 + 8 = 16!
+          idsParaApagar.push(s.id);
+        }
+      });
+
+      if (idsParaApagar.length > 0) {
+        await supabase
+          .from('ciclo_sessoes')
+          .delete()
+          .in('id', idsParaApagar)
+          .eq('user_id', user.id);
       }
 
+      // Se o usuário pediu para resetar o Histórico/Dashboard, zera também o contador de Ciclos Completos e checks do edital
+      if (resetarHistoricoEDashboard) {
+        localStorage.removeItem(`hub_ciclos_completos_${planoAtivo?.id || 'all'}`);
+        localStorage.removeItem('hub_edital_checks_geral');
+        localStorage.removeItem(`hub_edital_checks_${planoAtivo?.id || 'geral'}`);
+      }
+
+      // 2. Se o usuário marcou "Resetar também todas as Revisões deste plano"
+      if (resetarRevisoes) {
+        const { data: todasRevs } = await supabase
+          .from('revisoes')
+          .select('*')
+          .eq('user_id', user.id);
+
+        const revsDoPlano = ((todasRevs || []) as Revisao[]).filter((r) =>
+          revisaoPertenceAoPlano(r, planoAtivo, sessoesDestePlano)
+        );
+        const revIds = revsDoPlano.map((r) => r.id);
+        if (revIds.length > 0) {
+          await supabase
+            .from('revisoes')
+            .delete()
+            .in('id', revIds)
+            .eq('user_id', user.id);
+        }
+      }
+
+      // 3. Gera os novos blocos da sequência limpos (com foco em branco por padrão para você escolher a subpasta na hora!)
       const disciplinasEscolhidas = disciplinasDoPlano.filter((d) =>
         selectedDiscIds.includes(Number(d.id))
       );
@@ -143,7 +213,6 @@ export function PlanejamentoWizardModal({
               aindaTem = true;
               item.restantes -= 1;
 
-              const topicoAuto = sugerirTopicosAuto ? obterTopicoSugerido(item.disc) : '';
               const partesDiario: string[] = [];
               if (planoAtivo) partesDiario.push(`[PLANO:${planoAtivo.id}]`);
               partesDiario.push(`[MIN:${minutosBloco}]`);
@@ -157,7 +226,7 @@ export function PlanejamentoWizardModal({
                 ordem: ordemCounter++,
                 disciplina_id: Number(item.disc.id),
                 materia_nome: item.disc.title,
-                foco_sugerido: topicoAuto,
+                foco_sugerido: '',
                 diario_de_bordo: partesDiario.join(' | '),
                 concluida: false,
                 materia_finalizada: false,
@@ -167,7 +236,6 @@ export function PlanejamentoWizardModal({
         }
       } else {
         disciplinasEscolhidas.forEach((disc, idx) => {
-          const topicoAuto = sugerirTopicosAuto ? obterTopicoSugerido(disc) : '';
           const partesDiario: string[] = [];
           if (planoAtivo) partesDiario.push(`[PLANO:${planoAtivo.id}]`);
           partesDiario.push(`[MIN:${minutosBloco}]`);
@@ -180,7 +248,7 @@ export function PlanejamentoWizardModal({
             ordem: ordemCounter++,
             disciplina_id: Number(disc.id),
             materia_nome: disc.title,
-            foco_sugerido: topicoAuto,
+            foco_sugerido: '',
             diario_de_bordo: partesDiario.join(' | '),
             concluida: false,
             materia_finalizada: false,
@@ -196,8 +264,10 @@ export function PlanejamentoWizardModal({
       if (error) {
         toast.error('Erro ao gerar planejamento.');
       } else if (inseridos) {
-        toast.success(`Planejamento criado com ${inseridos.length} blocos!`);
-        onCreated(inseridos as SessaoEstudo[], idsAntigosPendentes, formato);
+        toast.success(
+          `Novo planejamento criado com ${inseridos.length} blocos (sequência anterior substituída)!`
+        );
+        onCreated(inseridos as SessaoEstudo[], idsParaApagar, formato);
         onClose();
         router.refresh();
       }
@@ -210,7 +280,6 @@ export function PlanejamentoWizardModal({
         className="w-full max-w-[1040px] max-h-[92vh] rounded-2xl bg-card border border-border shadow-2xl overflow-hidden flex flex-col md:flex-row text-foreground"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* COLUNA ESQUERDA: ETAPAS + RESUMO */}
         <div className="w-full md:w-72 bg-secondary/30 border-b md:border-b-0 md:border-r border-border p-6 flex flex-col justify-between flex-shrink-0">
           <div className="space-y-6">
             <div>
@@ -221,9 +290,9 @@ export function PlanejamentoWizardModal({
             <div className="space-y-4">
               {[
                 { num: 1, title: 'Formato', sub: 'Ciclo ou quadro semanal' },
-                { num: 2, title: 'Disciplinas & Pesos', sub: 'O que entra no plano' },
+                { num: 2, title: 'Disciplinas & Pesos', sub: 'Pastas principais' },
                 { num: 3, title: 'Rotina', sub: 'Horas e blocos' },
-                { num: 4, title: 'Período', sub: 'Início e término' },
+                { num: 4, title: 'Período & Reset', sub: 'O que manter ou zerar' },
               ].map((st) => {
                 const isDone = step > st.num;
                 const isCurrent = step === st.num;
@@ -275,7 +344,7 @@ export function PlanejamentoWizardModal({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Distribuição</span>
               <strong className="text-foreground">
-                {metodoCalculo === 'pesos' ? 'Cálculo por Pesos' : 'Manual'}
+                {metodoCalculo === 'pesos' ? 'Cálculo por Pesos' : '1 bloco por matéria'}
               </strong>
             </div>
             <div className="flex justify-between">
@@ -286,16 +355,9 @@ export function PlanejamentoWizardModal({
               <span className="text-muted-foreground">Por semana</span>
               <strong className="text-foreground">{horasSemana}h</strong>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Período</span>
-              <strong className="text-foreground">
-                {termino === 'continuo' ? 'Contínuo' : 'Até a prova'}
-              </strong>
-            </div>
           </div>
         </div>
 
-        {/* COLUNA DIREITA: CONTEÚDO DAS 4 ETAPAS */}
         <div className="flex-1 flex flex-col justify-between p-6 sm:p-8 overflow-y-auto">
           <div>
             <div className="flex items-center justify-between mb-6">
@@ -303,9 +365,9 @@ export function PlanejamentoWizardModal({
                 <span className="text-xs font-bold text-emerald-500">Etapa {step} de 4</span>
                 <h3 className="text-xl sm:text-2xl font-extrabold text-foreground mt-0.5">
                   {step === 1 && 'Como você prefere organizar seus estudos?'}
-                  {step === 2 && 'Quais disciplinas entram no planejamento?'}
+                  {step === 2 && 'Quais disciplinas principais entram no ciclo?'}
                   {step === 3 && 'Qual será sua carga horária e duração dos blocos?'}
-                  {step === 4 && 'Quando começa e até quando vai?'}
+                  {step === 4 && 'Opções de Reset e Período do Planejamento'}
                 </h3>
               </div>
               <button
@@ -373,7 +435,7 @@ export function PlanejamentoWizardModal({
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Cada dia de Segunda a Domingo tem suas disciplinas e sua carga de horas. Você abre o dia e já sabe o que estudar.
+                      Cada dia de Segunda a Domingo tem suas disciplinas e sua carga de horas.
                     </p>
                     <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]">
                       Para rotina fixa
@@ -416,10 +478,10 @@ export function PlanejamentoWizardModal({
                       )}
                     >
                       <span className="font-bold text-sm block">
-                        Prefiro montar do zero (Disciplina por disciplina)
+                        1 Bloco por Matéria (Montar simples)
                       </span>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Cria 1 bloco base para cada matéria e você duplica ou ajusta manualmente na sequência.
+                        Cria exatamente 1 bloco para cada disciplina selecionada (ex: 8 matérias = 8 blocos).
                       </p>
                     </div>
                   </div>
@@ -432,7 +494,7 @@ export function PlanejamentoWizardModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
                     <strong className="text-foreground">{selectedDiscIds.length}</strong> de{' '}
-                    {disciplinasDoPlano.length} selecionadas
+                    {disciplinasDoPlano.length} pastas principais selecionadas
                   </span>
                   <div className="flex gap-2">
                     <Button
@@ -583,101 +645,102 @@ export function PlanejamentoWizardModal({
             )}
 
             {step === 4 && (
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h4 className="text-sm font-bold">Quando você quer começar?</h4>
-                  <div className="grid grid-cols-3 gap-3.5">
-                    {[
-                      { id: 'hoje', title: 'Hoje', sub: 'Começar agora' },
-                      { id: 'amanha', title: 'Amanhã', sub: 'Próximo dia' },
-                      { id: 'outro', title: 'Outro dia', sub: 'Escolher data' },
-                    ].map((op) => (
-                      <div
-                        key={op.id}
-                        onClick={() => setInicio(op.id as any)}
-                        className={cn(
-                          'p-4 rounded-2xl border cursor-pointer transition-all',
-                          inicio === op.id
-                            ? 'border-emerald-500 bg-emerald-500/[0.08]'
-                            : 'border-border hover:bg-secondary/30'
-                        )}
-                      >
-                        <span className="font-bold text-sm block">{op.title}</span>
-                        <span className="text-xs text-muted-foreground">{op.sub}</span>
-                      </div>
-                    ))}
+              <div className="space-y-5">
+                {/* CAIXA DE OPÇÕES DE RESET AO REPLANEJAR */}
+                <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] space-y-3">
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                      O que você deseja resetar junto com este Replanejamento?
+                    </h4>
                   </div>
-                  {inicio === 'outro' && (
-                    <Input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="h-10 w-52 text-xs bg-secondary/30 rounded-xl"
-                    />
-                  )}
+
+                  <div className="space-y-2.5 text-xs">
+                    <label className="flex items-start gap-2.5 cursor-not-allowed opacity-90">
+                      <Checkbox
+                        checked={true}
+                        disabled
+                        className="mt-0.5 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                      />
+                      <div>
+                        <span className="font-bold text-foreground block">
+                          Substituir a Sequência do Planejamento anterior (Obrigatório)
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Remove os blocos da sequência antiga para não acumular (ex: evita somar 8 antigos + 8 novos = 16).
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <Checkbox
+                        checked={resetarHistoricoEDashboard}
+                        onCheckedChange={(v) => setResetarHistoricoEDashboard(Boolean(v))}
+                        className="mt-0.5 data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
+                      />
+                      <div>
+                        <span className="font-bold text-foreground block">
+                          Zerar também Histórico de Estudos, Estatísticas e Dashboard deste plano
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Marque se quiser recomeçar este plano 100% do zero (apaga horas estudadas, questões e ciclos passados).
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <Checkbox
+                        checked={resetarRevisoes}
+                        onCheckedChange={(v) => setResetarRevisoes(Boolean(v))}
+                        className="mt-0.5 data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
+                      />
+                      <div>
+                        <span className="font-bold text-foreground block">
+                          Zerar também todas as Revisões agendadas deste plano
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          Se deixar desmarcado, suas revisões atuais são mantidas sem duplicar quando você estudar de novo.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
                   <h4 className="text-sm font-bold">Até quando vai o planejamento?</h4>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div
                       onClick={() => setTermino('continuo')}
                       className={cn(
-                        'p-4 rounded-2xl border cursor-pointer transition-all flex items-center gap-3',
+                        'p-4 rounded-2xl border cursor-pointer transition-all',
                         termino === 'continuo'
                           ? 'border-emerald-500 bg-emerald-500/[0.08]'
                           : 'border-border hover:bg-secondary/30'
                       )}
                     >
-                      <div className="w-4 h-4 rounded-full border-2 border-emerald-500 flex items-center justify-center">
-                        {termino === 'continuo' && (
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm">Sem data de término</span>
-                          <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]">
-                            RECOMENDADO
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          O planejamento segue até você encerrar ou definir uma data.
-                        </p>
-                      </div>
+                      <span className="font-bold text-sm block">Sem data de término (Contínuo)</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Segue em voltas contínuas até você encerrar.
+                      </p>
                     </div>
 
                     <div
                       onClick={() => setTermino('data')}
                       className={cn(
-                        'p-4 rounded-2xl border cursor-pointer transition-all space-y-3',
+                        'p-4 rounded-2xl border cursor-pointer transition-all space-y-2',
                         termino === 'data'
                           ? 'border-emerald-500 bg-emerald-500/[0.08]'
                           : 'border-border hover:bg-secondary/30'
                       )}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full border-2 border-emerald-500 flex items-center justify-center">
-                          {termino === 'data' && (
-                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          )}
-                        </div>
-                        <div>
-                          <span className="font-bold text-sm block">
-                            Definir data da prova / meta final
-                          </span>
-                          <p className="text-xs text-muted-foreground">
-                            As revisões serão escalonadas automaticamente até esta data.
-                          </p>
-                        </div>
-                      </div>
+                      <span className="font-bold text-sm block">Até a Data da Prova</span>
                       {termino === 'data' && (
                         <Input
                           type="date"
                           value={dataTermino}
                           onChange={(e) => setDataTermino(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
-                          className="h-10 w-56 text-xs bg-background rounded-xl ml-7"
+                          className="h-8 text-xs bg-background rounded-lg"
                         />
                       )}
                     </div>
@@ -687,7 +750,6 @@ export function PlanejamentoWizardModal({
             )}
           </div>
 
-          {/* RODAPÉ DO WIZARD */}
           <div className="flex items-center justify-between pt-6 border-t border-border mt-6">
             <span className="text-xs text-muted-foreground">Etapa {step} de 4</span>
             <div className="flex items-center gap-3">
@@ -717,7 +779,7 @@ export function PlanejamentoWizardModal({
                   onClick={handleConfirmar}
                   className="h-10 px-6 text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-md"
                 >
-                  {isPending ? 'Criando...' : 'Criar planejamento'}
+                  {isPending ? 'Aplicando...' : 'Criar novo planejamento'}
                 </Button>
               )}
             </div>
