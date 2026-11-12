@@ -164,11 +164,10 @@ export function usePlanoAtivo() {
             .is('parent_id', null),
         ]);
 
-        const todasRaiz = paginasRaizRes.data || [];
-        const listaConcursos = concursosRes.data || [];
+        const todasRaiz: any[] = paginasRaizRes.data || [];
+        const listaConcursos: any[] = concursosRes.data || [];
 
-        // Se houver disciplinas primárias que ainda não estão vinculadas a nenhum plano, vincula automaticamente ao primeiro plano ativo!
-        const primeiroAtivo =
+        const primeiroAtivo: any =
           listaConcursos.find((c: any) => c.status === 'ativo') || listaConcursos[0];
 
         if (primeiroAtivo && todasRaiz.length > 0) {
@@ -190,7 +189,7 @@ export function usePlanoAtivo() {
             orfas.forEach((o) => {
               primeiroAtivo.concurso_paginas = [
                 ...(primeiroAtivo.concurso_paginas || []),
-                { pagina_id: o.id, paginas: { id: o.id, title: o.title } },
+                { pagina_id: o.id, paginas: { id: o.id, title: o.title } } as any,
               ];
             });
           }
@@ -203,11 +202,12 @@ export function usePlanoAtivo() {
             if (cp.pagina_id && !dIds.includes(Number(cp.pagina_id))) {
               dIds.push(Number(cp.pagina_id));
             }
-            if (cp.paginas?.id && !dIds.includes(Number(cp.paginas.id))) {
-              dIds.push(Number(cp.paginas.id));
+            const pagObj = Array.isArray(cp.paginas) ? cp.paginas[0] : cp.paginas;
+            if (pagObj?.id && !dIds.includes(Number(pagObj.id))) {
+              dIds.push(Number(pagObj.id));
             }
-            if (cp.paginas?.title) {
-              dNomes.push(cp.paginas.title.trim());
+            if (pagObj?.title) {
+              dNomes.push(String(pagObj.title).trim());
             }
           });
 
