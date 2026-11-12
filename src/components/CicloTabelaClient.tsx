@@ -14,6 +14,7 @@ import {
   usePlanoAtivo,
   sessaoPertenceAoPlano,
   limparTagPlano,
+  getHojeBrasilISO,
 } from '@/lib/plano-ativo';
 import { PlanejamentoWizardModal } from './PlanejamentoWizardModal';
 import { type SessaoEstudo, type Node as DisciplinaNode } from '@/lib/types';
@@ -47,6 +48,7 @@ import {
   ChevronDown,
   ArrowUpRight,
   SlidersHorizontal,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -71,16 +73,47 @@ const DIAS_SEMANA_NOMES = [
   'Domingo',
 ];
 
-function extrairMinutosBloco(diario: string | null): number {
+function extrairSubpastasDaDisciplina(
+  discNode: DisciplinaNode | undefined
+): { id: number; label: string; rawTitle: string }[] {
+  if (!discNode || !Array.isArray(discNode.children)) return [];
+  const lista: { id: number; label: string; rawTitle: string }[] = [];
+
+  function percorrer(nodes: DisciplinaNode[], prefixo: string) {
+    for (const n of nodes) {
+      const hasChildren = Array.isArray(n.children) && n.children.length > 0;
+      const caminho = prefixo ? `${prefixo} › ${n.title}` : n.title;
+      lista.push({
+        id: Number(n.id),
+        label: `${hasChildren ? '📂' : '📄'} ${caminho}`,
+        rawTitle: n.title,
+      });
+      if (hasChildren) {
+        percorrer(n.children!, caminho);
+      }
+    }
+  }
+
+  percorrer(discNode.children, '');
+  return lista;
+}
+
+function extrairMinutosPlanejadosBloco(diario: string | null): number {
   if (diario) {
     const matchPlan = diario.match(/\[MIN:(\d+)\]/);
     if (matchPlan) return parseInt(matchPlan[1], 10) || 45;
-    const matchTime = diario.match(/⏱️\s*(\d{1,2}):(\d{2})/);
-    if (matchTime) {
-      return (parseInt(matchTime[1], 10) || 0) * 60 + (parseInt(matchTime[2], 10) || 0);
-    }
   }
   return 45;
+}
+
+function extrairMinutosCumpridosBloco(sessao: SessaoEstudo): number {
+  const meta = extrairMinutosPlanejadosBloco(sessao.diario_de_bordo);
+  if (sessao.concluida) return meta;
+  if (sessao.diario_de_bordo) {
+    const matchProg = sessao.diario_de_bordo.match(/\[PROG:(\d+)\]/);
+    if (matchProg) return Math.min(meta, parseInt(matchProg[1], 10) || 0);
+  }
+  return 0;
 }
 
 function formatarMinutosHoras(min: number): string {
@@ -95,6 +128,7 @@ function limparNotasDiario(diario: string | null): string {
   return diario
     .replace(/\[PLANO:\d+\]\s*\|?\s*/g, '')
     .replace(/\[MIN:\d+\]\s*\|?\s*/g, '')
+    .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
     .replace(/\[DIA:[^\]]+\]\s*\|?\s*/g, '')
     .trim();
 }
@@ -121,7 +155,6 @@ export function CicloTabelaClient({
 
   const [sessoes, setSessoes] = useState<SessaoEstudo[]>(sessoesIniciais);
   const [isEditingCycle, setIsEditingCycle] = useState(false);
-  const [sugerirTopicosAuto, setSugerirTopicosAuto] = useState(true);
   const [ciclosCompletos, setCiclosCompletos] = useState(0);
   const [wizardOpen, setWizardOpen] = useState(false);
 
@@ -129,7 +162,6 @@ export function CicloTabelaClient({
   const [groupBy, setGroupBy] = useState<'sequencia' | 'materia' | 'dia'>('sequencia');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Revisões Inteligentes até a Prova (Sem cair no limbo após 30 dias!)
   const [modoRevisao, setModoRevisao] = useState<'ate_prova' | 'personalizado'>('ate_prova');
   const [intervalosPersonalizados, setIntervalosPersonalizados] = useState<number[]>([
     1, 7, 15, 30, 60, 90,
@@ -145,23 +177,31 @@ export function CicloTabelaClient({
     setCiclosCompletos(saved ? parseInt(saved, 10) || 0 : 0);
   }, [storageKeyCiclos]);
 
-  const sessoesDoPlano = useMemo(
-    () => sessoes.filter((s) => sessaoPertenceAoPlano(s, planoAtivo)),
-    [sessoes, planoAtivo]
-  );
-
-// Exibe sempre todas as pastas primárias de disciplinas para nenhuma ficar de fora do planejamento
   const disciplinasDoPlano = useMemo(() => {
     return disciplinaTree;
   }, [disciplinaTree]);
-  
+
+  const blocosPlanejamentoDoPlano = useMemo(() => {
+    return sessoes.filter((s) => {
+      const diario = s.diario_de_bordo || '';
+      const foco = s.foco_sugerido || '';
+      if (diario.includes('[HISTORICO]') || diario.includes('[SIMULADO:') || foco.includes('[Simulado]')) {
+        return false;
+      }
+      if (diario.includes('⏱️') && !diario.includes('[MIN:')) {
+        return false;
+      }
+      return sessaoPertenceAoPlano(s, planoAtivo);
+    });
+  }, [sessoes, planoAtivo]);
+
   const sessoesCicloAtivo = useMemo(
-    () => sessoesDoPlano.filter((s) => !s.materia_finalizada),
-    [sessoesDoPlano]
+    () => blocosPlanejamentoDoPlano.filter((s) => !s.materia_finalizada),
+    [blocosPlanejamentoDoPlano]
   );
   const sessoesZeradas = useMemo(
-    () => sessoesDoPlano.filter((s) => s.materia_finalizada),
-    [sessoesDoPlano]
+    () => blocosPlanejamentoDoPlano.filter((s) => s.materia_finalizada),
+    [blocosPlanejamentoDoPlano]
   );
 
   const dadosCiclo = useMemo(() => {
@@ -173,9 +213,11 @@ export function CicloTabelaClient({
     > = {};
 
     sessoesCicloAtivo.forEach((s) => {
-      const m = extrairMinutosBloco(s.diario_de_bordo);
-      minutosTotais += m;
-      if (s.concluida) minutosConcluidos += m;
+      const mPlanejado = extrairMinutosPlanejadosBloco(s.diario_de_bordo);
+      const mCumprido = extrairMinutosCumpridosBloco(s);
+
+      minutosTotais += mPlanejado;
+      minutosConcluidos += mCumprido;
 
       const nome = s.materia_nome?.trim() || 'Disciplina não definida';
       if (!mapaMaterias[nome]) {
@@ -187,8 +229,8 @@ export function CicloTabelaClient({
           cor: SLICE_COLORS[corIdx],
         };
       }
-      mapaMaterias[nome].minutosPlanejados += m;
-      if (s.concluida) mapaMaterias[nome].minutosConcluidos += m;
+      mapaMaterias[nome].minutosPlanejados += mPlanejado;
+      mapaMaterias[nome].minutosConcluidos += mCumprido;
     });
 
     const percProgresso =
@@ -245,8 +287,10 @@ export function CicloTabelaClient({
     return Object.entries(gDia).map(([titulo, itens]) => ({ titulo, itens }));
   }, [itensExibidos, groupBy]);
 
-  const agendarRevisoesInteligentes = async (sessao: SessaoEstudo, dataEstudoISO: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+  const agendarRevisoesPermanentes = async (sessao: SessaoEstudo, dataEstudoISO: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const baseDate = new Date(dataEstudoISO + 'T12:00:00Z');
@@ -276,7 +320,7 @@ export function CicloTabelaClient({
       if (!dataProvaDate || dRev < dataProvaDate) {
         novasRevisoes.push({
           user_id: user.id,
-          ciclo_sessao_id: sessao.id,
+          ciclo_sessao_id: null,
           data_revisao: dRev.toISOString().split('T')[0],
           tipo_revisao: label,
           concluida: false,
@@ -286,22 +330,6 @@ export function CicloTabelaClient({
       }
     });
 
-    if (modoRevisao === 'ate_prova' && dataProvaDate) {
-      const revFinal = new Date(dataProvaDate);
-      revFinal.setDate(dataProvaDate.getDate() - 7);
-      if (revFinal > baseDate) {
-        novasRevisoes.push({
-          user_id: user.id,
-          ciclo_sessao_id: sessao.id,
-          data_revisao: revFinal.toISOString().split('T')[0],
-          tipo_revisao: 'Reta Final',
-          concluida: false,
-          materia_nome: sessao.materia_nome || 'Disciplina',
-          foco_sugerido: `${focoComPlano} (Revisão Pré-Prova)`,
-        });
-      }
-    }
-
     if (novasRevisoes.length > 0) {
       await supabase.from('revisoes').insert(novasRevisoes);
     }
@@ -309,27 +337,107 @@ export function CicloTabelaClient({
 
   const handleToggleConcluirBloco = async (sessao: SessaoEstudo) => {
     const novoStatus = !sessao.concluida;
-    const hojeISO = new Date().toISOString().split('T')[0];
+    const hojeISO = getHojeBrasilISO(0);
     const dataFinal = sessao.data_estudo ? sessao.data_estudo.split('T')[0] : hojeISO;
+    const minsPlanejados = extrairMinutosPlanejadosBloco(sessao.diario_de_bordo);
 
-    setSessoes((prev) =>
-      prev.map((s) =>
-        s.id === sessao.id ? { ...s, concluida: novoStatus, data_estudo: dataFinal } : s
-      )
+    const diarioSemProg = (sessao.diario_de_bordo || '')
+      .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+      .trim();
+    const novoDiario = novoStatus
+      ? `[PROG:${minsPlanejados}] | ${diarioSemProg}`
+      : diarioSemProg;
+
+    const novaLista = sessoes.map((s) =>
+      s.id === sessao.id
+        ? { ...s, concluida: novoStatus, data_estudo: dataFinal, diario_de_bordo: novoDiario }
+        : s
     );
+    setSessoes(novaLista);
 
     startTransition(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       await supabase
         .from('ciclo_sessoes')
-        .update({ concluida: novoStatus, data_estudo: dataFinal })
+        .update({ concluida: novoStatus, data_estudo: dataFinal, diario_de_bordo: novoDiario })
         .eq('id', sessao.id);
 
-      if (novoStatus) {
-        await agendarRevisoesInteligentes(sessao, dataFinal);
-        toast.success('Bloco concluído e revisões agendadas!');
+      if (novoStatus && user) {
+        const hh = Math.floor(minsPlanejados / 60)
+          .toString()
+          .padStart(2, '0');
+        const mm = (minsPlanejados % 60).toString().padStart(2, '0');
+        const diarioHist = [
+          '[HISTORICO]',
+          planoAtivo ? `[PLANO:${planoAtivo.id}]` : '',
+          `⏱️ ${hh}:${mm}:00`,
+        ]
+          .filter(Boolean)
+          .join(' | ');
+
+        await supabase.from('ciclo_sessoes').insert({
+          user_id: user.id,
+          ordem: 9999,
+          disciplina_id: sessao.disciplina_id,
+          materia_nome: sessao.materia_nome,
+          foco_sugerido: `[Teoria] ${limparTagPlano(sessao.foco_sugerido) || 'Bloco do Ciclo'}`,
+          diario_de_bordo: diarioHist,
+          concluida: true,
+          materia_finalizada: false,
+          data_estudo: dataFinal,
+        });
+
+        await agendarRevisoesPermanentes(sessao, dataFinal);
+
+        const ativosDoPlano = novaLista.filter(
+          (s) =>
+            !s.materia_finalizada &&
+            !(s.diario_de_bordo || '').includes('[HISTORICO]') &&
+            sessaoPertenceAoPlano(s, planoAtivo)
+        );
+        const todosConcluidos =
+          ativosDoPlano.length > 0 && ativosDoPlano.every((s) => s.concluida);
+
+        if (todosConcluidos) {
+          const novoTotalCiclos = ciclosCompletos + 1;
+          setCiclosCompletos(novoTotalCiclos);
+          localStorage.setItem(storageKeyCiclos, String(novoTotalCiclos));
+
+          for (const b of ativosDoPlano) {
+            const dLimpo = (b.diario_de_bordo || '')
+              .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+              .trim();
+            await supabase
+              .from('ciclo_sessoes')
+              .update({ concluida: false, diario_de_bordo: dLimpo })
+              .eq('id', b.id);
+          }
+
+          setSessoes((prev) =>
+            prev.map((s) =>
+              ativosDoPlano.some((a) => a.id === s.id)
+                ? {
+                    ...s,
+                    concluida: false,
+                    diario_de_bordo: (s.diario_de_bordo || '')
+                      .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+                      .trim(),
+                  }
+                : s
+            )
+          );
+
+          toast.success(
+            `🎉 Parabéns! Você completou 100% da Volta #${novoTotalCiclos} do Ciclo! Os blocos foram reiniciados para a próxima volta!`
+          );
+        } else {
+          toast.success('Bloco concluído! Estudo salvo no histórico e revisões agendadas.');
+        }
       } else {
-        await supabase.from('revisoes').delete().eq('ciclo_sessao_id', sessao.id).eq('concluida', false);
-        toast.info('Bloco reaberto.');
+        toast.info('Bloco desmarcado na volta atual (suas revisões e histórico foram mantidos).');
       }
       router.refresh();
     });
@@ -360,13 +468,15 @@ export function CicloTabelaClient({
       data_estudo?: string;
     }
   ) => {
-    const mins = updates.minutos ?? extrairMinutosBloco(sessao.diario_de_bordo);
+    const mins = updates.minutos ?? extrairMinutosPlanejadosBloco(sessao.diario_de_bordo);
     const notas = updates.notasDiario ?? limparNotasDiario(sessao.diario_de_bordo);
     const diaTag = extrairDiaQuadroSemanal(sessao.diario_de_bordo);
+    const matchProg = (sessao.diario_de_bordo || '').match(/\[PROG:(\d+)\]/);
 
     const partesDiario: string[] = [];
     if (planoAtivo) partesDiario.push(`[PLANO:${planoAtivo.id}]`);
     partesDiario.push(`[MIN:${mins}]`);
+    if (matchProg) partesDiario.push(`[PROG:${matchProg[1]}]`);
     if (diaTag) partesDiario.push(`[DIA:${diaTag}]`);
     if (notas) partesDiario.push(notas);
 
@@ -409,11 +519,19 @@ export function CicloTabelaClient({
 
   const handleDuplicarBloco = (sessao: SessaoEstudo) => {
     startTransition(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const maxOrdem =
-        sessoesDoPlano.length > 0 ? Math.max(...sessoesDoPlano.map((s) => s.ordem || 0)) : 0;
+        blocosPlanejamentoDoPlano.length > 0
+          ? Math.max(...blocosPlanejamentoDoPlano.map((s) => s.ordem || 0))
+          : 0;
+
+      const diarioSemProg = (sessao.diario_de_bordo || '')
+        .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+        .trim();
 
       const { data: duplicada, error } = await supabase
         .from('ciclo_sessoes')
@@ -422,8 +540,8 @@ export function CicloTabelaClient({
           ordem: maxOrdem + 1,
           disciplina_id: sessao.disciplina_id,
           materia_nome: sessao.materia_nome,
-          foco_sugerido: sessao.foco_sugerido,
-          diario_de_bordo: sessao.diario_de_bordo,
+          foco_sugerido: '',
+          diario_de_bordo: diarioSemProg,
           concluida: false,
           materia_finalizada: false,
         })
@@ -440,11 +558,15 @@ export function CicloTabelaClient({
 
   const handleAdicionarBlocoManual = () => {
     startTransition(async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const maxOrdem =
-        sessoesDoPlano.length > 0 ? Math.max(...sessoesDoPlano.map((s) => s.ordem || 0)) : 0;
+        blocosPlanejamentoDoPlano.length > 0
+          ? Math.max(...blocosPlanejamentoDoPlano.map((s) => s.ordem || 0))
+          : 0;
       const discPadrao = disciplinasDoPlano[0] || null;
 
       const partesDiario: string[] = [];
@@ -475,35 +597,53 @@ export function CicloTabelaClient({
   };
 
   const handleRecomecarCiclo = () => {
-    if (!confirm('Deseja concluir esta volta e recomeçar o ciclo do início?')) return;
+    if (
+      !confirm(
+        'Deseja iniciar uma nova volta do ciclo? (Seus registros de estudo e revisões continuarão salvos!)'
+      )
+    )
+      return;
     startTransition(async () => {
-      const idsAtivos = sessoesCicloAtivo.map((s) => s.id);
-      if (idsAtivos.length > 0) {
+      for (const b of sessoesCicloAtivo) {
+        const dLimpo = (b.diario_de_bordo || '')
+          .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+          .trim();
         await supabase
           .from('ciclo_sessoes')
-          .update({ concluida: false })
-          .in('id', idsAtivos);
+          .update({ concluida: false, diario_de_bordo: dLimpo })
+          .eq('id', b.id);
       }
 
       const novoTotal = ciclosCompletos + 1;
       setCiclosCompletos(novoTotal);
       localStorage.setItem(storageKeyCiclos, String(novoTotal));
       setSessoes((prev) =>
-        prev.map((s) => (idsAtivos.includes(s.id) ? { ...s, concluida: false } : s))
+        prev.map((s) =>
+          sessoesCicloAtivo.some((a) => a.id === s.id)
+            ? {
+                ...s,
+                concluida: false,
+                diario_de_bordo: (s.diario_de_bordo || '')
+                  .replace(/\[PROG:\d+\]\s*\|?\s*/g, '')
+                  .trim(),
+              }
+            : s
+        )
       );
-      toast.success(`Ciclo #${novoTotal} registrado!`);
+      toast.success(`Volta #${novoTotal} contabilizada! Blocos prontos para a nova rodada.`);
       router.refresh();
     });
   };
 
   const handleExcluirPlanejamento = () => {
-    if (!confirm('Tem certeza que deseja excluir todos os blocos deste planejamento?')) return;
+    if (!confirm('Tem certeza que deseja excluir todos os blocos da sequência deste planejamento?'))
+      return;
     startTransition(async () => {
-      const ids = sessoesDoPlano.map((s) => s.id);
+      const ids = blocosPlanejamentoDoPlano.map((s) => s.id);
       if (ids.length > 0) {
         await deleteSessoesEmMassa(ids);
         setSessoes((prev) => prev.filter((s) => !ids.includes(s.id)));
-        toast.success('Planejamento excluído.');
+        toast.success('Sequência do planejamento excluída.');
       }
     });
   };
@@ -576,7 +716,6 @@ export function CicloTabelaClient({
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -628,7 +767,7 @@ export function CicloTabelaClient({
                       Automático Estendido até a Prova
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                      Agenda 24h, 7d, 15d, 30d, 60d, 90d + Reta Final 7 dias antes da prova.
+                      Agenda 24h, 7d, 15d, 30d, 60d e 90d permanentemente.
                     </span>
                   </div>
                 </label>
@@ -697,10 +836,8 @@ export function CicloTabelaClient({
         </div>
       </div>
 
-      {/* GRID PRINCIPAL DO PLANEJAMENTO */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 space-y-5">
-          {/* 2 CARDS DE TOPO */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -715,14 +852,14 @@ export function CicloTabelaClient({
                 {ciclosCompletos}
               </span>
               <span className="text-xs text-muted-foreground">
-                desde o início do planejamento
+                voltas completas concluídas
               </span>
             </div>
 
             <div className="p-5 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Progresso do Ciclo
+                  Progresso da Volta Atual
                 </span>
                 <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
                   <BarChart2 className="w-4 h-4" />
@@ -741,12 +878,11 @@ export function CicloTabelaClient({
               </div>
               <span className="text-xs text-muted-foreground">
                 {formatarMinutosHoras(dadosCiclo.minutosConcluidos)} de{' '}
-                {formatarMinutosHoras(dadosCiclo.minutosTotais)}
+                {formatarMinutosHoras(dadosCiclo.minutosTotais)} planejados na sequência
               </span>
             </div>
           </div>
 
-          {/* PAINEL: SEQUÊNCIA DOS ESTUDOS */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -784,33 +920,14 @@ export function CicloTabelaClient({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64 p-1.5 text-xs">
-                    <div
-                      onClick={() => setSugerirTopicosAuto(!sugerirTopicosAuto)}
-                      className="flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-secondary cursor-pointer"
-                    >
-                      <span className="font-medium">Sugerir tópicos automaticamente</span>
-                      <div
-                        className={cn(
-                          'w-8 h-4 rounded-full transition-colors p-0.5',
-                          sugerirTopicosAuto ? 'bg-emerald-500' : 'bg-secondary'
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'w-3 h-3 rounded-full bg-white transition-transform',
-                            sugerirTopicosAuto ? 'translate-x-4' : 'translate-x-0'
-                          )}
-                        />
-                      </div>
-                    </div>
-                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={handleRecomecarCiclo}
-                      className="cursor-pointer flex items-center justify-between py-2 px-2.5"
+                      className="cursor-pointer flex items-center justify-between py-2 px-2.5 font-semibold text-emerald-400"
                     >
-                      <span>Recomeçar ciclo</span>
-                      <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Nova Volta / Recomeçar ciclo</span>
+                      <RotateCcw className="w-3.5 h-3.5" />
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={handleExcluirPlanejamento}
                       className="cursor-pointer flex items-center justify-between py-2 px-2.5 text-rose-400 focus:text-rose-400"
@@ -823,7 +940,6 @@ export function CicloTabelaClient({
               </div>
             </div>
 
-            {/* BARRA DE FILTROS + AGRUPAMENTO + BUSCA */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/60">
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {[
@@ -894,7 +1010,6 @@ export function CicloTabelaClient({
               </div>
             </div>
 
-            {/* LISTA DE BLOCOS DA SEQUÊNCIA */}
             <div className="space-y-4 pt-1">
               {gruposRenderizados.map((grupo) => (
                 <div key={grupo.titulo} className="space-y-2.5">
@@ -909,209 +1024,294 @@ export function CicloTabelaClient({
 
                   {grupo.itens.length > 0 ? (
                     grupo.itens.map((sessao, idx) => {
-                      const mins = extrairMinutosBloco(sessao.diario_de_bordo);
+                      const minsPlanejados = extrairMinutosPlanejadosBloco(sessao.diario_de_bordo);
+                      const minsCumpridos = extrairMinutosCumpridosBloco(sessao);
+                      const percBloco = Math.min(
+                        100,
+                        Math.round((minsCumpridos / Math.max(1, minsPlanejados)) * 100)
+                      );
                       const notas = limparNotasDiario(sessao.diario_de_bordo);
                       const fatiaCor =
                         dadosCiclo.fatias.find((f) => f.nome === sessao.materia_nome)?.cor ||
                         SLICE_COLORS[idx % SLICE_COLORS.length];
 
+                      const discNodeDesteBloco = disciplinasDoPlano.find(
+                        (d) =>
+                          Number(d.id) === Number(sessao.disciplina_id) ||
+                          d.title.trim().toLowerCase() ===
+                            (sessao.materia_nome || '').trim().toLowerCase()
+                      );
+                      const subpastasDestaDisciplina =
+                        extrairSubpastasDaDisciplina(discNodeDesteBloco);
+
                       return (
                         <div
                           key={sessao.id}
                           className={cn(
-                            'p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3',
+                            'p-3.5 rounded-2xl border transition-all flex flex-col gap-2.5',
                             sessao.concluida
                               ? 'bg-emerald-500/[0.04] border-emerald-500/30'
                               : 'bg-secondary/20 border-border hover:border-border/80'
                           )}
                         >
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <div className="pt-1 flex items-center gap-2">
-                              <Checkbox
-                                checked={sessao.concluida}
-                                onCheckedChange={() => handleToggleConcluirBloco(sessao)}
-                                title="Marcar bloco como concluído e agendar revisões"
-                                className="h-4 w-4 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                              />
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <div className="pt-1 flex items-center gap-2">
+                                <Checkbox
+                                  checked={sessao.concluida}
+                                  onCheckedChange={() => handleToggleConcluirBloco(sessao)}
+                                  title="Marcar bloco como concluído na volta atual"
+                                  className="h-4 w-4 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                                />
+                              </div>
+
+                              <div className="flex-1 min-w-0 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: fatiaCor }}
+                                  />
+                                  {isEditingCycle ? (
+                                    <select
+                                      value={sessao.disciplina_id || ''}
+                                      onChange={(e) => {
+                                        const idNum = e.target.value ? Number(e.target.value) : null;
+                                        const discObj = disciplinasDoPlano.find(
+                                          (d) => Number(d.id) === idNum
+                                        );
+                                        handleUpdateBloco(sessao, {
+                                          disciplina_id: idNum,
+                                          materia_nome: discObj ? discObj.title : '',
+                                          foco_sugerido: '',
+                                        });
+                                      }}
+                                      className="h-9 flex-1 px-3 rounded-xl bg-background border border-border text-xs font-bold text-foreground"
+                                    >
+                                      <option value="">Selecione a disciplina principal...</option>
+                                      {disciplinasDoPlano.map((d) => (
+                                        <option key={d.id} value={d.id}>
+                                          {d.title}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span
+                                      className={cn(
+                                        'text-xs sm:text-sm font-bold text-foreground truncate',
+                                        sessao.concluida && 'line-through text-muted-foreground'
+                                      )}
+                                    >
+                                      {sessao.materia_nome || 'Disciplina não selecionada'}
+                                    </span>
+                                  )}
+
+                                  {sessao.disciplina_id && (
+                                    <Link
+                                      href={`/disciplinas?page=${sessao.disciplina_id}`}
+                                      title="Abrir caderno da disciplina"
+                                      className="text-muted-foreground hover:text-emerald-400"
+                                    >
+                                      <ArrowUpRight className="w-3.5 h-3.5" />
+                                    </Link>
+                                  )}
+
+                                  {minsCumpridos > 0 && !sessao.concluida && (
+                                    <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px]">
+                                      {minsCumpridos}/{minsPlanejados} min cumpridos
+                                    </Badge>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+                                  {subpastasDestaDisciplina.length > 0 && (
+                                    <select
+                                      value={limparTagPlano(sessao.foco_sugerido)}
+                                      onChange={(e) =>
+                                        handleUpdateBloco(sessao, {
+                                          foco_sugerido: e.target.value,
+                                        })
+                                      }
+                                      className="h-7 px-2 rounded-lg bg-background/80 border border-border/70 text-[11px] text-foreground max-w-full sm:max-w-[260px]"
+                                      title="Escolher subpasta ou tópico desta disciplina"
+                                    >
+                                      <option value="">
+                                        📂 Escolher subpasta / tópico ({subpastasDestaDisciplina.length})...
+                                      </option>
+                                      {subpastasDestaDisciplina.map((sub) => (
+                                        <option key={sub.id} value={sub.rawTitle}>
+                                          {sub.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+
+                                  <input
+                                    type="text"
+                                    key={`${sessao.id}-${sessao.foco_sugerido}`}
+                                    defaultValue={limparTagPlano(sessao.foco_sugerido)}
+                                    onBlur={(e) =>
+                                      handleUpdateBloco(sessao, { foco_sugerido: e.target.value })
+                                    }
+                                    placeholder="Ou digite o foco desta sessão..."
+                                    className="flex-1 bg-transparent text-xs text-muted-foreground focus:text-foreground focus:outline-none border-b border-transparent focus:border-emerald-500/50 pb-0.5"
+                                  />
+                                </div>
+                              </div>
                             </div>
 
-                            <div className="flex-1 min-w-0 space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: fatiaCor }}
-                                />
-                                {isEditingCycle ? (
-                                  <select
-                                    value={sessao.disciplina_id || ''}
-                                    onChange={(e) => {
-                                      const idNum = e.target.value ? Number(e.target.value) : null;
-                                      const discObj = disciplinasDoPlano.find(
-                                        (d) => Number(d.id) === idNum
-                                      );
-                                      handleUpdateBloco(sessao, {
-                                        disciplina_id: idNum,
-                                        materia_nome: discObj ? discObj.title : '',
-                                      });
-                                    }}
-                                    className="h-9 flex-1 px-3 rounded-xl bg-background border border-border text-xs font-bold text-foreground"
-                                  >
-                                    <option value="">Selecione a disciplina...</option>
-                                    {disciplinasDoPlano.map((d) => (
-                                      <option key={d.id} value={d.id}>
-                                        {d.title}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <span
-                                    className={cn(
-                                      'text-xs sm:text-sm font-bold text-foreground truncate',
-                                      sessao.concluida && 'line-through text-muted-foreground'
-                                    )}
-                                  >
-                                    {sessao.materia_nome || 'Disciplina não selecionada'}
-                                  </span>
-                                )}
+                            <div className="flex flex-wrap items-center gap-2 self-end sm:self-center flex-shrink-0">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() =>
+                                  window.dispatchEvent(
+                                    new CustomEvent('open-registro-estudo', {
+                                      detail: {
+                                        disciplinaId: sessao.disciplina_id
+                                          ? String(sessao.disciplina_id)
+                                          : undefined,
+                                        topico: limparTagPlano(sessao.foco_sugerido),
+                                        tempoFormatado: `00:${Math.max(
+                                          5,
+                                          minsPlanejados - minsCumpridos
+                                        )
+                                          .toString()
+                                          .padStart(2, '0')}:00`,
+                                      },
+                                    })
+                                  )
+                                }
+                                className="h-8 w-8 rounded-full border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/15"
+                                title="Registrar tempo estudado neste bloco"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                              </Button>
 
-                                {sessao.disciplina_id && (
-                                  <Link
-                                    href={`/disciplinas?page=${sessao.disciplina_id}`}
-                                    title="Abrir caderno da disciplina"
-                                    className="text-muted-foreground hover:text-emerald-400"
-                                  >
-                                    <ArrowUpRight className="w-3.5 h-3.5" />
-                                  </Link>
-                                )}
+                              <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-2.5 h-8">
+                                <input
+                                  type="number"
+                                  min={10}
+                                  max={240}
+                                  step={5}
+                                  key={`${sessao.id}-${minsPlanejados}`}
+                                  defaultValue={minsPlanejados}
+                                  onBlur={(e) =>
+                                    handleUpdateBloco(sessao, {
+                                      minutos: Math.max(10, parseInt(e.target.value, 10) || 45),
+                                    })
+                                  }
+                                  className="w-10 text-center text-xs font-bold bg-transparent focus:outline-none"
+                                  title="Minutos planejados para este bloco"
+                                />
+                                <span className="text-[10px] text-muted-foreground font-semibold">
+                                  min
+                                </span>
                               </div>
 
                               <input
-                                type="text"
-                                defaultValue={limparTagPlano(sessao.foco_sugerido)}
-                                onBlur={(e) =>
-                                  handleUpdateBloco(sessao, { foco_sugerido: e.target.value })
+                                type="date"
+                                value={sessao.data_estudo ? sessao.data_estudo.split('T')[0] : ''}
+                                onChange={(e) =>
+                                  handleUpdateBloco(sessao, { data_estudo: e.target.value })
                                 }
-                                placeholder="Tópico / Foco sugerido desta sessão..."
-                                className="w-full bg-transparent text-xs text-muted-foreground focus:text-foreground focus:outline-none border-b border-transparent focus:border-emerald-500/50 pb-0.5"
+                                className="h-8 px-2 rounded-xl bg-background border border-border text-[11px] text-muted-foreground hover:text-foreground"
+                                title="Data do estudo"
                               />
-                            </div>
-                          </div>
 
-                          <div className="flex flex-wrap items-center gap-2 self-end sm:self-center flex-shrink-0">
-                            <div className="flex items-center gap-1 bg-background border border-border rounded-xl px-2.5 h-8">
-                              <input
-                                type="number"
-                                min={10}
-                                max={240}
-                                step={5}
-                                defaultValue={mins}
-                                onBlur={(e) =>
-                                  handleUpdateBloco(sessao, {
-                                    minutos: Math.max(10, parseInt(e.target.value, 10) || 45),
-                                  })
-                                }
-                                className="w-10 text-center text-xs font-bold bg-transparent focus:outline-none"
-                                title="Minutos planejados para este bloco"
-                              />
-                              <span className="text-[10px] text-muted-foreground font-semibold">
-                                min
-                              </span>
-                            </div>
-
-                            <input
-                              type="date"
-                              value={sessao.data_estudo ? sessao.data_estudo.split('T')[0] : ''}
-                              onChange={(e) =>
-                                handleUpdateBloco(sessao, { data_estudo: e.target.value })
-                              }
-                              className="h-8 px-2 rounded-xl bg-background border border-border text-[11px] text-muted-foreground hover:text-foreground"
-                              title="Data do estudo"
-                            />
-
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    'h-8 px-2.5 rounded-xl border text-xs flex items-center gap-1 transition-colors',
-                                    notas
-                                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold'
-                                      : 'border-border bg-background text-muted-foreground hover:text-foreground'
-                                  )}
-                                  title="Diário de Bordo da sessão"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  <span className="hidden md:inline">
-                                    {notas ? 'Diário' : 'Anotar'}
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      'h-8 px-2.5 rounded-xl border text-xs flex items-center gap-1 transition-colors',
+                                      notas
+                                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold'
+                                        : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                                    )}
+                                    title="Diário de Bordo da sessão"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    <span className="hidden md:inline">
+                                      {notas ? 'Diário' : 'Anotar'}
+                                    </span>
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 p-3.5 space-y-2 bg-card border-border shadow-xl" align="end">
+                                  <span className="text-xs font-bold flex items-center gap-1.5">
+                                    <FileText className="w-3.5 h-3.5 text-emerald-500" />
+                                    Diário de Bordo — {sessao.materia_nome}
                                   </span>
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-80 p-3.5 space-y-2 bg-card border-border shadow-xl" align="end">
-                                <span className="text-xs font-bold flex items-center gap-1.5">
-                                  <FileText className="w-3.5 h-3.5 text-emerald-500" />
-                                  Diário de Bordo — {sessao.materia_nome}
-                                </span>
-                                <textarea
-                                  rows={4}
-                                  defaultValue={notas}
-                                  onBlur={(e) =>
-                                    handleUpdateBloco(sessao, { notasDiario: e.target.value })
-                                  }
-                                  placeholder="Onde parei, página do PDF, pontos importantes..."
-                                  className="w-full rounded-xl border border-border bg-secondary/30 p-2.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                                />
-                              </PopoverContent>
-                            </Popover>
+                                  <textarea
+                                    rows={4}
+                                    defaultValue={notas}
+                                    onBlur={(e) =>
+                                      handleUpdateBloco(sessao, { notasDiario: e.target.value })
+                                    }
+                                    placeholder="Onde parei, página do PDF, pontos importantes..."
+                                    className="w-full rounded-xl border border-border bg-secondary/30 p-2.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </PopoverContent>
+                              </Popover>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleZerarMateria(sessao)}
-                              className={cn(
-                                'h-8 w-8 rounded-full border border-border',
-                                sessao.materia_finalizada
-                                  ? 'text-indigo-400 bg-indigo-500/10'
-                                  : 'text-muted-foreground hover:text-foreground'
-                              )}
-                              title={
-                                sessao.materia_finalizada
-                                  ? 'Restaurar matéria para o ciclo ativo'
-                                  : 'Zerar / Arquivar matéria'
-                              }
-                            >
-                              {sessao.materia_finalizada ? (
-                                <ArchiveRestore className="w-3.5 h-3.5" />
-                              ) : (
-                                <Archive className="w-3.5 h-3.5" />
-                              )}
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleToggleZerarMateria(sessao)}
+                                className={cn(
+                                  'h-8 w-8 rounded-full border border-border',
+                                  sessao.materia_finalizada
+                                    ? 'text-indigo-400 bg-indigo-500/10'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                                title={
+                                  sessao.materia_finalizada
+                                    ? 'Restaurar matéria para o ciclo ativo'
+                                    : 'Zerar / Arquivar matéria'
+                                }
+                              >
+                                {sessao.materia_finalizada ? (
+                                  <ArchiveRestore className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Archive className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDuplicarBloco(sessao)}
-                              className="h-8 w-8 rounded-full border border-border text-muted-foreground hover:text-foreground"
-                              title="Duplicar disciplina na sequência"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDuplicarBloco(sessao)}
+                                className="h-8 w-8 rounded-full border border-border text-muted-foreground hover:text-foreground"
+                                title="Duplicar disciplina na sequência"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </Button>
 
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                startTransition(async () => {
-                                  await deleteSessaoCiclo(sessao.id);
-                                  setSessoes((prev) => prev.filter((s) => s.id !== sessao.id));
-                                  toast.success('Bloco removido.');
-                                });
-                              }}
-                              className="h-8 w-8 rounded-full border border-border text-muted-foreground hover:text-destructive"
-                              title="Excluir bloco"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  startTransition(async () => {
+                                    await deleteSessaoCiclo(sessao.id);
+                                    setSessoes((prev) => prev.filter((s) => s.id !== sessao.id));
+                                    toast.success('Bloco removido.');
+                                  });
+                                }}
+                                className="h-8 w-8 rounded-full border border-border text-muted-foreground hover:text-destructive"
+                                title="Excluir bloco"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
                           </div>
+
+                          {minsCumpridos > 0 && !sessao.concluida && (
+                            <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+                              <div
+                                className="h-full bg-amber-400 rounded-full transition-all"
+                                style={{ width: `${percBloco}%` }}
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -1160,11 +1360,15 @@ export function CicloTabelaClient({
           </div>
         </div>
 
-        {/* COLUNA DIREITA: GRÁFICO DE DISTRIBUIÇÃO DO CICLO */}
         <div className="lg:col-span-5 p-6 rounded-2xl bg-card border border-border shadow-xs space-y-6 sticky top-4">
-          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-            Distribuição do Ciclo
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Distribuição do Ciclo
+            </span>
+            <Badge variant="secondary" className="text-[10px]">
+              Total: {formatarMinutosHoras(dadosCiclo.minutosTotais)}
+            </Badge>
+          </div>
 
           {renderDonutChart()}
 
@@ -1201,14 +1405,13 @@ export function CicloTabelaClient({
         </div>
       </div>
 
-      {/* ASSISTENTE DE 4 ETAPAS */}
       <PlanejamentoWizardModal
         open={wizardOpen}
         onClose={() => setWizardOpen(false)}
         disciplinasDoPlano={disciplinasDoPlano}
         sessoesCicloAtivo={sessoesCicloAtivo}
         planoAtivo={planoAtivo}
-        sugerirTopicosAuto={sugerirTopicosAuto}
+        sugerirTopicosAuto={false}
         onCreated={(novos, idsRemovidos, formatoEscolhido) => {
           setSessoes((prev) => [
             ...prev.filter((s) => !idsRemovidos.includes(s.id)),

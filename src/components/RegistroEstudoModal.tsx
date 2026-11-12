@@ -39,6 +39,40 @@ const CATEGORIAS = [
   'Videoaula',
 ];
 
+function obterDescendentesDaDisciplina(
+  rootId: number,
+  todasPaginas: PaginaItem[]
+): { id: number; label: string; rawTitle: string }[] {
+  const resultado: { id: number; label: string; rawTitle: string }[] = [];
+
+  function percorrer(parentId: number, prefixo: string) {
+    const filhos = todasPaginas.filter((p) => Number(p.parent_id) === Number(parentId));
+    for (const f of filhos) {
+      const temNetos = todasPaginas.some((p) => Number(p.parent_id) === Number(f.id));
+      const caminho = prefixo ? `${prefixo} › ${f.title}` : f.title;
+      resultado.push({
+        id: f.id,
+        label: `${temNetos ? '📂' : '📄'} ${caminho}`,
+        rawTitle: f.title,
+      });
+      if (temNetos) {
+        percorrer(f.id, caminho);
+      }
+    }
+  }
+
+  percorrer(rootId, '');
+  return resultado;
+}
+
+function atualizarTagProgresso(diario: string, metaMin: number, novoProg: number): string {
+  let base = diario.replace(/\[PROG:\d+\]\s*\|?\s*/g, '').trim();
+  if (!base.includes('[MIN:')) {
+    base = `[MIN:${metaMin}] | ${base}`;
+  }
+  return `[PROG:${novoProg}] | ${base}`.replace(/\|\s*$/, '').trim();
+}
+
 export function RegistroEstudoModal() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,7 +83,7 @@ export function RegistroEstudoModal() {
   const [paginas, setPaginas] = useState<PaginaItem[]>([]);
 
   const [datePreset, setDatePreset] = useState<'hoje' | 'ontem' | 'outro'>('hoje');
-  const [customDate, setCustomDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [customDate, setCustomDate] = useState(() => getHojeBrasilISO(0));
 
   const [categoria, setCategoria] = useState('Teoria');
   const [disciplinaId, setDisciplinaId] = useState<string>('');
@@ -87,7 +121,7 @@ export function RegistroEstudoModal() {
       if (customEvent.detail?.disciplinaId) {
         setDisciplinaId(customEvent.detail.disciplinaId);
       }
-      if (customEvent.detail?.topico) {
+      if (customEvent.detail?.topico !== undefined) {
         setTopico(customEvent.detail.topico);
       }
       setOpen(true);
@@ -109,7 +143,9 @@ export function RegistroEstudoModal() {
   useEffect(() => {
     if (!open) return;
     async function fetchPaginas() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase
         .from('paginas')
@@ -121,25 +157,21 @@ export function RegistroEstudoModal() {
     fetchPaginas();
   }, [open, supabase]);
 
-const disciplinasRaiz = useMemo(() => {
-    return paginas.filter((p) => p.parent_id === null);
-  }, [paginas]);
-  
+  const disciplinasRaiz = useMemo(
+    () => paginas.filter((p) => p.parent_id === null),
+    [paginas]
+  );
+
   const topicosDaDisciplina = useMemo(() => {
     if (!disciplinaId || disciplinaId === 'nova') return [];
-    const numId = Number(disciplinaId);
-    return paginas.filter((p) => p.parent_id === numId);
+    return obterDescendentesDaDisciplina(Number(disciplinaId), paginas);
   }, [paginas, disciplinaId]);
 
-const getSelectedDateISO = () => {
-  if (datePreset === 'hoje') {
-    return getHojeBrasilISO(0);
-  }
-  if (datePreset === 'ontem') {
-    return getHojeBrasilISO(-1);
-  }
-  return customDate || getHojeBrasilISO(0);
-};
+  const getSelectedDateISO = () => {
+    if (datePreset === 'hoje') return getHojeBrasilISO(0);
+    if (datePreset === 'ontem') return getHojeBrasilISO(-1);
+    return customDate || getHojeBrasilISO(0);
+  };
 
   const handleOnlyNumbers = (val: string, setter: (v: string) => void) => {
     setter(val.replace(/\D/g, '').slice(0, 5));
@@ -150,6 +182,17 @@ const getSelectedDateISO = () => {
     if (digits.length <= 2) setter(digits);
     else if (digits.length <= 4) setter(`${digits.slice(0, 2)}:${digits.slice(2)}`);
     else setter(`${digits.slice(0, 2)}:${digits.slice(2, 4)}:${digits.slice(4, 6)}`);
+  };
+
+  const converterTempoParaMinutos = (str: string): number => {
+    const parts = str.split(':').map((n) => parseInt(n, 10) || 0);
+    if (parts.length === 3) {
+      return parts[0] * 60 + parts[1] + Math.round(parts[2] / 60);
+    }
+    if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return parseInt(str, 10) || 45;
   };
 
   const resetForm = () => {
@@ -172,7 +215,8 @@ const getSelectedDateISO = () => {
   const acertosNum = parseInt(questoesAcertos) || 0;
   const errosNum = parseInt(questoesErros) || 0;
   const totalQuestoesCalc = acertosNum + errosNum;
-  const percAcertoCalc = totalQuestoesCalc > 0 ? Math.round((acertosNum / totalQuestoesCalc) * 100) : 0;
+  const percAcertoCalc =
+    totalQuestoesCalc > 0 ? Math.round((acertosNum / totalQuestoesCalc) * 100) : 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +235,9 @@ const getSelectedDateISO = () => {
     setIsSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Usuário não autenticado.');
 
       let finalDisciplinaId: number | null =
@@ -204,13 +250,13 @@ const getSelectedDateISO = () => {
             user_id: user.id,
             title: novaDisciplinaNome.trim(),
             parent_id: null,
+            content: { type: 'doc', content: [{ type: 'paragraph' }] },
           })
           .select('id')
           .single();
 
         if (!pageErr && createdPage) {
           finalDisciplinaId = createdPage.id;
-          // Se houver um Plano Ativo, já vincula a nova disciplina a ele automaticamente!
           if (planoAtivo) {
             await linkPastaToConcurso(planoAtivo.id, createdPage.id);
           }
@@ -218,6 +264,8 @@ const getSelectedDateISO = () => {
       }
 
       const dataEstudoISO = getSelectedDateISO();
+      const tempoLimpo = tempoEstudo.trim() || '00:45:00';
+      const minutosEstudadosAgora = Math.max(1, converterTempoParaMinutos(tempoLimpo));
 
       const partesFoco: string[] = [];
       if (categoria) partesFoco.push(`[${categoria}]`);
@@ -225,12 +273,10 @@ const getSelectedDateISO = () => {
       if (material.trim()) partesFoco.push(`(${material.trim()})`);
       const focoFinal = partesFoco.join(' ') || 'Estudo Geral';
 
-      // Carimba o ID do Plano Ativo para isolamento absoluto entre planos
-      const partesDiario: string[] = [];
+      const partesDiario: string[] = ['[HISTORICO]'];
       if (planoAtivo) {
         partesDiario.push(`[PLANO:${planoAtivo.id}]`);
       }
-      const tempoLimpo = tempoEstudo.trim() || '00:45:00';
       partesDiario.push(`⏱️ ${tempoLimpo}`);
 
       const pIni = parseInt(paginaInicio) || 0;
@@ -261,92 +307,80 @@ const getSelectedDateISO = () => {
       const r7ISO = r7.toISOString().split('T')[0];
       const r30ISO = r30.toISOString().split('T')[0];
 
-      let targetSessionId: number | null = null;
+      const { data: inseridaHistorico, error: insertError } = await supabase
+        .from('ciclo_sessoes')
+        .insert({
+          user_id: user.id,
+          ordem: 9999,
+          disciplina_id: finalDisciplinaId,
+          materia_nome: nomeMateria,
+          foco_sugerido: focoFinal,
+          diario_de_bordo: diarioFinal,
+          questoes_acertos: acertosNum,
+          questoes_total: totalQuestoesCalc,
+          concluida: true,
+          materia_finalizada: false,
+          data_estudo: dataEstudoISO,
+          data_revisao_1: programarRevisoes ? r1ISO : null,
+          data_revisao_2: programarRevisoes ? r7ISO : null,
+          data_revisao_3: programarRevisoes ? r30ISO : null,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+
+      if (programarRevisoes && inseridaHistorico?.id) {
+        await toggleConclusaoSessao(inseridaHistorico.id, true);
+      }
 
       if (contabilizarPlanejamento) {
-        const { data: pendentes } = await supabase
+        const { data: blocosCiclo } = await supabase
           .from('ciclo_sessoes')
-          .select('id, diario_de_bordo, foco_sugerido')
+          .select('*')
           .eq('user_id', user.id)
           .eq('concluida', false)
           .eq('materia_nome', nomeMateria)
           .order('ordem', { ascending: true });
 
-        if (pendentes && pendentes.length > 0) {
-          // Procura sessão pendente do mesmo plano ativo
-          const doMesmoPlano = planoAtivo
-            ? pendentes.find(
-                (p) =>
-                  `${p.diario_de_bordo || ''} ${p.foco_sugerido || ''}`.includes(
-                    `[PLANO:${planoAtivo.id}]`
-                  ) || !`${p.diario_de_bordo || ''} ${p.foco_sugerido || ''}`.includes('[PLANO:')
-              )
-            : pendentes[0];
+        const blocosValidos = (blocosCiclo || []).filter(
+          (b) => !(b.diario_de_bordo || '').includes('[HISTORICO]')
+        );
 
-          if (doMesmoPlano) targetSessionId = doMesmoPlano.id;
+        if (blocosValidos.length > 0) {
+          const blocoAlvo = blocosValidos[0];
+          const diarioBloco = blocoAlvo.diario_de_bordo || '';
+          const matchMeta = diarioBloco.match(/\[MIN:(\d+)\]/);
+          const metaMinutosBloco = matchMeta ? parseInt(matchMeta[1], 10) || 45 : 45;
+
+          const matchProg = diarioBloco.match(/\[PROG:(\d+)\]/);
+          const progAnterior = matchProg ? parseInt(matchProg[1], 10) || 0 : 0;
+
+          const novoProgresso = progAnterior + minutosEstudadosAgora;
+          const completouBloco = novoProgresso >= metaMinutosBloco;
+
+          const diarioAtualizado = atualizarTagProgresso(
+            diarioBloco,
+            metaMinutosBloco,
+            completouBloco ? metaMinutosBloco : novoProgresso
+          );
+
+          await supabase
+            .from('ciclo_sessoes')
+            .update({
+              concluida: completouBloco,
+              data_estudo: dataEstudoISO,
+              foco_sugerido: topico.trim() || blocoAlvo.foco_sugerido,
+              diario_de_bordo: diarioAtualizado,
+            })
+            .eq('id', blocoAlvo.id);
         }
       }
 
-      if (targetSessionId) {
-        await supabase
-          .from('ciclo_sessoes')
-          .update({
-            disciplina_id: finalDisciplinaId,
-            materia_nome: nomeMateria,
-            foco_sugerido: focoFinal,
-            diario_de_bordo: diarioFinal,
-            questoes_acertos: acertosNum,
-            questoes_total: totalQuestoesCalc,
-            concluida: true,
-            data_estudo: dataEstudoISO,
-            data_revisao_1: programarRevisoes ? r1ISO : null,
-            data_revisao_2: programarRevisoes ? r7ISO : null,
-            data_revisao_3: programarRevisoes ? r30ISO : null,
-          })
-          .eq('id', targetSessionId);
-      } else {
-        const { data: ultimas } = await supabase
-          .from('ciclo_sessoes')
-          .select('ordem')
-          .eq('user_id', user.id)
-          .order('ordem', { ascending: false })
-          .limit(1);
-
-        const novaOrdem = ultimas && ultimas.length > 0 ? (ultimas[0].ordem || 0) + 1 : 1;
-
-        const { data: inserida, error: insertError } = await supabase
-          .from('ciclo_sessoes')
-          .insert({
-            user_id: user.id,
-            ordem: novaOrdem,
-            disciplina_id: finalDisciplinaId,
-            materia_nome: nomeMateria,
-            foco_sugerido: focoFinal,
-            diario_de_bordo: diarioFinal,
-            questoes_acertos: acertosNum,
-            questoes_total: totalQuestoesCalc,
-            concluida: true,
-            materia_finalizada: false,
-            data_estudo: dataEstudoISO,
-            data_revisao_1: programarRevisoes ? r1ISO : null,
-            data_revisao_2: programarRevisoes ? r7ISO : null,
-            data_revisao_3: programarRevisoes ? r30ISO : null,
-          })
-          .select('id')
-          .single();
-
-        if (insertError) throw insertError;
-        targetSessionId = inserida?.id || null;
-      }
-
-      if (programarRevisoes && targetSessionId) {
-        await toggleConclusaoSessao(targetSessionId, true);
-      }
-
       toast.success(
-        planoAtivo
-          ? `Estudo registrado no plano "${planoAtivo.nome}"!`
-          : 'Estudo registrado com sucesso!'
+        contabilizarPlanejamento
+          ? `Estudo de ${minutosEstudadosAgora}min registrado e sincronizado com o seu Ciclo!`
+          : 'Estudo registrado no Histórico com sucesso!'
       );
       recarregarPlanos();
       resetForm();
@@ -468,7 +502,7 @@ const getSelectedDateISO = () => {
 
             <div className="sm:col-span-6 space-y-1.5">
               <label className="text-xs font-semibold text-foreground block">
-                Disciplina {planoAtivo ? `(do plano ${planoAtivo.nome})` : ''}
+                Disciplina Principal
               </label>
               <div className="flex gap-2">
                 <div className="relative flex-1 flex items-center">
@@ -482,7 +516,7 @@ const getSelectedDateISO = () => {
                     className="w-full h-11 pl-9 pr-3 rounded-xl border border-border bg-secondary/30 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="" className="bg-card text-muted-foreground">
-                      Selecione ou crie uma nova...
+                      Selecione a disciplina...
                     </option>
                     {disciplinasRaiz.map((d) => (
                       <option key={d.id} value={String(d.id)} className="bg-card text-foreground">
@@ -490,7 +524,7 @@ const getSelectedDateISO = () => {
                       </option>
                     ))}
                     <option value="nova" className="bg-card text-primary font-bold">
-                      + Criar nova disciplina neste plano...
+                      + Criar nova disciplina...
                     </option>
                   </select>
                 </div>
@@ -526,24 +560,49 @@ const getSelectedDateISO = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
             <div className="sm:col-span-8 space-y-1.5">
-              <label className="text-xs font-semibold text-foreground block">Tópico</label>
-              <div className="relative flex items-center">
-                <FileText className="w-4 h-4 text-muted-foreground absolute left-3 pointer-events-none" />
-                <input
-                  type="text"
-                  list="topicos-sugeridos"
-                  value={topico}
-                  onChange={(e) => setTopico(e.target.value)}
-                  placeholder="Selecione ou crie um novo..."
-                  className="w-full h-11 pl-9 pr-3 text-sm rounded-xl bg-secondary/30 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">
+                  Tópico / Subpasta da Disciplina
+                </label>
                 {topicosDaDisciplina.length > 0 && (
-                  <datalist id="topicos-sugeridos">
-                    {topicosDaDisciplina.map((t) => (
-                      <option key={t.id} value={t.title} />
-                    ))}
-                  </datalist>
+                  <span className="text-[11px] text-emerald-400 font-semibold">
+                    {topicosDaDisciplina.length} subpastas/tópicos desta matéria
+                  </span>
                 )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                {topicosDaDisciplina.length > 0 && (
+                  <select
+                    value={topico}
+                    onChange={(e) => setTopico(e.target.value)}
+                    className="h-11 sm:w-1/2 px-3 rounded-xl border border-border bg-secondary/30 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="" className="bg-card text-muted-foreground">
+                      📂 Escolher da lista desta matéria...
+                    </option>
+                    {topicosDaDisciplina.map((t) => (
+                      <option key={t.id} value={t.rawTitle} className="bg-card text-foreground">
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <div className="relative flex-1 flex items-center">
+                  <FileText className="w-4 h-4 text-muted-foreground absolute left-3 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={topico}
+                    onChange={(e) => setTopico(e.target.value)}
+                    placeholder={
+                      topicosDaDisciplina.length > 0
+                        ? 'Ou digite / edite o tópico aqui...'
+                        : 'Digite o tópico estudado...'
+                    }
+                    className="w-full h-11 pl-9 pr-3 text-xs rounded-xl bg-secondary/30 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
               </div>
             </div>
 
@@ -557,7 +616,7 @@ const getSelectedDateISO = () => {
                   type="text"
                   value={material}
                   onChange={(e) => setMaterial(e.target.value)}
-                  placeholder="Ex.: Aula 01"
+                  placeholder="Ex.: Aula 01, PDF..."
                   className="w-full h-11 pl-9 pr-3 text-sm rounded-xl bg-secondary/30 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -580,8 +639,8 @@ const getSelectedDateISO = () => {
                 onCheckedChange={(v) => setContabilizarPlanejamento(Boolean(v))}
                 className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
               />
-              <span>Contabilizar no planejamento</span>
-              <span title="Vincula e conclui o bloco no Ciclo de Estudos deste plano">
+              <span>Contabilizar no planejamento (abater minutos no bloco do ciclo)</span>
+              <span title="Abate os minutos estudados diretamente no bloco desta disciplina lá na Sequência de Estudos">
                 <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
               </span>
             </label>
