@@ -31,23 +31,25 @@ export function extractLinksAndPriorities(concurso: Concurso | null): {
 
   const namedLinks: NamedLink[] = [];
   const cleanPriorities: string[] = [];
-
-  if (concurso.edital_url?.trim()) {
-    namedLinks.push({ label: 'Edital Principal', url: concurso.edital_url.trim() });
-  }
+  const urlsAdicionadas = new Set<string>();
 
   (concurso.prioridades || []).forEach((line) => {
     if (line.startsWith('[LINK]')) {
       const raw = line.replace('[LINK]', '');
       const [label, ...urlParts] = raw.split('|');
-      const url = urlParts.join('|');
-      if (url?.trim()) {
-        namedLinks.push({ label: label?.trim() || 'Link', url: url.trim() });
+      const url = urlParts.join('|').trim();
+      if (url && !urlsAdicionadas.has(url)) {
+        urlsAdicionadas.add(url);
+        namedLinks.push({ label: label?.trim() || 'Edital', url });
       }
     } else if (line.trim()) {
       cleanPriorities.push(line);
     }
   });
+
+  if (concurso.edital_url?.trim() && !urlsAdicionadas.has(concurso.edital_url.trim())) {
+    namedLinks.unshift({ label: 'Edital Principal', url: concurso.edital_url.trim() });
+  }
 
   return { namedLinks, cleanPriorities };
 }

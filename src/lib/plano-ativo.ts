@@ -14,7 +14,6 @@ export interface PlanoAtivoInfo {
   disciplinaNomes: string[];
 }
 
-// Retorna a data de hoje (YYYY-MM-DD) sempre no fuso horário de Brasília (evita o bug das 21h UTC)
 export function getHojeBrasilISO(offsetDays = 0): string {
   const now = new Date();
   if (offsetDays !== 0) {
@@ -92,7 +91,6 @@ export function revisaoPertenceAoPlano(
   return false;
 }
 
-// Cache compartilhado em memória para evitar múltiplas chamadas simultâneas ao Supabase
 let cachedPlanos: PlanoAtivoInfo[] | null = null;
 let cachedUserId: string | null = null;
 let inflightPromise: Promise<PlanoAtivoInfo[]> | null = null;
@@ -151,19 +149,60 @@ export function usePlanoAtivo() {
       }
 
       inflightPromise = (async () => {
-        const { data } = await supabase
-          .from('concursos')
-          .select(
-            'id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))'
-          )
-          .eq('user_id', user.id)
-          .order('ordem', { ascending: true, nullsFirst: false });
+        const [concursosRes, paginasRaizRes] = await Promise.all([
+          supabase
+            .from('concursos')
+            .select(
+              'id, nome, banca, data_prova, status, concurso_paginas(pagina_id, paginas(id, title))'
+            )
+            .eq('user_id', user.id)
+            .order('ordem', { ascending: true, nullsFirst: false }),
+          supabase
+            .from('paginas')
+            .select('id, title')
+            .eq('user_id', user.id)
+            .is('parent_id', null),
+        ]);
 
-        const formatados: PlanoAtivoInfo[] = (data || []).map((c: any) => {
+        const todasRaiz = paginasRaizRes.data || [];
+        const listaConcursos = concursosRes.data || [];
+
+        // Se houver disciplinas primárias que ainda não estão vinculadas a nenhum plano, vincula automaticamente ao primeiro plano ativo!
+        const primeiroAtivo =
+          listaConcursos.find((c: any) => c.status === 'ativo') || listaConcursos[0];
+
+        if (primeiroAtivo && todasRaiz.length > 0) {
+          const vinculadasEmAlgumPlano = new Set<number>();
+          listaConcursos.forEach((c: any) => {
+            (c.concurso_paginas || []).forEach((cp: any) => {
+              if (cp.pagina_id) vinculadasEmAlgumPlano.add(Number(cp.pagina_id));
+            });
+          });
+
+          const orfas = todasRaiz.filter((p) => !vinculadasEmAlgumPlano.has(Number(p.id)));
+          if (orfas.length > 0) {
+            await supabase.from('concurso_paginas').insert(
+              orfas.map((o) => ({
+                concurso_id: primeiroAtivo.id,
+                pagina_id: o.id,
+              }))
+            );
+            orfas.forEach((o) => {
+              primeiroAtivo.concurso_paginas = [
+                ...(primeiroAtivo.concurso_paginas || []),
+                { pagina_id: o.id, paginas: { id: o.id, title: o.title } },
+              ];
+            });
+          }
+        }
+
+        const formatados: PlanoAtivoInfo[] = listaConcursos.map((c: any) => {
           const dIds: number[] = [];
           const dNomes: string[] = [];
           (c.concurso_paginas || []).forEach((cp: any) => {
-            if (cp.pagina_id) dIds.push(Number(cp.pagina_id));
+            if (cp.pagina_id && !dIds.includes(Number(cp.pagina_id))) {
+              dIds.push(Number(cp.pagina_id));
+            }
             if (cp.paginas?.id && !dIds.includes(Number(cp.paginas.id))) {
               dIds.push(Number(cp.paginas.id));
             }
